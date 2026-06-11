@@ -7,7 +7,7 @@ Never commit your OpenShock API token.
 Use an environment variable:
 
 ```powershell
-$env:OPENSHOCK\_TOKEN = "paste-your-token-here"
+$env:OPENSHOCK_TOKEN = "paste-your-token-here"
 ```
 
 The browser never receives the token. `server.js` acts as a local proxy and sends the token only from the local Node.js process.

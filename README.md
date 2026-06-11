@@ -4,7 +4,7 @@ A local, browser-based roulette party game for OpenShock.
 
 The app runs on a Windows laptop or any machine with Node.js. It shows a **Target Spinner** and a **Fate Spinner**, talks to OpenShock through a local Node.js proxy, and keeps the OpenShock API token out of the browser.
 
-> **afety and consent first:** Only use this with informed, sober, consenting adults who can stop at any time. Do not use electrical stimulation on people with heart conditions, epilepsy, implanted medical devices, pregnancy concerns, unknown medical risks, or anyone who has not explicitly agreed to play.
+> **Safety and consent first:** Only use this with informed, sober, consenting adults who can stop at any time. Do not use electrical stimulation on people with heart conditions, epilepsy, implanted medical devices, pregnancy concerns, unknown medical risks, or anyone who has not explicitly agreed to play.
 
 ---
 
