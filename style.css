@@ -1,0 +1,398 @@
+:root {
+      font-family: system-ui, Segoe UI, sans-serif;
+      background:#101010;
+      color:#eee;
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin:0;
+      padding:20px;
+      overflow-x:hidden;
+    }
+
+    .topbar {
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:16px;
+      max-width:1750px;
+      margin:0 auto 14px auto;
+    }
+
+    .topbar h1 { margin:0; }
+
+    .stats {
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .stat {
+      background:#1b1b1b;
+      border:1px solid #333;
+      border-radius:999px;
+      padding:7px 12px;
+      font-weight:800;
+      white-space:nowrap;
+    }
+
+    .grid {
+      display:grid;
+      grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr) minmax(500px, 560px);
+      gap:18px;
+      align-items:start;
+      max-width:1750px;
+      margin:0 auto;
+    }
+
+    .card {
+      background:#1b1b1b;
+      border:1px solid #333;
+      border-radius:14px;
+      padding:16px;
+      box-shadow:0 10px 30px #0005;
+      min-width:0;
+    }
+
+    .settingsCard {
+      width:100%;
+      max-width:560px;
+      overflow:hidden;
+    }
+
+    h1,h2,h3 { margin-top:0; }
+
+    button,input,select,textarea {
+      font:inherit;
+      border-radius:10px;
+      border:1px solid #444;
+      padding:8px 10px;
+      min-width:0;
+      max-width:100%;
+    }
+
+    input,select,textarea {
+      background:#0f0f0f;
+      color:#eee;
+    }
+
+    button {
+      cursor:pointer;
+      background:#2d6cdf;
+      color:white;
+      border:0;
+      font-weight:800;
+      white-space:nowrap;
+    }
+
+    button.secondary { background:#444; }
+    button.danger { background:#b00020; }
+    button.good { background:#188038; }
+    button.warn { background:#b35c00; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+
+    .wheelWrap {
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:12px;
+      min-width:0;
+    }
+
+    .canvasWrap {
+      position:relative;
+      width:min(38vw, 500px);
+      height:min(38vw, 500px);
+      max-width:500px;
+      max-height:500px;
+      min-width:280px;
+      min-height:280px;
+    }
+
+    canvas.wheelCanvas {
+      width:100%;
+      height:100%;
+      border-radius:50%;
+      filter: drop-shadow(0 20px 40px #000a);
+      transition: transform 4.2s cubic-bezier(.15,.75,.1,1);
+    }
+
+    .pointer {
+      width:0;
+      height:0;
+      border-left:22px solid transparent;
+      border-right:22px solid transparent;
+      border-top:42px solid #fff;
+      filter: drop-shadow(0 4px 4px #000);
+      margin-bottom:-30px;
+      z-index:2;
+    }
+
+    .controls {
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      justify-content:center;
+    }
+
+    .row {
+      display:grid;
+      grid-template-columns: 145px minmax(0, 1fr);
+      gap:8px;
+      align-items:center;
+      margin:8px 0;
+    }
+
+    .row.twoInputs {
+      grid-template-columns: 145px minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .row.buttons {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .player {
+      display:grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap:8px;
+      align-items:center;
+      padding:8px;
+      border-bottom:1px solid #333;
+    }
+
+    .player .muted { overflow-wrap:anywhere; }
+
+    .muted {
+      color:#aaa;
+      font-size:.92rem;
+    }
+
+    #log {
+      white-space:pre-wrap;
+      max-height:150px;
+      overflow:auto;
+      background:#0b0b0b;
+      padding:10px;
+      border-radius:10px;
+      border:1px solid #333;
+    }
+
+    .result {
+      font-size:1.25rem;
+      font-weight:800;
+      text-align:center;
+      min-height:2rem;
+    }
+
+    .bigResult {
+      width:100%;
+      font-size:1.65rem;
+      font-weight:950;
+      text-align:center;
+      min-height:4rem;
+      padding:14px;
+      background:#101010;
+      border:1px solid #333;
+      border-radius:14px;
+    }
+
+    .bigResult.safe { border-color:#188038; color:#8ee59a; }
+    .bigResult.all { border-color:#b00020; color:#ff8a9b; }
+    .bigResult.hit { border-color:#fb8c00; color:#ffd08a; }
+
+    .pill {
+      display:inline-block;
+      padding:3px 8px;
+      border-radius:999px;
+      background:#333;
+      margin-left:6px;
+      font-size:.85rem;
+    }
+
+    .mini { font-size:.86rem; }
+
+    .oddsGrid {
+      display:grid;
+      grid-template-columns: minmax(0, 1fr) 70px;
+      gap:6px 12px;
+      font-size:.9rem;
+      min-height:168px;
+    }
+
+    .disabledOdds {
+      opacity:.4;
+      text-decoration: line-through;
+    }
+
+    .fateGrid {
+      display:grid;
+      grid-template-columns: 96px 118px 132px 76px 112px;
+      gap:10px;
+      align-items:center;
+      width:100%;
+      margin:7px 0;
+    }
+
+    .fateHeader {
+      color:#aaa;
+      font-size:.78rem;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.03em;
+    }
+
+    .fateName {
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .rangePair {
+      display:grid;
+      grid-template-columns: 62px 62px;
+      gap:8px;
+    }
+
+    .numSmall {
+      width:62px;
+      text-align:center;
+      padding:7px 6px;
+    }
+
+    .numWeight {
+      width:76px;
+      padding:7px 8px;
+    }
+
+    .fateGrid select {
+      width:112px;
+      padding:7px 8px;
+    }
+
+    .toggle {
+      position:relative;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:96px;
+      height:34px;
+      user-select:none;
+    }
+
+    .toggle input {
+      position:absolute;
+      opacity:0;
+      pointer-events:none;
+    }
+
+    .toggleText {
+      width:96px;
+      height:30px;
+      border-radius:999px;
+      background:#555;
+      color:#ddd;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:.74rem;
+      font-weight:900;
+      border:1px solid #666;
+    }
+
+    .toggle input:checked + .toggleText {
+      background:#188038;
+      border-color:#20a34a;
+      color:white;
+    }
+
+    .section {
+      border-top:1px solid #333;
+      padding-top:12px;
+      margin-top:12px;
+    }
+
+    textarea {
+      width:100%;
+      min-height:120px;
+      background:#0b0b0b;
+      color:#eee;
+      border:1px solid #333;
+      border-radius:10px;
+      padding:10px;
+      font-family: ui-monospace, Consolas, monospace;
+      resize:vertical;
+    }
+
+    @media (max-width: 1420px) {
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .settingsCard {
+        grid-column:1 / -1;
+        max-width:none;
+      }
+
+      .canvasWrap {
+        width:min(42vw, 500px);
+        height:min(42vw, 500px);
+      }
+
+      .fateGrid {
+        grid-template-columns: 96px minmax(140px, 1fr) 132px 76px 112px;
+      }
+    }
+
+    @media (max-width: 850px) {
+      body { padding:12px; }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .canvasWrap {
+        width:min(86vw, 520px);
+        height:min(86vw, 520px);
+        min-width:260px;
+        min-height:260px;
+      }
+
+      .topbar {
+        align-items:flex-start;
+        flex-direction:column;
+      }
+
+      .row,
+      .row.twoInputs,
+      .row.buttons {
+        grid-template-columns: 1fr;
+      }
+
+      .fateGrid {
+        grid-template-columns: 1fr;
+        padding:10px;
+        border:1px solid #333;
+        border-radius:12px;
+        background:#151515;
+      }
+
+      .fateHeader {
+        display:none;
+      }
+
+      .rangePair {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .numSmall,
+      .numWeight,
+      .fateGrid select,
+      .toggle,
+      .toggleText {
+        width:100%;
+      }
+    }

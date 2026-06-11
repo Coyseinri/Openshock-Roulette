@@ -1,0 +1,142 @@
+{
+  "version": "1.0.0",
+  "server": {
+    "port": 8787,
+    "apiHost": "api.openshock.app",
+    "userAgent": "OpenShock-Roulette/1.0 (local-party-game)"
+  },
+  "safety": {
+    "serverMaxShockIntensity": 100,
+    "serverMaxVibrateIntensity": 100,
+    "minDurationMs": 300,
+    "maxDurationMs": 1000,
+    "defaultDurationMs": 700
+  },
+  "targetWheel": {
+    "playerWeight": 100,
+    "safeWeight": 10,
+    "shockAllWeight": 5
+  },
+  "game": {
+    "hiddenDoubleHitChancePercent": 5,
+    "doubleHitDelayMinMs": 700,
+    "doubleHitDelayMaxMs": 2500,
+    "pauseBeforeFateMinMs": 1500,
+    "pauseBeforeFateMaxMs": 3000,
+    "preHitDelayMinMs": 1000,
+    "preHitDelayMaxMs": 3000,
+    "noRepeatFate": false,
+    "escalationEnabled": true,
+    "escalationPerRound": 2,
+    "autoResetEscalationOnReload": true
+  },
+  "fateWheel": [
+    {
+      "key": "vibe",
+      "name": "Vibe",
+      "min": 0,
+      "max": 0,
+      "weight": 18,
+      "enabled": true,
+      "escalates": "down"
+    },
+    {
+      "key": "warmup",
+      "name": "Warmup",
+      "min": 1,
+      "max": 15,
+      "weight": 32,
+      "enabled": true,
+      "escalates": "down"
+    },
+    {
+      "key": "low",
+      "name": "Low",
+      "min": 16,
+      "max": 35,
+      "weight": 24,
+      "enabled": true,
+      "escalates": "neutral"
+    },
+    {
+      "key": "medium",
+      "name": "Medium",
+      "min": 36,
+      "max": 55,
+      "weight": 14,
+      "enabled": true,
+      "escalates": "up"
+    },
+    {
+      "key": "high",
+      "name": "High",
+      "min": 56,
+      "max": 75,
+      "weight": 7,
+      "enabled": true,
+      "escalates": "up"
+    },
+    {
+      "key": "brutal",
+      "name": "Brutal",
+      "min": 76,
+      "max": 90,
+      "weight": 3,
+      "enabled": true,
+      "escalates": "up"
+    },
+    {
+      "key": "deathwish",
+      "name": "Deathwish",
+      "min": 91,
+      "max": 100,
+      "weight": 1,
+      "enabled": true,
+      "escalates": "up"
+    }
+  ],
+  "ui": {
+    "pageTitle": "OpenShock Roulette",
+    "showShockerIds": true,
+    "wheelSpinMs": 4200,
+    "visibleWheelMaxRepeatsPerSegment": 12,
+    "showWheelLabels": true,
+    "showFateOdds": true,
+    "colors": {
+      "safe": "#188038",
+      "all": "#b00020",
+      "players": [
+        "#2d6cdf",
+        "#8e24aa",
+        "#039be5",
+        "#00897b",
+        "#7cb342",
+        "#fb8c00",
+        "#d81b60",
+        "#546e7a",
+        "#fdd835",
+        "#6d4c41"
+      ],
+      "fate": [
+        "#00acc1",
+        "#7cb342",
+        "#fdd835",
+        "#fb8c00",
+        "#e53935",
+        "#8e24aa",
+        "#b00020"
+      ]
+    },
+    "selectedNeedleAngleDeg": -90
+  },
+  "shockers": {
+    "excludeIds": [],
+    "excludeNames": []
+  },
+  "app": {
+    "name": "OpenShock Roulette",
+    "displayTitle": "OpenShock Roulette",
+    "subtitle": "A shocking roulette game",
+    "serverBanner": "OpenShock Roulette"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "openshock-roulette",
+  "version": "1.0.0",
+  "description": "A local browser-based roulette party game for OpenShock.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "openshock",
+    "roulette",
+    "party-game",
+    "local-web-app"
+  ],
+  "license": "MIT",
+  "private": false,
+  "engines": {
+    "node": ">=18"
+  }
+}
