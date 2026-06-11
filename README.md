@@ -175,10 +175,10 @@ The server tries to load shockers from OpenShock. If the hub/device name appears
 
 ```json
 "shockers": {
-  "excludeIds": \\\[
+  "excludeIds": [
     "hub-or-device-id-here"
   ],
-  "excludeNames": \\\[
+  "excludeNames": [
     "Living Room Hub"
   ]
 }
@@ -187,7 +187,7 @@ The server tries to load shockers from OpenShock. If the hub/device name appears
 If auto-loading does not work, edit `shockers.json`:
 
 ```json
-\\\[
+[
   {
     "id": "00000000-0000-0000-0000-000000000000",
     "name": "Player 1"
