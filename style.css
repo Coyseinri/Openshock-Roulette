@@ -511,3 +511,130 @@ canvas.wheelCanvas {
     width:100%;
   }
 }
+
+
+.eventOverlay {
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:radial-gradient(circle at center, #0008, #000e 70%);
+  backdrop-filter: blur(5px);
+  z-index:1000;
+}
+
+.eventOverlay[hidden] {
+  display:none;
+}
+
+.eventCardBox {
+  width:min(92vw, 560px);
+  min-height:300px;
+  border-radius:24px;
+  padding:28px;
+  text-align:center;
+  background:linear-gradient(145deg, #241437, #111 55%, #281111);
+  border:2px solid #777;
+  box-shadow:0 0 50px #000, 0 0 80px #ffffff22;
+  transform:translateY(-40px) scale(.86) rotate(-2deg);
+  opacity:0;
+}
+
+.eventOverlay.show .eventCardBox {
+  animation:eventCardDrop .55s cubic-bezier(.16, 1.2, .2, 1) forwards;
+}
+
+.eventCardBox.affectsTarget {
+  border-color:#00e5ff;
+  box-shadow:0 0 45px #00e5ff77, 0 0 100px #00e5ff33;
+}
+
+.eventCardBox.affectsFate {
+  border-color:#ff8a00;
+  box-shadow:0 0 45px #ff8a0077, 0 0 100px #ff8a0033;
+}
+
+.eventCardBox.affectsBoth {
+  border-color:#f500ff;
+  box-shadow:0 0 45px #f500ff77, 0 0 100px #00e5ff44;
+}
+
+.eventEyebrow {
+  color:#aaa;
+  letter-spacing:.22em;
+  font-weight:950;
+  font-size:.78rem;
+}
+
+.eventCardBox h2 {
+  margin:8px 0 10px;
+  font-size:clamp(2.1rem, 8vw, 4.4rem);
+  line-height:.95;
+  text-transform:uppercase;
+}
+
+.eventCardBox p {
+  color:#eee;
+  font-size:1.18rem;
+  margin:0 auto 18px;
+  max-width:44ch;
+}
+
+.eventPickerLine {
+  color:#ffd08a;
+  font-weight:900;
+  margin:14px 0;
+}
+
+.eventOptions {
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+  gap:10px;
+  margin:14px 0;
+}
+
+.eventOptionButton {
+  background:#6d28d9;
+  border:1px solid #a78bfa;
+  min-height:46px;
+}
+
+.eventResult {
+  min-height:1.6rem;
+  color:#8ee59a;
+  font-weight:900;
+  margin:12px 0;
+}
+
+.wheelCard.eventAffected {
+  animation:eventWheelPulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes eventCardDrop {
+  from {
+    opacity:0;
+    transform:translateY(-100px) scale(.65) rotate(-8deg);
+  }
+  to {
+    opacity:1;
+    transform:translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes eventWheelPulse {
+  from {
+    box-shadow:0 0 25px #ffffff22, 0 10px 30px #0005;
+  }
+  to {
+    box-shadow:0 0 35px #00e5ffaa, 0 0 70px #f500ff44, 0 10px 30px #0005;
+  }
+}
+
+.playerStats {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 700;
+}

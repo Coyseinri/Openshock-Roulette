@@ -7,6 +7,17 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="eventOverlay" class="eventOverlay" hidden>
+    <div id="eventCardBox" class="eventCardBox" role="dialog" aria-modal="true" aria-labelledby="eventTitle">
+      <div class="eventEyebrow">EVENT CARD</div>
+      <h2 id="eventTitle">Event Card</h2>
+      <p id="eventDescription">A round modifier has appeared.</p>
+      <div id="eventPickerLine" class="eventPickerLine">Waiting...</div>
+      <div id="eventOptions" class="eventOptions"></div>
+      <div id="eventResult" class="eventResult"></div>
+      <button id="eventContinueBtn" class="good" hidden>Continue now</button>
+    </div>
+  </div>
   <header class="topbar">
     <div>
       <h1 id="pageTitle">OpenShock Roulette</h1>
@@ -160,6 +171,24 @@
         <div class="row">
           <label>Escalation / round</label>
           <input id="escalationPerRound" type="number" min="0" max="20">
+        </div>
+
+        <div class="row">
+          <label>Event cards</label>
+          <select id="eventCardsEnabled">
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>Event chance %</label>
+          <input id="eventCardChance" type="number" min="0" max="100">
+        </div>
+
+        <div class="row">
+          <label>Event display ms</label>
+          <input id="eventCardDisplayMs" type="number" min="0" max="15000">
         </div>
       </div>
 

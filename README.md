@@ -247,3 +247,7 @@ This is a community hobby project and is not affiliated with OpenShock.
 
 Use at your own risk. The author is not responsible for injury, misuse, consent violations, device malfunction, API changes, or unsafe play.
 
+
+## Event cards
+
+Event cards are configured in `event-cards.json`. The game supports modular target/fate effects, interactive choices, and per-player session statistics for cards such as least shocked, most selected, longest not selected, bodyguard, duel, and share pain. See `EVENT_CARDS.md` for the full card/effect reference.
