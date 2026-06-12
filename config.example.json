@@ -12,6 +12,12 @@
     "maxDurationMs": 1000,
     "defaultDurationMs": 700
   },
+
+  "keyboard": {
+    "spinEnabled": true,
+    "spinKey": "F13"
+  },
+
   "targetWheel": {
     "playerWeight": 100,
     "safeWeight": 10,

@@ -155,8 +155,11 @@ async function saveConfig() {
 
 function updateConfigPreview(collect=true) {
   if (!config) return;
-  const clone = collect ? collectPreviewOnly() : JSON.parse(JSON.stringify(config));
-  document.getElementById("configPreview").value = JSON.stringify(clone, null, 2);
+  const preview = document.getElementById("configPreview");
+  if (preview) {
+    const clone = collect ? collectPreviewOnly() : JSON.parse(JSON.stringify(config));
+    preview.value = JSON.stringify(clone, null, 2);
+  }
   renderFateOdds();
   updateStats();
 }
@@ -248,18 +251,12 @@ function getFateConfig(escalated=true) {
   const perRound = Math.max(0, Number(document.getElementById("escalationPerRound")?.value || 0));
   const shift = roundNumber * perRound;
 
-	cfg = cfg.map(f => {
-	  let weight = f.weight;
-
-	  if (!f.enabled) {
-		weight = 0;
-	  } else {
-		if (f.escalates === "down") weight = Math.max(0, weight - shift);
-		if (f.escalates === "up") weight = weight + shift;
-	  }
-
-	  return { ...f, weight };
-	});
+  cfg = cfg.map(f => {
+    let weight = f.weight;
+    if (f.escalates === "down") weight = Math.max(0, weight - shift);
+    if (f.escalates === "up") weight = weight + shift;
+    return { ...f, weight };
+  });
 
   return cfg;
 }
@@ -440,9 +437,24 @@ function renderPlayers() {
   playersDiv.innerHTML = "";
   shockers.forEach(s => {
     const row = document.createElement("div");
-    row.className = "player";
-    const showIds = config?.ui?.showShockerIds !== false;
-    row.innerHTML = `<div><b>${escapeHtml(s.name)}</b>${showIds ? `<br><span class="muted">${s.id}</span>` : ""}</div>`;
+    row.className = eliminated.has(s.id) ? "player eliminated" : "player";
+
+    const info = document.createElement("div");
+
+    const nameButton = document.createElement("button");
+    nameButton.type = "button";
+    nameButton.className = "playerNameButton";
+    nameButton.textContent = s.name;
+    nameButton.title = "Click to show/hide shocker ID";
+    nameButton.onclick = () => row.classList.toggle("showId");
+
+    const idLine = document.createElement("div");
+    idLine.className = "playerId";
+    idLine.textContent = s.id;
+
+    info.appendChild(nameButton);
+    info.appendChild(idLine);
+
     const btn = document.createElement("button");
     btn.className = eliminated.has(s.id) ? "good" : "secondary";
     btn.textContent = eliminated.has(s.id) ? "Rejoin" : "Eliminate";
@@ -452,6 +464,8 @@ function renderPlayers() {
       renderPlayers();
       redrawAllWheels();
     };
+
+    row.appendChild(info);
     row.appendChild(btn);
     playersDiv.appendChild(row);
   });
@@ -464,7 +478,7 @@ async function loadShockers() {
   shockers = data.shockers || [];
   eliminated.clear();
   if (config?.game?.autoResetEscalationOnReload !== false) resetGame(false);
-  document.getElementById("sourcePill").textContent = data.source || "unknown";
+  document.getElementById("sourcePill").textContent = `${data.shockers.length} shockers`;
   renderPlayers();
   redrawAllWheels();
   targetResult.textContent = shockers.length ? `${shockers.length} collars loaded` : "No collars found";
@@ -701,6 +715,30 @@ document.getElementById("spinBtn").onclick = spinRound;
 document.getElementById("stopBtn").onclick = stopAll;
 document.getElementById("reloadBtn").onclick = loadShockers;
 document.getElementById("elimOneBtn").onclick = eliminateOne;
+
+document.addEventListener("keydown", (event) => {
+  if (event.repeat) return;
+
+  const activeElement = document.activeElement;
+  const isTyping =
+    activeElement &&
+    ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(activeElement.tagName);
+
+  if (isTyping) return;
+
+  const keyboard = config?.keyboard || {};
+  if (keyboard.spinEnabled === false) return;
+
+  const spinKey = keyboard.spinKey || "F13";
+
+  if (event.code === spinKey) {
+    event.preventDefault();
+
+    if (!spinBtn.disabled) {
+      spinRound();
+    }
+  }
+});
 
 (async function init() {
   await loadConfig();
