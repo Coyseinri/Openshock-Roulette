@@ -12,6 +12,10 @@
     "maxDurationMs": 1000,
     "defaultDurationMs": 700
   },
+  "keyboard": {
+    "spinEnabled": true,
+    "spinKey": "F13"
+  },
   "targetWheel": {
     "playerWeight": 100,
     "safeWeight": 10,
@@ -138,5 +142,10 @@
     "displayTitle": "OpenShock Roulette",
     "subtitle": "A shocking roulette game",
     "serverBanner": "OpenShock Roulette"
+  },
+  "eventCards": {
+    "enabled": true,
+    "chancePercent": 18,
+    "displayDurationMs": 4000
   }
 }

@@ -9,6 +9,7 @@ const fs = require("fs");
 const path = require("path");
 
 const CONFIG_PATH = path.join(__dirname, "config.json");
+const EVENT_CARDS_PATH = path.join(__dirname, "event-cards.json");
 
 function readConfig() {
   const raw = fs.readFileSync(CONFIG_PATH, "utf8");
@@ -17,6 +18,14 @@ function readConfig() {
 
 function writeConfig(config) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf8");
+}
+
+function readEventCards() {
+  if (!fs.existsSync(EVENT_CARDS_PATH)) {
+    return { enabled: false, chancePercent: 0, displayDurationMs: 4000, cards: [] };
+  }
+  const raw = fs.readFileSync(EVENT_CARDS_PATH, "utf8");
+  return validateEventCards(JSON.parse(raw));
 }
 
 let CONFIG = readConfig();
@@ -261,10 +270,40 @@ async function handleStopAll(req, res) {
   sendJson(res, result.statusCode, { stopped: ids.length, openshock: result.body });
 }
 
+function validateEventCards(data) {
+  if (!data || typeof data !== "object") throw new Error("Event cards config must be an object");
+  data.enabled = Boolean(data.enabled ?? true);
+  data.chancePercent = clampInt(data.chancePercent ?? 18, 0, 100);
+  data.displayDurationMs = clampInt(data.displayDurationMs ?? 4000, 0, 15000);
+  if (!Array.isArray(data.cards)) data.cards = [];
+
+  data.cards = data.cards.map((card, i) => {
+    if (!card || typeof card !== "object") throw new Error(`event card ${i} must be an object`);
+    if (!card.id) throw new Error(`event card ${i} needs id`);
+    card.id = String(card.id);
+    card.title = String(card.title || card.id);
+    card.description = String(card.description || card.text || "");
+    card.enabled = Boolean(card.enabled ?? true);
+    card.weight = clampInt(card.weight ?? 1, 0, 1000);
+    if (card.effects !== undefined && !Array.isArray(card.effects)) throw new Error(`event card ${card.id} effects must be an array`);
+    if (!Array.isArray(card.effects)) card.effects = card.type ? [{ type: String(card.type) }] : [];
+    card.effects = card.effects.map(effect => ({ ...effect, type: String(effect.type || "") })).filter(effect => effect.type);
+    card.targetWheel = Boolean(card.targetWheel ?? false);
+    card.fateWheel = Boolean(card.fateWheel ?? false);
+    return card;
+  });
+
+  return data;
+}
+
 function validateConfig(config) {
   if (!config || typeof config !== "object") throw new Error("Config must be an object");
   if (!Array.isArray(config.fateWheel)) throw new Error("config.fateWheel must be an array");
   if (!config.fateWheel.length) throw new Error("config.fateWheel must not be empty");
+  config.eventCards = config.eventCards || {};
+  config.eventCards.enabled = Boolean(config.eventCards.enabled ?? false);
+  config.eventCards.chancePercent = clampInt(config.eventCards.chancePercent ?? 18, 0, 100);
+  config.eventCards.displayDurationMs = clampInt(config.eventCards.displayDurationMs ?? 4000, 0, 15000);
 
   const maxShock = clampInt(config.safety?.serverMaxShockIntensity ?? 100, 1, 100);
 
@@ -296,6 +335,10 @@ const server = http.createServer(async (req, res) => {
       writeConfig(validated);
       CONFIG = validated;
       return sendJson(res, 200, { saved: true, config: CONFIG });
+    }
+
+    if (url.pathname === "/api/event-cards" && req.method === "GET") {
+      return sendJson(res, 200, readEventCards());
     }
 
     if (url.pathname === "/api/shockers" && req.method === "GET") {

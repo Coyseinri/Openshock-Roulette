@@ -7,7 +7,18 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="topbar">
+  <div id="eventOverlay" class="eventOverlay" hidden>
+    <div id="eventCardBox" class="eventCardBox" role="dialog" aria-modal="true" aria-labelledby="eventTitle">
+      <div class="eventEyebrow">EVENT CARD</div>
+      <h2 id="eventTitle">Event Card</h2>
+      <p id="eventDescription">A round modifier has appeared.</p>
+      <div id="eventPickerLine" class="eventPickerLine">Waiting...</div>
+      <div id="eventOptions" class="eventOptions"></div>
+      <div id="eventResult" class="eventResult"></div>
+      <button id="eventContinueBtn" class="good" hidden>Continue now</button>
+    </div>
+  </div>
+  <header class="topbar">
     <div>
       <h1 id="pageTitle">OpenShock Roulette</h1>
       <div class="muted" id="subtitleText">Canvas wheels with labels. Weights affect odds, not visual clutter.</div>
@@ -17,139 +28,187 @@
       <div class="stat" id="escalationStat">Escalation +0</div>
       <div class="stat" id="activeStat">Active 0</div>
     </div>
-  </div>
+  </header>
 
-  <div class="grid">
-    <div class="card wheelWrap">
-      <h2>1. Target Spinner</h2>
-      <div class="pointer"></div>
-      <div class="canvasWrap">
-        <canvas id="targetWheel" class="wheelCanvas" width="900" height="900"></canvas>
+  <main class="pageShell">
+    <section class="spinnerRow" aria-label="Game spinners">
+      <div class="card wheelCard">
+        <h2>1. Target Spinner</h2>
+        <div class="pointer"></div>
+        <div class="canvasWrap">
+          <canvas id="targetWheel" class="wheelCanvas" width="900" height="900"></canvas>
+        </div>
+        <div class="result" id="targetResult">Loading config...</div>
       </div>
-      <div class="result" id="targetResult">Loading config...</div>
-    </div>
 
-    <div class="card wheelWrap">
-      <h2>2. Fate Spinner</h2>
-      <div class="pointer"></div>
-      <div class="canvasWrap">
-        <canvas id="fateWheel" class="wheelCanvas" width="900" height="900"></canvas>
+      <div class="card wheelCard">
+        <h2>2. Fate Spinner</h2>
+        <div class="pointer"></div>
+        <div class="canvasWrap">
+          <canvas id="fateWheel" class="wheelCanvas" width="900" height="900"></canvas>
+        </div>
+        <div class="result" id="fateResult">Waiting...</div>
       </div>
-      <div class="result" id="fateResult">Waiting...</div>
+    </section>
+
+    <section class="controlPanel" aria-label="Game controls">
       <div class="bigResult" id="mainResult">Ready</div>
-      <div class="controls">
+      <div class="controls gameControls">
         <button id="spinBtn" disabled>SPIN ROUND</button>
         <button class="warn" id="elimOneBtn">ELIMINATE 1</button>
         <button class="danger" id="stopBtn">STOP ALL</button>
         <button class="secondary" id="reloadBtn">Reload collars</button>
       </div>
-    </div>
+    </section>
 
-    <div class="card settingsCard">
-      <h2>Game settings</h2>
-
-      <div class="row buttons">
-        <button class="good" id="saveConfigBtn">Save config.json</button>
-        <button class="secondary" id="reloadConfigBtn">Reload config</button>
+    <section class="card playersPanel">
+      <div class="sectionHeader">
+        <h2>Players <span class="pill" id="sourcePill">not loaded</span></h2>
+        <p class="muted">Click a player name to reveal the shocker ID.</p>
       </div>
+      <div id="players" class="playersGrid"></div>
+    </section>
 
-      <div class="row">
-        <label>Player weight</label>
-        <input id="playerWeight" type="number" min="1" max="1000">
-      </div>
+    <section class="configRow">
+      <details class="card settingsDetails" >
+        <summary>
+          <span>
+            <strong>Current fate odds</strong>
+            <small>List of all possible fates and their probabilities</small>
+          </span>
+        </summary>
 
-      <div class="row">
-        <label>Safe weight</label>
-        <input id="safeWeight" type="number" min="0" max="1000">
-      </div>
-
-      <div class="row">
-        <label>Shock All weight</label>
-        <input id="shockAllWeight" type="number" min="0" max="1000">
-      </div>
-
-      <div class="row">
-        <label>Hidden double-hit %</label>
-        <input id="doubleHitChance" type="number" min="0" max="100">
-      </div>
-
-      <div class="row twoInputs">
-        <label>First pause ms</label>
-        <input id="pauseMinMs" type="number" min="0" max="10000">
-        <input id="pauseMaxMs" type="number" min="0" max="10000">
-      </div>
-
-      <div class="row twoInputs">
-        <label>Pre-hit delay ms</label>
-        <input id="hitDelayMinMs" type="number" min="0" max="10000">
-        <input id="hitDelayMaxMs" type="number" min="0" max="10000">
-      </div>
-
-      <div class="row twoInputs">
-        <label>Double-hit delay ms</label>
-        <input id="doubleDelayMinMs" type="number" min="0" max="10000">
-        <input id="doubleDelayMaxMs" type="number" min="0" max="10000">
-      </div>
-
-      <div class="row">
-        <label>Duration ms</label>
-        <input id="duration" type="number" min="300" max="1000">
-      </div>
-
-      <div class="row">
-        <label>No-repeat fate</label>
-        <select id="noRepeatMode">
-          <option value="off">Off</option>
-          <option value="on">On</option>
-        </select>
-      </div>
-
-      <div class="row">
-        <label>Escalation</label>
-        <select id="escalationEnabled">
-          <option value="on">On</option>
-          <option value="off">Off</option>
-        </select>
-      </div>
-
-      <div class="row">
-        <label>Escalation / round</label>
-        <input id="escalationPerRound" type="number" min="0" max="20">
-      </div>
-
-      <div class="section">
-        <h3>Current fate odds <span class="muted mini">(disabled categories are crossed out)</span></h3>
         <div id="fateOdds" class="oddsGrid"></div>
-      </div>
+      </details>
 
-      <div class="section">
-        <h3>Fate ranges and weights</h3>
+      <details class="card settingsDetails" >
+        <summary>
+          <span>
+            <strong>Chance configuration</strong>
+            <small>Fate ranges, weights and enabled categories</small>
+          </span>
+        </summary>
+
         <div class="fateGrid fateHeader">
           <div>Enabled</div><div>Name</div><div>Range</div><div>Weight</div><div>Escalates</div>
         </div>
         <div id="fateSettings"></div>
-        <div class="row buttons">
+
+        <div class="buttonLine">
           <button class="secondary" id="resetGameBtn">Reset game / escalation</button>
+        </div>
+      </details>
+    </section>
+
+    <details class="card settingsDetails mainSettings">
+      <summary>
+        <span>
+          <strong>Main game settings</strong>
+          <small>Configuration for the main game mechanics</small>
+        </span>
+      </summary>
+
+      <div class="settingsGrid">
+        <div class="row">
+          <label>Player weight</label>
+          <input id="playerWeight" type="number" min="1" max="1000">
+        </div>
+
+        <div class="row">
+          <label>Safe weight</label>
+          <input id="safeWeight" type="number" min="0" max="1000">
+        </div>
+
+        <div class="row">
+          <label>Shock All weight</label>
+          <input id="shockAllWeight" type="number" min="0" max="1000">
+        </div>
+
+        <div class="row">
+          <label>Hidden double-hit %</label>
+          <input id="doubleHitChance" type="number" min="0" max="100">
+        </div>
+
+        <div class="row twoInputs">
+          <label>First pause ms</label>
+          <input id="pauseMinMs" type="number" min="0" max="10000">
+          <input id="pauseMaxMs" type="number" min="0" max="10000">
+        </div>
+
+        <div class="row twoInputs">
+          <label>Pre-hit delay ms</label>
+          <input id="hitDelayMinMs" type="number" min="0" max="10000">
+          <input id="hitDelayMaxMs" type="number" min="0" max="10000">
+        </div>
+
+        <div class="row twoInputs">
+          <label>Double-hit delay ms</label>
+          <input id="doubleDelayMinMs" type="number" min="0" max="10000">
+          <input id="doubleDelayMaxMs" type="number" min="0" max="10000">
+        </div>
+
+        <div class="row">
+          <label>Duration ms</label>
+          <input id="duration" type="number" min="300" max="1000">
+        </div>
+
+        <div class="row">
+          <label>No-repeat fate</label>
+          <select id="noRepeatMode">
+            <option value="off">Off</option>
+            <option value="on">On</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>Escalation</label>
+          <select id="escalationEnabled">
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>Escalation / round</label>
+          <input id="escalationPerRound" type="number" min="0" max="20">
+        </div>
+
+        <div class="row">
+          <label>Event cards</label>
+          <select id="eventCardsEnabled">
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>Event chance %</label>
+          <input id="eventCardChance" type="number" min="0" max="100">
+        </div>
+
+        <div class="row">
+          <label>Event display ms</label>
+          <input id="eventCardDisplayMs" type="number" min="0" max="15000">
         </div>
       </div>
 
-      <div class="section">
-        <h3>Raw config preview</h3>
-        <textarea id="configPreview" readonly></textarea>
+      <div class="buttonLine">
+        <button class="good" id="saveConfigBtn">Save config.json</button>
+        <button class="secondary" id="reloadConfigBtn">Reload config</button>
       </div>
+    </details>
 
-      <div class="section">
-        <h2>Players <span class="pill" id="sourcePill">not loaded</span></h2>
-        <div id="players"></div>
-      </div>
+    <details class="card settingsDetails logDetails">
+      <summary>
+        <span>
+          <strong>Log</strong>
+          <small>Debug and game events</small>
+        </span>
+      </summary>
+      <div id="log"></div>
+    </details>
+  </main>
 
-      <div class="section">
-        <h2>Log</h2>
-        <div id="log"></div>
-      </div>
-    </div>
-  </div>
-
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

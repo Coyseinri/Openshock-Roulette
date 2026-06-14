@@ -1,0 +1,1170 @@
+{
+  "enabled": true,
+  "chancePercent": 18,
+  "displayDurationMs": 10000,
+  "cards": [
+    {
+      "id": "revenge",
+      "enabled": true,
+      "weight": 10,
+      "title": "Revenge",
+      "description": "The last player who was shocked chooses the next target manually. Then the fate spinner starts.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "manualTargetByLastShocked"
+        }
+      ]
+    },
+    {
+      "id": "dealers-choice",
+      "enabled": true,
+      "weight": 6,
+      "title": "Dealer's Choice",
+      "description": "The host chooses the next target manually. Then the fate spinner starts.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "manualTargetByHost"
+        }
+      ]
+    },
+    {
+      "id": "mob-justice",
+      "enabled": true,
+      "weight": 6,
+      "title": "Mob Justice",
+      "description": "The group decides who goes next. Use the buttons to register the group's choice.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "groupVoteTarget"
+        }
+      ]
+    },
+    {
+      "id": "lucky-escape",
+      "enabled": true,
+      "weight": 7,
+      "title": "Lucky Escape",
+      "description": "The previous selected target is immune this round.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "excludeLastTarget"
+        }
+      ]
+    },
+    {
+      "id": "revenge-shield",
+      "enabled": true,
+      "weight": 6,
+      "title": "Revenge Shield",
+      "description": "Anyone shocked last round is immune this round.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "excludeLastShocked"
+        }
+      ]
+    },
+    {
+      "id": "hot-seat",
+      "enabled": true,
+      "weight": 4,
+      "title": "Hot Seat",
+      "description": "The previous selected target is selected again. Target spinner is skipped.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "forcePreviousTarget"
+        }
+      ]
+    },
+    {
+      "id": "echo",
+      "enabled": true,
+      "weight": 3,
+      "title": "Echo",
+      "description": "The last shocked player is selected again. Target spinner is skipped.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "forceLastShockedTarget"
+        }
+      ]
+    },
+    {
+      "id": "villain-arc",
+      "enabled": true,
+      "weight": 6,
+      "title": "Villain Arc",
+      "description": "The player who has been shocked the least becomes the target.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "forceLeastShockedTarget"
+        }
+      ]
+    },
+    {
+      "id": "karma",
+      "enabled": true,
+      "weight": 6,
+      "title": "Karma",
+      "description": "The player who has been selected the least becomes the target.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "forceLeastSelectedTarget"
+        }
+      ]
+    },
+    {
+      "id": "repeat-offender",
+      "enabled": true,
+      "weight": 5,
+      "title": "Repeat Offender",
+      "description": "The previous target is three times more likely to be selected.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "multiplyTargetWeight",
+          "selector": "lastSelected",
+          "multiplier": 3
+        }
+      ]
+    },
+    {
+      "id": "unfinished-business",
+      "enabled": true,
+      "weight": 4,
+      "title": "Unfinished Business",
+      "description": "The last shocked player is three times more likely to be selected.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "multiplyTargetWeight",
+          "selector": "lastShocked",
+          "multiplier": 3
+        }
+      ]
+    },
+    {
+      "id": "new-blood",
+      "enabled": true,
+      "weight": 6,
+      "title": "New Blood",
+      "description": "The least selected player is three times more likely to be selected.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "multiplyTargetWeight",
+          "selector": "leastSelected",
+          "multiplier": 3
+        }
+      ]
+    },
+    {
+      "id": "double-trouble",
+      "enabled": true,
+      "weight": 6,
+      "title": "Double Trouble",
+      "description": "A second random player joins the selected target.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "doubleTarget"
+        }
+      ]
+    },
+    {
+      "id": "triple-threat",
+      "enabled": true,
+      "weight": 3,
+      "title": "Triple Threat",
+      "description": "Two extra random players join the selected target.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "addRandomTargets",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "public-enemy",
+      "enabled": true,
+      "weight": 3,
+      "title": "Public Enemy",
+      "description": "Everyone is selected. Target spinner is skipped.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "forceAllTargets"
+        }
+      ]
+    },
+    {
+      "id": "no-hiding",
+      "enabled": true,
+      "weight": 4,
+      "title": "No Hiding",
+      "description": "SAFE is removed from the target wheel this round.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "disableTargetType",
+          "targetType": "safe"
+        }
+      ]
+    },
+    {
+      "id": "no-mass-panic",
+      "enabled": true,
+      "weight": 5,
+      "title": "No Mass Panic",
+      "description": "The ALL segment is removed from the target wheel this round.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "disableTargetType",
+          "targetType": "all"
+        }
+      ]
+    },
+    {
+      "id": "all-or-nothing-target",
+      "enabled": true,
+      "weight": 4,
+      "title": "All Or Nothing",
+      "description": "The ALL segment is three times more likely this round.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "multiplyTargetWeight",
+          "targetType": "all",
+          "multiplier": 3
+        }
+      ]
+    },
+    {
+      "id": "vibe-check",
+      "enabled": true,
+      "weight": 8,
+      "title": "Vibe Check",
+      "description": "No shock this round. Fate is forced to vibration.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceVibrateOnly"
+        }
+      ]
+    },
+    {
+      "id": "no-mercy",
+      "enabled": true,
+      "weight": 7,
+      "title": "No Mercy",
+      "description": "SAFE-style outcomes are removed where applicable.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "disableSafe"
+        }
+      ]
+    },
+    {
+      "id": "safe-haven",
+      "enabled": true,
+      "weight": 7,
+      "title": "Safe Haven",
+      "description": "The SAFE target segment is doubled this round.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "doubleSafeWeight"
+        }
+      ]
+    },
+    {
+      "id": "mercy-round",
+      "enabled": true,
+      "weight": 7,
+      "title": "Mercy Round",
+      "description": "Fate is capped at Medium or lower this round.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "capFateCategory",
+          "value": "medium"
+        }
+      ]
+    },
+    {
+      "id": "soft-landing",
+      "enabled": true,
+      "weight": 5,
+      "title": "Soft Landing",
+      "description": "Fate is capped at Low or lower this round.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "capFateCategory",
+          "value": "low"
+        }
+      ]
+    },
+    {
+      "id": "loaded-chamber",
+      "enabled": true,
+      "weight": 5,
+      "title": "Loaded Chamber",
+      "description": "Brutal and Deathwish are twice as likely this round.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "brutal",
+          "multiplier": 2
+        },
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "deathwish",
+          "multiplier": 2
+        }
+      ]
+    },
+    {
+      "id": "angry-wheel",
+      "enabled": true,
+      "weight": 5,
+      "title": "Angry Wheel",
+      "description": "High, Brutal and Deathwish are twice as likely this round.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "high",
+          "multiplier": 2
+        },
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "brutal",
+          "multiplier": 2
+        },
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "deathwish",
+          "multiplier": 2
+        }
+      ]
+    },
+    {
+      "id": "safe-is-boring",
+      "enabled": true,
+      "weight": 5,
+      "title": "Safe Is Boring",
+      "description": "Vibe and Warmup are half as likely this round.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "vibe",
+          "multiplier": 0.5
+        },
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "warmup",
+          "multiplier": 0.5
+        }
+      ]
+    },
+    {
+      "id": "chaos-wheel",
+      "enabled": true,
+      "weight": 5,
+      "title": "Chaos Wheel",
+      "description": "Every enabled fate category has equal weight this round.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "equalFateWeights"
+        }
+      ]
+    },
+    {
+      "id": "fate-reversal",
+      "enabled": true,
+      "weight": 4,
+      "title": "Fate Reversal",
+      "description": "The fate weights are inverted for this round.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "invertFateWeights"
+        }
+      ]
+    },
+    {
+      "id": "sudden-death",
+      "enabled": true,
+      "weight": 3,
+      "title": "Sudden Death",
+      "description": "Only High, Brutal or Deathwish can be rolled this round.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceRandomFate",
+          "fateKeys": [
+            "high",
+            "brutal",
+            "deathwish"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "warmup-only",
+      "enabled": true,
+      "weight": 5,
+      "title": "Warmup Only",
+      "description": "Fate is forced to Warmup.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceFate",
+          "fateKey": "warmup"
+        }
+      ]
+    },
+    {
+      "id": "high-stakes",
+      "enabled": true,
+      "weight": 3,
+      "title": "High Stakes",
+      "description": "Fate is forced to High.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceFate",
+          "fateKey": "high"
+        }
+      ]
+    },
+    {
+      "id": "double-tap",
+      "enabled": true,
+      "weight": 4,
+      "title": "Double Tap",
+      "description": "If the result is a shock, the hidden double-hit is guaranteed.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "guaranteedDoubleHit"
+        }
+      ]
+    },
+    {
+      "id": "coinflip-double",
+      "enabled": true,
+      "weight": 5,
+      "title": "Coinflip Double",
+      "description": "If the result is a shock, the hidden double-hit chance becomes 50%. Faintly evil, statistically rude.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "setDoubleHitChance",
+          "percent": 50
+        }
+      ]
+    },
+    {
+      "id": "power-surge",
+      "enabled": true,
+      "weight": 4,
+      "title": "Power Surge",
+      "description": "Shock values are increased by 15, capped by the server safety maximum.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "valueOffset",
+          "offset": 15
+        }
+      ]
+    },
+    {
+      "id": "half-power",
+      "enabled": true,
+      "weight": 5,
+      "title": "Half Power",
+      "description": "Shock values are halved this round.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "valueMultiplier",
+          "multiplier": 0.5
+        }
+      ]
+    },
+    {
+      "id": "share-the-pain",
+      "enabled": true,
+      "weight": 7,
+      "title": "Share The Pain",
+      "description": "After the target is selected, they choose another player to join them.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "sharePain"
+        }
+      ]
+    },
+    {
+      "id": "bodyguard",
+      "enabled": true,
+      "weight": 6,
+      "title": "Bodyguard",
+      "description": "After the target is selected, choose a volunteer to take their place. If nobody volunteers, the original target stays.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "bodyguard"
+        }
+      ]
+    },
+    {
+      "id": "duel",
+      "enabled": true,
+      "weight": 6,
+      "title": "Duel",
+      "description": "After the target is selected, they challenge another player. A random loser receives the fate.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "duel"
+        }
+      ]
+    },
+    {
+      "id": "choose-your-fate",
+      "enabled": true,
+      "weight": 6,
+      "title": "Choose Your Fate",
+      "description": "After the target is selected, they choose between Low for sure or spinning the fate wheel.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "chooseFateByTarget",
+          "choices": [
+            {
+              "label": "Low for sure",
+              "fateKey": "low"
+            },
+            {
+              "label": "Spin the fate wheel",
+              "fateKey": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cowards-bargain",
+      "enabled": true,
+      "weight": 5,
+      "title": "Coward's Bargain",
+      "description": "After the target is selected, they can take Vibe now or risk a guaranteed double-hit on the normal fate spin.",
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "chooseFateByTarget",
+          "choices": [
+            {
+              "label": "Take Vibe",
+              "fateKey": "vibe",
+              "forceValue": 0
+            },
+            {
+              "label": "Risk double-hit",
+              "doubleHitChance": 100
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "last-words",
+      "enabled": true,
+      "weight": 5,
+      "title": "Last Words",
+      "description": "After the target is selected, they get a short moment to plead their case before fate spins.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "lastWords",
+          "durationMs": 0
+        }
+      ]
+    },
+    {
+      "id": "nemesis",
+      "enabled": true,
+      "weight": 5,
+      "title": "Nemesis",
+      "description": "After the target is selected, they pick an opponent. Random loser receives the fate.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "duel"
+        }
+      ]
+    },
+    {
+      "id": "sacrifice",
+      "enabled": true,
+      "weight": 5,
+      "title": "Sacrifice",
+      "description": "The target chooses someone to join them, but the final shock value is halved.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "sharePain"
+        },
+        {
+          "type": "valueMultiplier",
+          "multiplier": 0.5
+        }
+      ]
+    },
+    {
+      "id": "executioner",
+      "enabled": true,
+      "weight": 4,
+      "title": "Executioner",
+      "description": "The last shocked player chooses the target, and double-hit chance becomes 50%.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "manualTargetByLastShocked"
+        },
+        {
+          "type": "setDoubleHitChance",
+          "percent": 50
+        }
+      ]
+    },
+    {
+      "id": "coup-detat",
+      "enabled": true,
+      "weight": 4,
+      "title": "Coup d'\u00c9tat",
+      "description": "The host manually chooses the target and the fate is forced to Medium.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "manualTargetByHost"
+        },
+        {
+          "type": "forceFate",
+          "fateKey": "medium"
+        }
+      ]
+    },
+    {
+      "id": "domino-effect",
+      "enabled": true,
+      "weight": 5,
+      "title": "Domino Effect",
+      "description": "One extra random player joins, but shock values are halved.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "doubleTarget"
+        },
+        {
+          "type": "valueMultiplier",
+          "multiplier": 0.5
+        }
+      ]
+    },
+    {
+      "id": "crowd-control",
+      "enabled": true,
+      "weight": 4,
+      "title": "Crowd Control",
+      "description": "Everyone is selected, but fate is capped at Low.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceAllTargets"
+        },
+        {
+          "type": "capFateCategory",
+          "value": "low"
+        }
+      ]
+    },
+    {
+      "id": "russian-roulette",
+      "enabled": true,
+      "weight": 5,
+      "title": "Russian Roulette",
+      "description": "SAFE is removed and every target has equal chance as usual. One unlucky player faces the wheel.",
+      "targetWheel": true,
+      "effects": [
+        {
+          "type": "disableTargetType",
+          "targetType": "safe"
+        },
+        {
+          "type": "disableTargetType",
+          "targetType": "all"
+        }
+      ]
+    },
+    {
+      "id": "tiny-chaos",
+      "enabled": true,
+      "weight": 5,
+      "title": "Tiny Chaos",
+      "description": "Everyone is selected and fate is forced to Vibe.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceAllTargets"
+        },
+        {
+          "type": "forceVibrateOnly"
+        }
+      ]
+    },
+    {
+      "id": "loaded-mercy",
+      "enabled": true,
+      "weight": 4,
+      "title": "Loaded Mercy",
+      "description": "SAFE is removed, but fate is capped at Medium.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "disableTargetType",
+          "targetType": "safe"
+        },
+        {
+          "type": "capFateCategory",
+          "value": "medium"
+        }
+      ]
+    },
+    {
+      "id": "trial-by-fire",
+      "enabled": true,
+      "weight": 3,
+      "title": "Trial By Fire",
+      "description": "The least shocked player becomes target, and High/Brutal/Deathwish are doubled.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceLeastShockedTarget"
+        },
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "high",
+          "multiplier": 2
+        },
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "brutal",
+          "multiplier": 2
+        },
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "deathwish",
+          "multiplier": 2
+        }
+      ]
+    },
+    {
+      "id": "forgotten-soul",
+      "enabled": true,
+      "weight": 6,
+      "title": "Forgotten Soul",
+      "description": "The player who has gone the longest without being selected becomes the target.",
+      "targetWheel": true,
+      "fateWheel": false,
+      "effects": [
+        {
+          "type": "forceLongestNotSelectedTarget"
+        }
+      ]
+    },
+    {
+      "id": "untouched-nerve",
+      "enabled": true,
+      "weight": 6,
+      "title": "Untouched Nerve",
+      "description": "The player who has gone the longest without a shock becomes the target.",
+      "targetWheel": true,
+      "fateWheel": false,
+      "effects": [
+        {
+          "type": "forceLongestNotShockedTarget"
+        }
+      ]
+    },
+    {
+      "id": "vibe-virgin",
+      "enabled": true,
+      "weight": 5,
+      "title": "Vibe Virgin",
+      "description": "The player with the fewest vibe rounds becomes the target, and fate is forced to Vibe.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceLeastVibedTarget"
+        },
+        {
+          "type": "forceVibrateOnly"
+        }
+      ]
+    },
+    {
+      "id": "buzz-addict",
+      "enabled": true,
+      "weight": 4,
+      "title": "Buzz Addict",
+      "description": "The player with the most vibe rounds gets picked again.",
+      "targetWheel": true,
+      "fateWheel": false,
+      "effects": [
+        {
+          "type": "forceMostVibedTarget"
+        }
+      ]
+    },
+    {
+      "id": "pain-debt",
+      "enabled": true,
+      "weight": 5,
+      "title": "Pain Debt",
+      "description": "The player with the lowest total shock intensity receives this round.",
+      "targetWheel": true,
+      "fateWheel": false,
+      "effects": [
+        {
+          "type": "forceLowestIntensityTarget"
+        }
+      ]
+    },
+    {
+      "id": "overcharged",
+      "enabled": true,
+      "weight": 3,
+      "title": "Overcharged",
+      "description": "The player with the highest total shock intensity is pulled back into the game.",
+      "targetWheel": true,
+      "fateWheel": false,
+      "effects": [
+        {
+          "type": "forceHighestIntensityTarget"
+        }
+      ]
+    },
+    {
+      "id": "statistics-hate-you",
+      "enabled": true,
+      "weight": 4,
+      "title": "Statistics Hate You",
+      "description": "The least shocked player is more likely to be selected, and brutal results are more likely.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "multiplyTargetWeight",
+          "selector": "leastShocked",
+          "multiplier": 4
+        },
+        {
+          "type": "multiplyFateWeight",
+          "fateKey": "brutal",
+          "multiplier": 2
+        }
+      ]
+    },
+    {
+      "id": "fan-favorite",
+      "enabled": true,
+      "weight": 4,
+      "title": "Fan Favorite",
+      "description": "The most selected player has a much higher target weight this round.",
+      "targetWheel": true,
+      "fateWheel": false,
+      "effects": [
+        {
+          "type": "multiplyTargetWeight",
+          "selector": "mostSelected",
+          "multiplier": 5
+        }
+      ]
+    },
+    {
+      "id": "veteran-privilege",
+      "enabled": true,
+      "weight": 4,
+      "title": "Veteran Privilege",
+      "description": "The most shocked player is less likely to be selected, while SAFE is doubled.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "multiplyTargetWeight",
+          "selector": "mostShocked",
+          "multiplier": 0.25
+        },
+        {
+          "type": "doubleSafeWeight"
+        }
+      ]
+    },
+    {
+      "id": "long-memory",
+      "enabled": true,
+      "weight": 4,
+      "title": "Long Memory",
+      "description": "The player who has gone longest without being selected has a huge target weight.",
+      "targetWheel": true,
+      "fateWheel": false,
+      "effects": [
+        {
+          "type": "multiplyTargetWeight",
+          "selector": "longestNotSelected",
+          "multiplier": 6
+        }
+      ]
+    },
+    {
+      "id": "cold-streak",
+      "enabled": true,
+      "weight": 4,
+      "title": "Cold Streak",
+      "description": "The player who has gone longest without a shock has a huge target weight.",
+      "targetWheel": true,
+      "fateWheel": false,
+      "effects": [
+        {
+          "type": "multiplyTargetWeight",
+          "selector": "longestNotShocked",
+          "multiplier": 6
+        }
+      ]
+    },
+    {
+      "id": "host-chooses-fate",
+      "enabled": true,
+      "weight": 4,
+      "title": "Host Chooses Fate",
+      "description": "The host chooses the target manually, then the target chooses between a safe low hit or the wheel.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "manualTargetByHost"
+        },
+        {
+          "type": "chooseFateByTarget",
+          "choices": [
+            {
+              "label": "Low for sure",
+              "fateKey": "low"
+            },
+            {
+              "label": "Spin the fate wheel",
+              "fateKey": null
+            },
+            {
+              "label": "Vibe but double-hit chance 100%",
+              "fateKey": "vibe",
+              "doubleHitChance": 100
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mercy-or-madness",
+      "enabled": true,
+      "weight": 5,
+      "title": "Mercy or Madness",
+      "description": "Target chooses: guaranteed Vibe, or random High/Brutal/Deathwish.",
+      "targetWheel": false,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "chooseFateByTarget",
+          "choices": [
+            {
+              "label": "Guaranteed Vibe",
+              "fateKey": "vibe"
+            },
+            {
+              "label": "High / Brutal / Deathwish random",
+              "fateKey": null,
+              "forceRandomFateKeys": [
+                "high",
+                "brutal",
+                "deathwish"
+              ]
+            },
+            {
+              "label": "Low, but double hit guaranteed",
+              "fateKey": "low",
+              "doubleHitChance": 100
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "last-one-laughing",
+      "enabled": true,
+      "weight": 4,
+      "title": "Last One Laughing",
+      "description": "The last shocked player picks the target, but SAFE is disabled.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "manualTargetByLastShocked"
+        },
+        {
+          "type": "disableSafe"
+        }
+      ]
+    },
+    {
+      "id": "everybody-hates-safe",
+      "enabled": true,
+      "weight": 4,
+      "title": "Everybody Hates Safe",
+      "description": "SAFE is removed from the target wheel and the fate wheel.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "disableSafe"
+        }
+      ]
+    },
+    {
+      "id": "reverse-charity",
+      "enabled": true,
+      "weight": 4,
+      "title": "Reverse Charity",
+      "description": "The lowest total intensity player gets selected, but fate is capped at Medium.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceLowestIntensityTarget"
+        },
+        {
+          "type": "capFateCategory",
+          "value": "medium"
+        }
+      ]
+    },
+    {
+      "id": "equalizer",
+      "enabled": true,
+      "weight": 4,
+      "title": "Equalizer",
+      "description": "The least selected player is picked and all fate odds become equal.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceLeastSelectedTarget"
+        },
+        {
+          "type": "equalFateWeights"
+        }
+      ]
+    },
+    {
+      "id": "villain-tax",
+      "enabled": true,
+      "weight": 4,
+      "title": "Villain Tax",
+      "description": "The most shocked player is selected, but the result is softened by 50%.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "forceMostShockedTarget"
+        },
+        {
+          "type": "valueMultiplier",
+          "multiplier": 0.5
+        }
+      ]
+    },
+    {
+      "id": "wheel-remembers",
+      "enabled": true,
+      "weight": 4,
+      "title": "The Wheel Remembers",
+      "description": "The previous target is excluded, and the longest not selected player is favored heavily.",
+      "targetWheel": true,
+      "fateWheel": false,
+      "effects": [
+        {
+          "type": "excludeLastTarget"
+        },
+        {
+          "type": "multiplyTargetWeight",
+          "selector": "longestNotSelected",
+          "multiplier": 5
+        }
+      ]
+    },
+    {
+      "id": "no-good-options",
+      "enabled": true,
+      "weight": 3,
+      "title": "No Good Options",
+      "description": "Target chooses between High, Low with guaranteed double-hit, or sharing the pain.",
+      "targetWheel": true,
+      "fateWheel": true,
+      "effects": [
+        {
+          "type": "chooseFateByTarget",
+          "choices": [
+            {
+              "label": "High",
+              "fateKey": "high"
+            },
+            {
+              "label": "Low + guaranteed double-hit",
+              "fateKey": "low",
+              "doubleHitChance": 100
+            }
+          ]
+        },
+        {
+          "type": "sharePain"
+        }
+      ]
+    }
+  ]
+}
