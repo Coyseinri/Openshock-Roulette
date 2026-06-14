@@ -301,7 +301,7 @@ function validateConfig(config) {
   if (!Array.isArray(config.fateWheel)) throw new Error("config.fateWheel must be an array");
   if (!config.fateWheel.length) throw new Error("config.fateWheel must not be empty");
   config.eventCards = config.eventCards || {};
-  config.eventCards.enabled = Boolean(config.eventCards.enabled ?? false);
+  config.eventCards.enabled = Boolean(config.eventCards.enabled ?? true);
   config.eventCards.chancePercent = clampInt(config.eventCards.chancePercent ?? 18, 0, 100);
   config.eventCards.displayDurationMs = clampInt(config.eventCards.displayDurationMs ?? 4000, 0, 15000);
 

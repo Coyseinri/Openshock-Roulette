@@ -251,3 +251,36 @@ Use at your own risk. The author is not responsible for injury, misuse, consent 
 ## Event cards
 
 Event cards are configured in `event-cards.json`. The game supports modular target/fate effects, interactive choices, and per-player session statistics for cards such as least shocked, most selected, longest not selected, bodyguard, duel, and share pain. See `EVENT_CARDS.md` for the full card/effect reference.
+
+
+## Event card troubleshooting
+
+If event card chance is set to `100%` but cards do not trigger:
+
+- Check that **Event cards** is set to `On` in the webpage.
+- Check that `config.json` contains:
+
+```json
+"eventCards": {
+  "enabled": true,
+  "chancePercent": 100,
+  "displayDurationMs": 10000
+}
+```
+
+The browser log will now show whether the event roll was skipped, missed, or hit.
+
+
+## Event card display panel
+
+The page includes a permanent event card panel above the spinners.
+
+- The panel is always visible.
+- It has a fixed minimum height to prevent layout jumping.
+- If no card is active, it shows `No Event Card`.
+- When a card rolls, the card title and description stay visible while the round continues.
+- Card styling uses `category`, `type`, or inferred keywords:
+  - `good`
+  - `neutral`
+  - `evil`
+  - `chaos`

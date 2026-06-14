@@ -146,6 +146,7 @@
   "eventCards": {
     "enabled": true,
     "chancePercent": 18,
-    "displayDurationMs": 4000
+    "displayDurationMs": 4000,
+    "keepLastVisible": true
   }
 }

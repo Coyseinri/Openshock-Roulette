@@ -77,8 +77,6 @@ function defaultPlayerStats() {
 function ensurePlayerStats(shocker) {
   if (!shocker?.id) return defaultPlayerStats();
   if (!playerStats[shocker.id]) playerStats[shocker.id] = defaultPlayerStats();
-
-  // Backfill new fields when loading an older in-memory game state.
   playerStats[shocker.id] = { ...defaultPlayerStats(), ...playerStats[shocker.id] };
   return playerStats[shocker.id];
 }
@@ -179,6 +177,40 @@ function setMainResult(text, cls="") {
   mainResult.textContent = text;
 }
 
+function normalizeEventCategory(card) {
+  const raw = String(card?.category || card?.type || card?.tone || "").toLowerCase();
+  if (["good", "beneficial", "mercy", "safe"].includes(raw)) return "good";
+  if (["evil", "bad", "punishment", "red"].includes(raw)) return "evil";
+  if (["chaos", "wild", "random"].includes(raw)) return "chaos";
+  if (["neutral", "mixed", "orange"].includes(raw)) return "neutral";
+  const text = `${card?.id || ""} ${card?.title || ""} ${card?.description || ""}`.toLowerCase();
+  if (text.includes("safe") || text.includes("mercy") || text.includes("escape")) return "good";
+  if (text.includes("all") || text.includes("double") || text.includes("death") || text.includes("brutal")) return "evil";
+  if (text.includes("random") || text.includes("swap") || text.includes("reverse")) return "chaos";
+  return "neutral";
+}
+
+function updateEventCardPanel(card, stateText = null) {
+  const panel = document.getElementById("eventCardPanel");
+  const title = document.getElementById("eventCardTitle");
+  const description = document.getElementById("eventCardDescription");
+
+  if (!panel || !title || !description) return;
+
+  if (!card) {
+    panel.className = "eventCardPanel none";
+    title.textContent = "No Event Card";
+    description.textContent = stateText || "Waiting for the next event roll...";
+    return;
+  }
+
+  const category = normalizeEventCategory(card);
+  panel.className = `eventCardPanel ${category}`;
+  title.textContent = card.title || card.name || card.id || "Event Card";
+  description.textContent = card.description || card.text || card.effect || "No description provided.";
+}
+
+
 async function loadConfig() {
   const res = await fetch("/api/config");
   config = await res.json();
@@ -211,9 +243,15 @@ function applyConfigToForm() {
   document.getElementById("noRepeatMode").value = config.game?.noRepeatFate ? "on" : "off";
   document.getElementById("escalationEnabled").value = config.game?.escalationEnabled ? "on" : "off";
   document.getElementById("escalationPerRound").value = config.game?.escalationPerRound ?? 2;
-  document.getElementById("eventCardsEnabled").value = config.eventCards?.enabled ? "on" : "off";
-  document.getElementById("eventCardChance").value = config.eventCards?.chancePercent ?? 18;
-  document.getElementById("eventCardDisplayMs").value = config.eventCards?.displayDurationMs ?? 4000;
+  const effectiveEventCards = {
+    enabled: config.eventCards?.enabled ?? eventCardsConfig?.enabled ?? false,
+    chancePercent: config.eventCards?.chancePercent ?? eventCardsConfig?.chancePercent ?? 18,
+    displayDurationMs: config.eventCards?.displayDurationMs ?? eventCardsConfig?.displayDurationMs ?? 4000
+  };
+
+  document.getElementById("eventCardsEnabled").value = effectiveEventCards.enabled ? "on" : "off";
+  document.getElementById("eventCardChance").value = effectiveEventCards.chancePercent;
+  document.getElementById("eventCardDisplayMs").value = effectiveEventCards.displayDurationMs;
 }
 
 async function loadEventCards() {
@@ -539,8 +577,26 @@ function getEventRuntimeConfig() {
 
 function rollEventCard() {
   const ec = getEventRuntimeConfig();
-  if (!ec.enabled || !ec.cards.length || !rollPercent(ec.chancePercent)) return null;
-  return weightedPick(ec.cards.map(c => ({ ...c, weight: Math.max(0, Number(c.weight ?? 1)) })));
+
+  if (!ec.enabled) {
+    log("Event card roll skipped: event cards are disabled.");
+    return null;
+  }
+
+  if (!ec.cards.length) {
+    log("Event card roll skipped: no enabled event cards found.");
+    return null;
+  }
+
+  const roll = Math.random() * 100;
+  if (roll >= ec.chancePercent) {
+    log(`Event card roll missed: ${roll.toFixed(1)} >= ${ec.chancePercent}%.`);
+    return null;
+  }
+
+  const picked = weightedPick(ec.cards.map(c => ({ ...c, weight: Math.max(0, Number(c.weight ?? 1)) })));
+  log(`Event card roll hit: ${roll.toFixed(1)} < ${ec.chancePercent}%. Picked: ${picked.title || picked.id}.`);
+  return picked;
 }
 
 function getEventEffects(card) {
@@ -694,16 +750,32 @@ async function resolveInteractiveEvent(card, roundState) {
 
 async function runPreRoundEvent() {
   activeRoundEvent = null;
-  const card = rollEventCard();
-  const roundState = {
-    card, forcedTarget: null, extraTargets: [], forceValue: null, forceFateKey: null, capFateMax: null,
-    disabledFateKeys: new Set(), fateMultipliers: new Map(), targetMultipliers: [], excludeTargetIds: new Set(),
-    disableTargetTypes: new Set(), skipTargetSpin: false, doubleHitChanceOverride: null, valueMultiplier: 1, valueOffset: 0,
-    forceAllTargets: false, postTargetEffects: []
-  };
-  if (!card) return roundState;
 
+  const card = rollEventCard();
+
+  const roundState = {
+    card,
+    forcedTarget: null,
+    extraTargets: [],
+    forceValue: null,
+    forceFateKey: null,
+    capFateMax: null,
+    disabledFateKeys: new Set(),
+    fateMultipliers: new Map(),
+    targetMultipliers: [],
+    excludeTargetIds: new Set(),
+    disableTargetTypes: new Set(),
+    skipTargetSpin: false,
+    doubleHitChanceOverride: null,
+    valueMultiplier: 1,
+    valueOffset: 0,
+    forceAllTargets: false,
+    postTargetEffects: []
+  };
+
+  if (!card) return roundState;
   activeRoundEvent = card;
+  updateEventCardPanel(card);
   showEventOverlay(card);
   log(`Round ${roundNumber}: Event card triggered: ${card.title || card.id}`);
   await resolveInteractiveEvent(card, roundState);
@@ -1043,9 +1115,6 @@ function spinWheelToSegment(canvas, segments, picked, rotationVarName) {
   }
 
   const midDeg = (pickedStart + pickedEnd) / 2;
-
-  // We need: midDeg + finalRotation = needleDeg  (mod 360)
-  // Previous versions added an absolute target each round, causing pointer/result drift.
   const desiredRotationMod = normalizeDeg(needleDeg - midDeg);
   const currentRotation = rotationVarName === "target" ? targetRotation : fateRotation;
   const currentMod = normalizeDeg(currentRotation);
@@ -1395,7 +1464,8 @@ document.addEventListener("keydown", (event) => {
 });
 
 (async function init() {
-  await loadConfig();
+  updateEventCardPanel(null);
   await loadEventCards();
+  await loadConfig();
   await loadShockers();
 })();

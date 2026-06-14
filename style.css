@@ -111,8 +111,8 @@ button:disabled { opacity:.45; cursor:not-allowed; }
 
 .canvasWrap {
   position:relative;
-  width:min(42vw, 560px);
-  height:min(42vw, 560px);
+  width:min(32vw, 42vh, 500px);
+  height:min(32vw, 42vh, 500px);
   max-width:560px;
   max-height:560px;
   min-width:320px;
@@ -637,4 +637,84 @@ canvas.wheelCanvas {
   font-size: 0.75rem;
   color: var(--muted);
   font-weight: 700;
+}
+
+
+/* Persistent event card display.
+   Fixed min-height prevents the wheels from jumping when cards appear/disappear. */
+.eventCardPanel {
+  max-width:1500px;
+  min-height:118px;
+  margin:0 auto 16px auto;
+  padding:16px 20px;
+  border:2px solid #333;
+  border-radius:16px;
+  background:linear-gradient(180deg, #1b1b1b, #141414);
+  box-shadow:0 10px 30px #0005;
+  display:grid;
+  grid-template-rows:auto auto 1fr;
+  gap:6px;
+  text-align:center;
+}
+
+.eventCardPanel.none {
+  border-color:#333;
+  opacity:.88;
+}
+
+.eventCardPanel.good {
+  border-color:#188038;
+  box-shadow:0 0 0 1px #18803855, 0 10px 30px #0005;
+}
+
+.eventCardPanel.neutral {
+  border-color:#b35c00;
+  box-shadow:0 0 0 1px #b35c0055, 0 10px 30px #0005;
+}
+
+.eventCardPanel.evil {
+  border-color:#b00020;
+  box-shadow:0 0 0 1px #b0002055, 0 10px 30px #0005;
+}
+
+.eventCardPanel.chaos {
+  border-color:#8e24aa;
+  box-shadow:0 0 0 1px #8e24aa55, 0 10px 30px #0005;
+}
+
+.eventCardKicker {
+  color:#aaa;
+  font-size:.78rem;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+
+.eventCardTitle {
+  font-size:1.45rem;
+  font-weight:950;
+  line-height:1.15;
+   text-align:center;
+}
+
+.eventCardDescription {
+  color:#ddd;
+  font-size:1rem;
+  line-height:1.35;
+  max-width:1100px;
+  margin:0 auto; 
+  text-align:center;  
+
+}
+
+@media (max-width: 850px) {
+  .eventCardPanel {
+    min-height:132px;
+    margin-bottom:12px;
+    padding:14px;
+  }
+
+  .eventCardTitle {
+    font-size:1.25rem;
+  }
 }

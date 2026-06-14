@@ -552,15 +552,15 @@
       "enabled": true,
       "weight": 6,
       "title": "Choose Your Fate",
-      "description": "After the target is selected, they choose between Low for sure or spinning the fate wheel.",
+      "description": "After the target is selected, they choose between Medium for sure or spinning the fate wheel.",
       "fateWheel": true,
       "effects": [
         {
           "type": "chooseFateByTarget",
           "choices": [
             {
-              "label": "Low for sure",
-              "fateKey": "low"
+              "label": "Medium for sure",
+              "fateKey": "medium"
             },
             {
               "label": "Spin the fate wheel",
@@ -991,11 +991,6 @@
             {
               "label": "Spin the fate wheel",
               "fateKey": null
-            },
-            {
-              "label": "Vibe but double-hit chance 100%",
-              "fateKey": "vibe",
-              "doubleHitChance": 100
             }
           ]
         }
@@ -1006,7 +1001,7 @@
       "enabled": true,
       "weight": 5,
       "title": "Mercy or Madness",
-      "description": "Target chooses: guaranteed Vibe, or random High/Brutal/Deathwish.",
+      "description": "Target chooses: guaranteed Medium, or random High/Brutal",
       "targetWheel": false,
       "fateWheel": true,
       "effects": [
@@ -1018,17 +1013,16 @@
               "fateKey": "vibe"
             },
             {
-              "label": "High / Brutal / Deathwish random",
+              "label": "High or Brutal",
               "fateKey": null,
               "forceRandomFateKeys": [
                 "high",
-                "brutal",
-                "deathwish"
+                "brutal"
               ]
             },
             {
-              "label": "Low, but double hit guaranteed",
-              "fateKey": "low",
+              "label": "Double-Hit Medium",
+              "fateKey": "medium",
               "doubleHitChance": 100
             }
           ]
