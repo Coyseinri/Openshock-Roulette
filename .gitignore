@@ -1,13 +1,18 @@
 # Dependencies
 node_modules/
+package-lock.json
 
 # Local runtime config
+config/*.json
+!config/*.example.json
 config.json
 shockers.json
 .env
 .env.*
+!.env.example
 
 # Logs
+logs/
 *.log
 npm-debug.log*
 
@@ -16,3 +21,13 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+session-state.json
+session-state*.json
+session-archive/
+data/
+*.db
+*.db-wal
+*.db-shm
+
+

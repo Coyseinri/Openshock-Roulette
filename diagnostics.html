@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenShock Roulette Diagnostics</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 24px; background: #111; color: #eee; }
+    h1, h2 { margin-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .card { background: #1d1d1d; border: 1px solid #333; border-radius: 12px; padding: 14px; }
+    .metric { font-size: 28px; font-weight: 700; }
+    .muted { color: #aaa; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #333; padding: 6px; text-align: left; vertical-align: top; }
+    code { background: #222; padding: 2px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>OpenShock Roulette Diagnostics</h1>
+  <p class="muted">Auto-refreshes every 3 seconds. Raw data: <code>/api/debug/stats</code></p>
+  <div id="content">Loading...</div>
+  <script>
+    function esc(v) { return String(v ?? '').replace(/[&<>"']/g, function(m) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]); }); }
+    function row(r) { return '<tr><td>'+esc(r.time)+'</td><td>'+esc(r.method || '')+'</td><td><code>'+esc(r.path)+'</code></td><td>'+esc(r.statusCode || r.status)+'</td><td>'+esc(r.responseTimeMs)+'</td></tr>'; }
+    async function load() {
+      const res = await fetch('/api/debug/stats');
+      const d = await res.json();
+      document.getElementById('content').innerHTML =
+        '<div class="grid">' +
+          '<div class="card"><div class="muted">Incoming API calls</div><div class="metric">'+d.counters.incomingTotal+'</div></div>' +
+          '<div class="card"><div class="muted">OpenShock live calls</div><div class="metric">'+d.counters.openShockTotal+'</div></div>' +
+          '<div class="card"><div class="muted">Cache hits / misses</div><div class="metric">'+d.counters.openShockCacheHits+' / '+d.counters.openShockCacheMisses+'</div></div>' +
+          '<div class="card"><div class="muted">Slow requests</div><div class="metric">'+d.counters.slowRequests+'</div></div>' +
+          '<div class="card"><div class="muted">Cached shockers</div><div class="metric">'+d.cache.cachedShockers+'</div><div class="muted">expires in '+Math.round((d.cache.expiresInMs || 0)/1000)+'s</div></div>' +
+          '<div class="card"><div class="muted">Avg OpenShock response</div><div class="metric">'+d.averages.openShockResponseMs+'ms</div></div>' +
+        '</div>' +
+        '<h2>Recent OpenShock calls</h2><table><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>ms</th></tr></thead><tbody>'+d.recent.openShockCalls.map(row).join('')+'</tbody></table>' +
+        '<h2>Slow requests</h2><table><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>ms</th></tr></thead><tbody>'+d.recent.slowRequests.map(row).join('')+'</tbody></table>' +
+        '<h2>Recent incoming requests</h2><table><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>ms</th></tr></thead><tbody>'+d.recent.incomingRequests.map(row).join('')+'</tbody></table>';
+    }
+    load(); setInterval(load, 3000);
+  </script>
+</body>
+</html>

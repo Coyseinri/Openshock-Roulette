@@ -1,85 +1,321 @@
-# OpenShock Roulette
+# OpenShock Roulette (OSR) v1.3.0
 
-A local, browser-based roulette party game for OpenShock.
+> ## AI Notice
+>
+> This project contains code written with assistance from AI.
+>
+> Before anyone starts sharpening pitchforks:
+>
+> The AI did not design the game.
+> The AI did not test the shock collars.
+> The AI was absolutely not allowed to control the shock collars.
+>
+> It mostly wrote code, suggested features, generated bugs, helped fix bugs, and occasionally claimed everything was working while the server was actively on fire.
+>
+> All final decisions, testing, debugging, balancing and terrible gameplay ideas were performed by actual humans.
+>
+> Mostly.
 
-The app runs on a Windows laptop or any machine with Node.js. It shows a **Target Spinner** and a **Fate Spinner**, talks to OpenShock through a local Node.js proxy, and keeps the OpenShock API token out of the browser.
+---
 
-> **Safety and consent first:** Only use this with informed, sober, consenting adults who can stop at any time. Do not use electrical stimulation on people with heart conditions, epilepsy, implanted medical devices, pregnancy concerns, unknown medical risks, or anyone who has not explicitly agreed to play.
+## What is OpenShock Roulette?
+
+What started as:
+
+> "Pick a random player and shock them."
+
+...somehow evolved into a full multiplayer party game featuring hidden roles, secret objectives, audience participation, event cards, tokens, questionable alliances, betrayals, bribery, and an alarming number of ways for players to make poor life decisions.
+
+OpenShock Roulette is a local browser-based party game built around the OpenShock ecosystem. Players, audience members and the host influence every round through votes, tokens, event cards, objectives and pure chaos.
+
+What could possibly go wrong? - Historically, quite a lot.
+
+---
+
+## What's New in v1.3.0
+
+Version 1.3.0 transforms OpenShock Roulette from a simple roulette wheel into a complete multiplayer party game.
+
+### New Features
+
+- Host dashboard
+- Player dashboard
+- Audience dashboard
+- Hidden roles
+- Secret objectives
+- Token economy
+- Per-player intensity multipliers
+- Audience voting and approvals
+- QR-code access
+- Persistent game sessions
+- SQLite-backed persistence
+- Diagnostics dashboard
+- Expanded event card system
+
+Things escalated quickly.
+
+The original roadmap ended somewhere around "spin wheel, shock player".
+
+We may have deviated slightly.
 
 ---
 
 ## Features
 
-* Local web interface
-* OpenShock API proxy through Node.js
-* Auto-load OpenShock shockers/collars
-* Fallback `shockers.json` support
-* Target spinner:
-  * Players/collars
-  * SAFE
-  * SHOCK ALL
-* Fate spinner:
-  * `0 = Vibe`
-  * `1-100 = Shock`
-  * Warmup / Low / Medium / High / Brutal / Deathwish
-* Configurable fate ranges and weights
-* Enable/disable fate categories during the game
-* Disabled categories stay visible and crossed out in the odds table
-* Odds auto-normalize when categories are disabled
-* Escalation system
-* Optional no-repeat fate mode
-* Hidden double-hit chance
-* Random pause before fate spinner
-* Random delay before activation
-* Player elimination and rejoin
-* STOP ALL button
+### Core Roulette
+
+- Random player selection
+- Random fate selection
+- SAFE outcomes
+- SHOCK ALL outcomes
+- Hidden double-hit chance
+- Random execution delays
+- Fate weighting system
+- Escalation system
+- No-repeat fate mode
+- Player elimination and rejoin
+- STOP ALL button
+
+### OpenShock Integration
+
+- OpenShock API proxy through Node.js
+- Automatic device discovery
+- Multiple shocker support
+- Local API token protection
+- Fallback shocker configuration
+
+### Host Dashboard
+
+The Host controls the game.
+
+Responsibilities include:
+
+- Starting rounds
+- Approving audience actions
+- Managing players
+- Triggering manual shocks
+- Managing game settings
+- Claiming every bad outcome was intentional
+
+The host is not responsible for the outcome of the game.
+The host is, however, responsible for enabling most of the settings that caused it.
+
+### Player Dashboard
+
+Players receive their own dashboard.
+
+Features include:
+
+- Hidden role
+- Secret objective
+- Point balance
+- Token inventory
+- Player statistics
+- Round history
+- Pending actions
+
+Players will quickly discover seventeen reasons why they should not be the target this round.
+
+### Audience Dashboard
+
+Audience members can participate without wearing a collar.
+
+Features include:
+
+- Audience voting
+- Rewards and modifiers
+- Influence future rounds
+- Watch friendships collapse in real time
+
+The audience always believes they would make better decisions.
+
+The audience is usually lying.
+
+Audience members gain significant confidence from the fact that they are not wearing shock collars. (Yet)
 
 ---
 
-## Project structure
+## Hidden Roles
+
+Every player receives a hidden role.
+
+Examples include:
+
+- Survivor
+- Merchant
+- Bodyguard
+- Gambler
+- Cultist
+- Saboteur
+- Martyr
+- Chaos Agent
+
+Roles reward specific behaviour and provide alternative ways to earn points.
+
+Roles remain hidden from other players. (Unless somebody leaves their phone unlocked on the table.)
+
+Except for the Chaos Agent.. - Everyone knows who the Chaos Agent is.
+
+---
+
+## Secret Objectives
+
+Every player receives a secret objective.
+
+Completing an objective:
+
+- Grants rewards
+- Grants points
+- Automatically assigns a new objective
+
+Objectives are private and only visible to the player who owns them.
+
+---
+
+## Per-Player Multipliers
+
+Each player can have their own intensity multiplier.
+
+The rolled value is adjusted before being sent to OpenShock.
+
+Examples:
+
+- 50% multiplier → Roll 80 → Sends 40
+- 75% multiplier → Roll 80 → Sends 60
+- 100% multiplier → Roll 80 → Sends 80
+
+This allows individual balancing for players with different tolerance levels while keeping the game fair for everyone.
+
+Or at least equally unfair.
+
+---
+
+## Tokens & Economy
+
+Players earn points through gameplay, objectives and roles.
+
+Points can be spent on tokens and modifiers that influence future rounds.
+
+Examples include:
+
+- Shields
+- Blessings
+- Chaos effects
+- Protection effects
+- Future round modifiers
+
+Because apparently getting shocked wasn't enough. We also needed an economy.
+Because every good party game eventually asks the question:
+"What if capitalism, but with electricity?"
+
+---
+
+## Event Cards
+
+Event cards can trigger between rounds and temporarily modify gameplay.
+
+Examples include:
+
+- Bodyguard redirects
+- Forced targets
+- Forced fate values
+- Chaos rounds
+- Blessings
+- Double trouble
+- Protection effects
+- Audience effects
+- Fate manipulation
+
+Every round has the potential to become significantly worse.
+
+See `EVENT_CARDS.md` for the full reference.
+
+---
+
+## Persistent Sessions
+
+OSR stores active game state in SQLite.
+
+The following survive server restarts:
+
+- Points
+- Tokens
+- Roles
+- Objectives
+- Audience state
+- Player statistics
+- Round history
+- Active game progress
+
+Restarting the server does not erase your terrible score.
+
+---
+
+## Diagnostics
+
+A diagnostics dashboard is included for troubleshooting.
+
+Available at:
+
+```text
+http://localhost:8787/diagnostics
+```
+
+Useful for checking:
+
+- API activity
+- OpenShock requests
+- Cache status
+- Runtime statistics
+- Request logging
+
+Useful when investigating reports such as:
+"It shocked me for no reason."
+The Host already knew why you got shocked. 
+
+---
+
+## Project Structure
 
 ```text
 openshock-roulette/
-├── index.html              # Web UI shell
-├── style.css               # UI styling
-├── app.js                  # Browser game logic
-├── server.js               # Local Node.js server and OpenShock proxy
-├── config.example.json     # Example configuration
-├── shockers.example.json   # Example fallback shocker list
-├── package.json            # npm metadata and start script
-├── .gitignore
+├── config/
+├── data/
+├── logs/
+├── host/
+├── player/
+├── audience/
+├── server/
+├── app.js
+├── server.js
+├── index.html
+├── style.css
+├── package.json
 ├── LICENSE
-├── SECURITY.md
-└── README.md
-```
-
-Create your local runtime files from the examples:
-
-```powershell
-Copy-Item config.example.json config.json
-Copy-Item shockers.example.json shockers.json
+├── README.md
+└── EVENT_CARDS.md
 ```
 
 ---
 
 ## Requirements
 
-* Node.js LTS
-* OpenShock account
-* OpenShock API token
-* OpenShock hub/controller and paired shockers/collars
+- Node.js 22+
+- OpenShock Account
+- OpenShock API Token
+- OpenShock Controller / Hub
+- Compatible OpenShock devices
+- At least two volunteers
+- Poor decision-making skills (optional)
 
 ---
 
-## Quick start on Windows
-
-Clone or download the repo, then open PowerShell in the project folder.
+## Quick Start
 
 ```powershell
+git clone https://github.com/Coyseinri/Openshock-Roulette.git
+cd Openshock-Roulette
 npm install
-Copy-Item config.example.json config.json
-Copy-Item shockers.example.json shockers.json
-$env:OPENSHOCK_TOKEN = "paste-your-token-here"
 npm start
 ```
 
@@ -89,155 +325,144 @@ Open:
 http://localhost:8787
 ```
 
----
-
-## Running without npm install
-
-This project only uses Node.js built-in modules. You can also run it directly:
-
-```powershell
-$env:OPENSHOCK_TOKEN = "paste-your-token-here"
-node server.js
-```
+Copy `.env.example` to `.env` and configure your OpenShock token.
 
 ---
 
-## OpenShock token
+## Auto-loading Shockers
 
-The token is read from an environment variable:
+The server automatically attempts to load devices from OpenShock.
 
-```powershell
-$env:OPENSHOCK_TOKEN = "paste-your-token-here"
-```
+If the hub, controller, your smart fridge, your toaster, or some other appliance appears as a player, use exclusions in the configuration.
+If your toaster gets selected multiple times in a row, we recommend keeping it away from any nearby bathtubs.
 
-This variable can also be hard set in the server.js, but be aware that your token is saved to a readable file.
-
----
-
-## Configuration
-
-Most game settings live in `config.json`.
-
-Important sections:
-
-```json
-{
-  "app": {
-    "displayTitle": "OpenShock Roulette",
-    "subtitle": "A shocking roulette game"
-  },
-  "targetWheel": {
-    "playerWeight": 100,
-    "safeWeight": 10,
-    "shockAllWeight": 5
-  },
-  "game": {
-    "hiddenDoubleHitChancePercent": 5,
-    "pauseBeforeFateMinMs": 1500,
-    "pauseBeforeFateMaxMs": 3000,
-    "preHitDelayMinMs": 1000,
-    "preHitDelayMaxMs": 3000,
-    "noRepeatFate": false,
-    "escalationEnabled": true,
-    "escalationPerRound": 2
-  },
-  "safety": {
-    "serverMaxShockIntensity": 100,
-    "serverMaxVibrateIntensity": 100,
-    "defaultDurationMs": 700
-  }
-}
-```
-
-The page can edit many of these values and save them back to `config.json`.
-
----
-
-## Fate wheel defaults
-
-|Category|Range|Default weight|Escalation|
-|-|-:|-:|-|
-|Vibe|0|18|Down|
-|Warmup|1-15|32|Down|
-|Low|16-35|24|Neutral|
-|Medium|36-55|14|Up|
-|High|56-75|7|Up|
-|Brutal|76-90|3|Up|
-|Deathwish|91-100|1|Up|
-
-Disabled categories remain shown in the odds list but are crossed out. The remaining enabled categories are automatically reweighted.
-
----
-
-## Auto-loading collars
-
-The server tries to load shockers from OpenShock. If the hub/device name appears as a player, use exclusions in `config.json`:
-
-```json
-"shockers": {
-  "excludeIds": [
-    "hub-or-device-id-here"
-  ],
-  "excludeNames": [
-    "Living Room Hub"
-  ]
-}
-```
-
-If auto-loading does not work, edit `shockers.json`:
+If automatic discovery fails, devices can be configured manually in config/shockers.json
 
 ```json
 [
   {
-    "id": "00000000-0000-0000-0000-000000000000",
+    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
     "name": "Player 1"
+  },
+  {
+    "id": "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+    "name": "Player 2"
   }
 ]
 ```
 
 ---
 
-## Safety controls
+## Basic Setup
 
-The app includes:
-
-* STOP ALL button
-* Per-player eliminate/rejoin
-* Randomized delay settings
-* Server-side intensity ceiling
-* Server-side duration ceiling
-* No token in browser
-
-Recommended real-world rules:
-
-* Agree on max intensity before starting
-* Test the collar on every participant first
-* Keep the controller nearby
-* Let anyone opt out immediately
-* Do not use this on intoxicated participants
-* Do not leave the game unattended
-* Do not rely on software alone for safety
+1. Verify sound-proofing of the room/house you are playing in.
+2. Verify everyone consents.
+3. Connect OpenShock devices.
+4. Test every device.
+5. Confirm the correct player screams - This step is more important than it sounds.
+6. Start the OSR server.
+7. Open the main screen.
+7. Let players and audience scan their QR codes.
+9. Begin regretting your life choices.
 
 ---
 
-## Development notes
+## Basic Gameplay
 
-The app is intentionally simple:
+1. Players join.
+2. Audience joins.
+3. The host starts a round.
+4. Event cards temporarily suspend fairness.
+5. A target is selected.
+6. Fate is selected.
+7. Modifiers are applied.
+8. OpenShock executes the result.
+9. Players earn points.
+10. Players spend points.
+11. Repeat until somebody negotiates a peace treaty.
 
-* No frontend framework
-* No database
-* No build step
-* No external npm dependencies
-* One local Node server
-* Static frontend files
+---
 
-This makes it easy to run from a laptop at a party without extra infrastructure.
+## Safety Controls
+
+The application includes:
+
+- STOP ALL button
+- Per-player elimination
+- Randomized delays
+- Server-side safety limits
+- API token protection
+
+Recommended real-world rules:
+
+- Agree on intensity limits beforehand
+- Test devices before starting
+- Keep the controller nearby
+- Allow immediate opt-out
+- Never force participation
+- Do not rely solely on software for safety
+
+The STOP ALL button is traditionally discovered approximately one round later than ideal. For best results, locate it before you need it.
+
+---
+
+## Version History
+
+### v1.0
+
+- Simple roulette
+- What could possibly go wrong?
+
+### v1.1
+
+- UI improvements
+- Fate balancing
+- Quality-of-life improvements
+
+### v1.2
+
+- Event cards
+- Expanded gameplay modifiers
+
+### v1.3
+
+- Host dashboard
+- Player dashboard
+- Audience dashboard
+- Per-player intensity multipliers
+- Hidden roles
+- Secret objectives
+- Audience voting
+- Host approvals
+- Token economy
+- Persistent progression
+- Diagnostics dashboard
+- Lots more
+
+Things escalated quickly.
+
+---
+
+## Development Notes
+
+The application intentionally remains lightweight:
+
+- No frontend framework
+- One local Node.js server
+- Static frontend files
+- Minimal infrastructure
+
+Future Coyseinri is responsible for maintaining this. Present Coyseinri apologizes.
+
+Future Coyseinri would also like to apologize, but is currently busy fixing bugs introduced by Present Coyseinri.
 
 ---
 
 ## License
 
-MIT License. See `LICENSE`.
+MIT License.
+
+See `LICENSE` for details.
 
 ---
 
@@ -245,9 +470,10 @@ MIT License. See `LICENSE`.
 
 This is a community hobby project and is not affiliated with OpenShock.
 
-Use at your own risk. The author is not responsible for injury, misuse, consent violations, device malfunction, API changes, or unsafe play.
+OpenShock Roulette controls real OpenShock devices.
 
+Use at your own risk.
 
-## Event cards
+Unlike the emotional damage caused by the audience, the shocks are measurable.
 
-Event cards are configured in `event-cards.json`. The game supports modular target/fate effects, interactive choices, and per-player session statistics for cards such as least shocked, most selected, longest not selected, bodyguard, duel, and share pain. See `EVENT_CARDS.md` for the full card/effect reference.
+The author is not responsible for injury, misuse, consent violations, device malfunction, API changes, unsafe play, broken friendships, ruined alliances, suspiciously targeted event cards, or the consequences of trusting the audience.

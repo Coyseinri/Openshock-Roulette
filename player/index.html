@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenShock Roulette Player</title>
+  <link rel="stylesheet" href="/player/player.css">
+</head>
+<body>
+  <main class="playerShell">
+    <section class="playerCard">
+      <div class="eyebrow">OpenShock Roulette</div>
+      <h1 id="playerName">Player</h1>
+      <div id="roundLine" class="roundLine">Loading...</div>
+      <div id="pointsLine" class="pointsLine">0 points</div>
+      <div id="tokensLine" class="mutedLine">No tokens yet</div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Hidden role</h2>
+      <div id="roleBox" class="objectiveBox">Loading role...</div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Secret objective</h2>
+      <div id="objectiveBox" class="objectiveBox">Loading objective...</div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Token shop</h2>
+      <div id="shopStatus" class="mutedLine">Spend points to buy one-time tokens.</div>
+      <div id="tokenShop" class="tokenShop"></div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Actions for next round</h2>
+      <div id="actionStatus" class="mutedLine">Use tokens or offer help. Actions apply to the next round.</div>
+      <div class="actionGrid">
+        <button id="shieldBtn" type="button">Use Shield token</button>
+        <button id="mercyBtn" type="button">Use Mercy token</button>
+        <button id="chaosBtn" type="button">Use Chaos token</button>
+        <button id="immunityBtn" type="button">Use Immunity token</button>
+      </div>
+      <label class="selectLine">Pick player
+        <select id="targetPlayerSelect"></select>
+      </label>
+      <div class="actionGrid">
+        <button id="bodyguardBtn" type="button">Offer Bodyguard</button>
+        <button id="blessBtn" type="button">Use Blessing token</button>
+        <button id="curseBtn" type="button">Use Curse token</button>
+        <button id="guaranteeBtn" type="button">Use Guarantee token</button>
+        <button id="doubleShockBtn" type="button">Use Double Shock token</button>
+      </div>
+      <div id="pendingBox" class="pendingBox"></div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Quick reference</h2>
+      <div class="referenceBox">
+        <p><strong>Points</strong> are earned from objectives, role rewards and host/audience rewards. Spend them in the token shop.</p>
+        <p><strong>Tokens</strong> create next-round effects. Shield/Immunity protect you, Guarantee/Double Shock target a player, and Blessing/Curse affect another player.</p>
+        <p><strong>Hidden roles</strong> have their own progress and may award points, tokens or special next-round effects.</p>
+        <p><strong>Pending actions</strong> may need host approval before they become active next-round effects.</p>
+      </div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Your stats</h2>
+      <div id="statsGrid" class="statsGrid"></div>
+    </section>
+
+    <section class="playerCard mutedCard">
+      <div id="statusLine">Waiting for updates...</div>
+    </section>
+  </main>
+  <script src="/player/player.js"></script>
+</body>
+</html>

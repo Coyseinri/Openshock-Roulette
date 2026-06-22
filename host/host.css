@@ -1,0 +1,12 @@
+.hostAction { display:flex; justify-content:space-between; gap:12px; align-items:center; background:rgba(255,255,255,.07); border-radius:14px; padding:12px; margin-bottom:10px; }
+.hostActionButtons { display:flex; gap:8px; }
+.hostButton.reject { background:#be123c; }
+.hostButton.approve { background:#16a34a; }
+.manualControl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.manualControl label { display:grid; gap:6px; color:#ddd6ff; font-weight:800; }
+.manualControl button { grid-column:1 / -1; }
+@media (max-width: 640px) { .manualControl { grid-template-columns:1fr; } .hostAction { align-items:stretch; flex-direction:column; } }
+
+.hostTopCard .hostPrimaryActions { margin-top: 14px; }
+.hostPrimaryActions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 640px) { .hostPrimaryActions { grid-template-columns: 1fr; } }

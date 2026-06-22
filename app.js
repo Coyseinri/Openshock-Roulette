@@ -11,6 +11,11 @@ let lastShockedTargets = [];
 let lastSelectedTargets = [];
 let lastTargetPicked = null;
 let playerStats = {};
+let playerMultipliers = {};
+let sessionSaveEnabled = false;
+let hostSpinPaused = false;
+let hostCommandPollTimer = null;
+let sessionSaveTimer = null;
 
 const targetWheel = document.getElementById("targetWheel");
 const fateWheel = document.getElementById("fateWheel");
@@ -27,6 +32,31 @@ const eventPickerLine = document.getElementById("eventPickerLine");
 const eventOptions = document.getElementById("eventOptions");
 const eventResult = document.getElementById("eventResult");
 const eventContinueBtn = document.getElementById("eventContinueBtn");
+
+
+async function postEventLog(payload) {
+  try {
+    await fetch("/api/event-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {})
+    });
+  } catch (err) {
+    log(`Could not write event log: ${err.message}`);
+  }
+}
+
+async function postRoundResult(payload) {
+  try {
+    await fetch("/api/round-result", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {})
+    });
+  } catch (err) {
+    log(`Could not write round result: ${err.message}`);
+  }
+}
 
 function log(msg) {
   const el = document.getElementById("log");
@@ -59,6 +89,34 @@ function activeShockers() {
   return shockers.filter(s => !eliminated.has(s.id));
 }
 
+function getPlayerMultiplier(playerId) {
+  const raw = playerMultipliers?.[playerId];
+  const value = Number(raw === undefined || raw === null || raw === "" ? 100 : raw);
+  if (!Number.isFinite(value)) return 100;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function applyPlayerMultiplier(rolledValue, playerId) {
+  const value = Number(rolledValue || 0);
+  if (value <= 0) return 0;
+  return Math.max(1, Math.ceil(value * (getPlayerMultiplier(playerId) / 100)));
+}
+
+function describeAppliedValues(targets, rolledValue, appliedById) {
+  if (Number(rolledValue || 0) <= 0) return describeValue(0);
+  const unique = Array.from(new Map((targets || []).filter(Boolean).map(s => [s.id, s])).values());
+  if (unique.length === 1) {
+    const s = unique[0];
+    const mult = getPlayerMultiplier(s.id);
+    const applied = appliedById?.[s.id] ?? applyPlayerMultiplier(rolledValue, s.id);
+    return mult === 100
+      ? describeValue(applied)
+      : `Rolled ${rolledValue} · Multiplier ${mult}% · Applied ${applied}`;
+  }
+  const parts = unique.map(s => `${s.name}: ${appliedById?.[s.id] ?? applyPlayerMultiplier(rolledValue, s.id)} (${getPlayerMultiplier(s.id)}%)`);
+  return `Rolled ${rolledValue} · Applied ${parts.join(", ")}`;
+}
+
 
 function defaultPlayerStats() {
   return {
@@ -68,6 +126,10 @@ function defaultPlayerStats() {
     safe: 0,                  // target spinner SAFE rounds while player was active
     allTargeted: 0,           // times included by SHOCK ALL / forceAllTargets
     totalIntensity: 0,        // sum of non-zero selected values received
+    bodyguards: 0,            // approved bodyguard offers
+    cursesUsed: 0,            // approved curse actions
+    chaosUsed: 0,             // chaos tokens used
+    tokensBought: 0,          // tokens bought with points
     lastSelectedRound: 0,
     lastShockedRound: 0,
     lastVibeRound: 0
@@ -77,8 +139,6 @@ function defaultPlayerStats() {
 function ensurePlayerStats(shocker) {
   if (!shocker?.id) return defaultPlayerStats();
   if (!playerStats[shocker.id]) playerStats[shocker.id] = defaultPlayerStats();
-
-  // Backfill new fields when loading an older in-memory game state.
   playerStats[shocker.id] = { ...defaultPlayerStats(), ...playerStats[shocker.id] };
   return playerStats[shocker.id];
 }
@@ -101,7 +161,7 @@ function recordSafeRoundForActivePlayers() {
   });
 }
 
-function recordRoundTargets(targets, { value = null, wasAll = false } = {}) {
+function recordRoundTargets(targets, { value = null, valueByTargetId = null, wasAll = false } = {}) {
   const uniqueTargets = Array.from(new Map((targets || []).filter(Boolean).map(s => [s.id, s])).values());
   uniqueTargets.forEach(s => {
     const stats = ensurePlayerStats(s);
@@ -110,9 +170,10 @@ function recordRoundTargets(targets, { value = null, wasAll = false } = {}) {
 
     if (wasAll) stats.allTargeted = Math.max(0, Number(stats.allTargeted || 0)) + 1;
 
-    if (Number(value) > 0) {
+    const actualValue = valueByTargetId && Object.prototype.hasOwnProperty.call(valueByTargetId, s.id) ? Number(valueByTargetId[s.id] || 0) : Number(value || 0);
+    if (actualValue > 0) {
       stats.shocked = Math.max(0, Number(stats.shocked || 0)) + 1;
-      stats.totalIntensity = Math.max(0, Number(stats.totalIntensity || 0)) + Number(value || 0);
+      stats.totalIntensity = Math.max(0, Number(stats.totalIntensity || 0)) + actualValue;
       stats.lastShockedRound = roundNumber;
     } else {
       stats.vibes = Math.max(0, Number(stats.vibes || 0)) + 1;
@@ -165,6 +226,314 @@ function pickPlayerBySelector(selector, excludedIds = new Set()) {
   }
 }
 
+
+function getShockerById(id) {
+  return shockers.find(s => String(s.id) === String(id)) || null;
+}
+
+function getShockerName(id, fallback = "Unknown player") {
+  return getShockerById(id)?.name || fallback;
+}
+
+function serializeTargetIds(targets) {
+  return (targets || []).filter(Boolean).map(s => s.id).filter(Boolean);
+}
+
+function serializeLastTargetPicked(picked) {
+  if (!picked) return null;
+  const data = {
+    type: picked.type || null,
+    label: picked.label || null
+  };
+  if (picked.shocker?.id) data.shockerId = picked.shocker.id;
+  return data;
+}
+
+function restoreLastTargetPicked(data) {
+  if (!data || typeof data !== "object") return null;
+  if (data.type === "player") {
+    const shocker = getShockerById(data.shockerId);
+    if (!shocker) return null;
+    return { type: "player", label: shocker.name, shocker, weight: 1 };
+  }
+  if (data.type === "safe") return { type: "safe", label: data.label || "SAFE", weight: 1 };
+  if (data.type === "all") return { type: "all", label: data.label || "ALL", weight: 1 };
+  return null;
+}
+
+function buildSessionSnapshot() {
+  return {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    roundNumber,
+    eliminatedIds: Array.from(eliminated),
+    playerStats,
+    playerMultipliers,
+    lastSelectedTargetIds: serializeTargetIds(lastSelectedTargets),
+    lastShockedTargetIds: serializeTargetIds(lastShockedTargets),
+    lastTargetPicked: serializeLastTargetPicked(lastTargetPicked),
+    fateDeckKeys: (fateDeck || []).map(f => f.key).filter(Boolean)
+  };
+}
+
+function applySessionSnapshot(state) {
+  if (!state || typeof state !== "object") return;
+
+  roundNumber = Math.max(0, Math.round(Number(state.roundNumber || 0)));
+  eliminated = new Set(Array.isArray(state.eliminatedIds) ? state.eliminatedIds.map(String) : []);
+  playerStats = state.playerStats && typeof state.playerStats === "object" ? state.playerStats : {};
+  playerMultipliers = state.playerMultipliers && typeof state.playerMultipliers === "object" ? state.playerMultipliers : {};
+  ensureAllPlayerStats();
+  shockers.forEach(s => { if (playerMultipliers[s.id] === undefined) playerMultipliers[s.id] = 100; });
+  shockers.forEach(s => { if (playerMultipliers[s.id] === undefined) playerMultipliers[s.id] = 100; });
+
+  lastSelectedTargets = (Array.isArray(state.lastSelectedTargetIds) ? state.lastSelectedTargetIds : [])
+    .map(getShockerById)
+    .filter(Boolean);
+  lastShockedTargets = (Array.isArray(state.lastShockedTargetIds) ? state.lastShockedTargetIds : [])
+    .map(getShockerById)
+    .filter(Boolean);
+  lastTargetPicked = restoreLastTargetPicked(state.lastTargetPicked);
+
+  const fateByKey = new Map((config?.fateWheel || []).map(f => [f.key, f]));
+  fateDeck = (Array.isArray(state.fateDeckKeys) ? state.fateDeckKeys : [])
+    .map(key => fateByKey.get(key))
+    .filter(Boolean);
+
+  targetResult.textContent = shockers.length ? `${shockers.length} collars loaded` : "No collars found";
+  fateResult.textContent = "Waiting...";
+  setMainResult(roundNumber > 0 ? `Restored round ${roundNumber}` : "Ready");
+  renderPlayers();
+  redrawAllWheels();
+}
+
+async function loadSessionState() {
+  try {
+    const res = await fetch("/api/session");
+    const state = await res.json();
+    if (!res.ok) throw new Error(state.error || "Could not load session state");
+    applySessionSnapshot(state);
+    sessionSaveEnabled = true;
+    log(`Session restored from server state. Round ${roundNumber}.`);
+  } catch (err) {
+    sessionSaveEnabled = true;
+    ensureAllPlayerStats();
+    log(`Session restore skipped: ${err.message}`);
+  }
+}
+
+function saveSessionState(reason = "state change") {
+  if (!sessionSaveEnabled) return;
+  if (sessionSaveTimer) clearTimeout(sessionSaveTimer);
+  sessionSaveTimer = setTimeout(async () => {
+    sessionSaveTimer = null;
+    try {
+      const snapshot = buildSessionSnapshot();
+      const res = await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snapshot)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not save session state");
+      log(`Session saved (${reason}).`);
+      if (document.getElementById("objectiveDetails")?.open) loadPlayerObjectivePanel();
+    } catch (err) {
+      log(`Session save failed: ${err.message}`);
+    }
+  }, 150);
+}
+
+async function getServerSessionState() {
+  const res = await fetch("/api/session", { cache: "no-store" });
+  const state = await res.json();
+  if (!res.ok) throw new Error(state.error || "Could not load server session");
+  return state;
+}
+
+async function consumeRoundModifiers(modifiers) {
+  const ids = (modifiers || []).map(m => typeof m === "string" ? m : m?.id).filter(Boolean);
+  if (!ids.length) return;
+  try {
+    await fetch("/api/round-modifiers/consume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids })
+    });
+  } catch (err) {
+    log(`Could not consume pending modifiers: ${err.message}`);
+  }
+}
+
+function markRoundModifierConsumed(roundState, mod, reason = "used") {
+  if (!roundState || !mod?.id) return;
+  if (!roundState.consumedModifierIds) roundState.consumedModifierIds = new Set();
+  roundState.consumedModifierIds.add(String(mod.id));
+  mod.consumedReason = reason;
+}
+
+function consumedRoundModifierIds(roundState) {
+  return Array.from(roundState?.consumedModifierIds || []);
+}
+
+function applyPendingModifiersBeforeTarget(roundState) {
+  const mods = roundState.pendingRoundModifiers || [];
+  roundState.bodyguardRedirects = new Map();
+  for (const mod of mods) {
+    if (mod.type === "bodyguardNextRound" && mod.targetPlayerId && mod.bodyguardPlayerId) {
+      const protectedId = String(mod.targetPlayerId);
+      const bodyguardId = String(mod.bodyguardPlayerId);
+      const protectedPlayer = getShockerById(protectedId);
+      const bodyguard = getShockerById(bodyguardId);
+      if (protectedPlayer && bodyguard && protectedId !== bodyguardId) {
+        roundState.bodyguardRedirects.set(protectedId, { protectedId, bodyguardId, protectedPlayer, bodyguard, modifierId: mod.id });
+        log(`Pending modifier: ${bodyguard.name} is bodyguarding ${protectedPlayer.name}.`);
+      }
+    }
+    if (mod.type === "shieldNextRound" && mod.targetPlayerId) {
+      roundState.excludeTargetIds.add(String(mod.targetPlayerId));
+      markRoundModifierConsumed(roundState, mod, "shield applied");
+      log(`Pending modifier: ${getShockerName(mod.targetPlayerId, mod.targetPlayerId)} is shielded this round.`);
+    }
+    if (mod.type === "immunityNextRound" && mod.targetPlayerId) {
+      roundState.immuneTargetIds = roundState.immuneTargetIds || new Set();
+      roundState.immuneTargetIds.add(String(mod.targetPlayerId));
+      log(`Pending modifier: ${getShockerName(mod.targetPlayerId, mod.targetPlayerId)} has immunity this round.`);
+    }
+    if (mod.type === "forcedDoubleShockNextRound" && mod.targetPlayerId) {
+      roundState.forcedDoubleShockTargetIds = roundState.forcedDoubleShockTargetIds || new Set();
+      roundState.forcedDoubleShockTargetIds.add(String(mod.targetPlayerId));
+      log(`Pending modifier: forced double shock armed for ${getShockerName(mod.targetPlayerId, mod.targetPlayerId)}.`);
+    }
+    if (mod.type === "volunteerNextRound" && mod.playerId) {
+      const volunteer = getShockerById(mod.playerId);
+      if (volunteer) {
+        roundState.extraTargets.push(volunteer);
+        markRoundModifierConsumed(roundState, mod, "volunteer applied");
+      }
+    }
+
+    if (mod.type === "guaranteedPickNextRound" && mod.targetPlayerId) {
+      const guaranteed = getShockerById(mod.targetPlayerId);
+      if (guaranteed && !roundState.guaranteedTargets.some(s => String(s.id) === String(guaranteed.id))) {
+        roundState.guaranteedTargets.push(guaranteed);
+        markRoundModifierConsumed(roundState, mod, "guaranteed pick applied");
+        log(`Guaranteed pick active: ${guaranteed.name} will be included this round.`);
+      }
+    }
+    if (mod.type === "chaosNextRound") {
+      roundState.equalFateWeights = true;
+      roundState.disableTargetTypes = roundState.disableTargetTypes || new Set();
+      roundState.disableTargetTypes.add("safe");
+      roundState.targetMultipliers.push({ targetType: "all", multiplier: 80 });
+      roundState.forceEqualTargetWeights = true;
+      markRoundModifierConsumed(roundState, mod, "chaos applied");
+      log(`Chaos token activated by ${getShockerName(mod.playerId, "a player")}.`);
+    }
+    if (Number(mod.targetWeightMultiplier || 1) !== 1 && mod.targetPlayerId) {
+      roundState.targetMultipliers.push({ targetId: String(mod.targetPlayerId), multiplier: Number(mod.targetWeightMultiplier) });
+      log(`Pending modifier: target weight x${Number(mod.targetWeightMultiplier)} for ${getShockerName(mod.targetPlayerId, mod.targetPlayerId)}.`);
+    }
+  }
+
+  if (roundState.guaranteedTargets?.length) {
+    const guaranteed = Array.from(new Map(roundState.guaranteedTargets.map(s => [String(s.id), s])).values());
+    if (roundState.forcedTarget?.type === "all") {
+      log("Guaranteed picks are included by SHOCK ALL.");
+    } else if (roundState.forcedTarget?.type === "player" && roundState.forcedTarget.shocker) {
+      const combined = Array.from(new Map([roundState.forcedTarget.shocker, ...guaranteed].map(s => [String(s.id), s])).values());
+      roundState.forcedTarget = { type: combined.length > 1 ? "multi" : "player", label: combined.map(s => s.name).join(" + "), shocker: combined[0], shockers: combined, weight: 1 };
+    } else {
+      roundState.forcedTarget = { type: guaranteed.length > 1 ? "multi" : "player", label: guaranteed.map(s => s.name).join(" + "), shocker: guaranteed[0], shockers: guaranteed, weight: 1 };
+    }
+  }
+}
+
+function applyPendingModifiersAfterTarget(roundState, targetPicked, targets) {
+  const mods = roundState.pendingRoundModifiers || [];
+  targets = Array.from(new Map((targets || []).filter(Boolean).map(t => [t.id, t])).values());
+  for (const mod of mods) {
+    if (mod.type === "bodyguardNextRound") {
+      const protectedId = String(mod.targetPlayerId || "");
+      const bodyguard = getShockerById(mod.bodyguardPlayerId);
+      const protectedPlayer = getShockerById(protectedId);
+      const selectedProtected = targets.some(t => String(t.id) === protectedId);
+      const alreadyRedirected = targetPicked?.bodyguardRedirect && String(targetPicked?.originalShocker?.id || "") === protectedId;
+      if (bodyguard && selectedProtected) {
+        targets = targets.filter(t => String(t.id) !== protectedId);
+        if (!targets.some(t => String(t.id) === String(bodyguard.id))) targets.push(bodyguard);
+        const redirectInfo = { bodyguardRedirect: true, originalShocker: protectedPlayer, bodyguardShocker: bodyguard };
+        targetPicked = targetPicked?.type === "all"
+          ? { ...targetPicked, ...redirectInfo }
+          : { type: "player", label: protectedPlayer?.name || targetPicked?.label || "Protected", shocker: protectedPlayer || targetPicked?.shocker, weight: 1, ...redirectInfo };
+        markRoundModifierConsumed(roundState, mod, "bodyguard redirected");
+        log(`${bodyguard.name} bodyguards ${protectedPlayer?.name || protectedId}.`);
+      } else if (alreadyRedirected && bodyguard) {
+        targets = [bodyguard];
+        markRoundModifierConsumed(roundState, mod, "bodyguard redirected");
+        log(`${bodyguard.name} bodyguards ${protectedPlayer?.name || protectedId}.`);
+      }
+    }
+    if ((mod.type === "mercyNextRound" || mod.type === "blessingNextRound") && mod.targetPlayerId && targets.some(t => t.id === String(mod.targetPlayerId))) {
+      const cap = normalizeFateCap(mod.capFateMax || "low");
+      if (cap !== null) roundState.capFateMax = roundState.capFateMax === null ? cap : Math.min(roundState.capFateMax, cap);
+      if (Number(mod.valueOffset || 0)) roundState.valueOffset += Number(mod.valueOffset || 0);
+      markRoundModifierConsumed(roundState, mod, "blessing/mercy applied");
+      log(`Blessing/Mercy applied to ${mod.targetPlayerId}.`);
+    }
+    if (mod.type === "curseNextRound" && mod.targetPlayerId && targets.some(t => t.id === String(mod.targetPlayerId))) {
+      roundState.valueOffset += Number(mod.valueOffset || 10);
+      markRoundModifierConsumed(roundState, mod, "curse applied");
+      log(`Curse applied to ${mod.targetPlayerId}.`);
+    }
+  }
+  return { targetPicked, targets };
+}
+
+
+async function pollHostSpinnerCommands() {
+  try {
+    const res = await fetch("/api/host/spinner-commands", { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok) return;
+    for (const cmd of data.commands || []) {
+      if (cmd.command === "pause") { hostSpinPaused = true; setMainResult("Paused by host"); log("Host command: pause."); }
+      if (cmd.command === "resume") { hostSpinPaused = false; setMainResult("Ready"); log("Host command: resume."); }
+      if (cmd.command === "spin") {
+        log("Host command: spin requested.");
+        if (!spinBtn.disabled && !hostSpinPaused) spinRound();
+      }
+    }
+  } catch {}
+}
+
+function startHostCommandPolling() {
+  if (hostCommandPollTimer) return;
+  hostCommandPollTimer = setInterval(pollHostSpinnerCommands, 1000);
+}
+
+async function resetServerSessionState() {
+  try {
+    if (sessionSaveTimer) {
+      clearTimeout(sessionSaveTimer);
+      sessionSaveTimer = null;
+    }
+
+    const res = await fetch("/api/session/reset", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Could not reset session state");
+
+    if (data.archivedTo) log(`Server session state archived to ${data.archivedTo}.`);
+    else log("Server session state reset. No previous state file existed to archive.");
+
+    return data.session || null;
+  } catch (err) {
+    log(`Server session reset failed: ${err.message}`);
+    window.alert(`Could not reset server session state: ${err.message}`);
+    return null;
+  }
+}
+
 function getPercent(id) {
   const value = Number(document.getElementById(id).value || 0);
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -179,6 +548,40 @@ function setMainResult(text, cls="") {
   mainResult.textContent = text;
 }
 
+function normalizeEventCategory(card) {
+  const raw = String(card?.category || card?.type || card?.tone || "").toLowerCase();
+  if (["good", "beneficial", "mercy", "safe"].includes(raw)) return "good";
+  if (["evil", "bad", "punishment", "red"].includes(raw)) return "evil";
+  if (["chaos", "wild", "random"].includes(raw)) return "chaos";
+  if (["neutral", "mixed", "orange"].includes(raw)) return "neutral";
+  const text = `${card?.id || ""} ${card?.title || ""} ${card?.description || ""}`.toLowerCase();
+  if (text.includes("safe") || text.includes("mercy") || text.includes("escape")) return "good";
+  if (text.includes("all") || text.includes("double") || text.includes("death") || text.includes("brutal")) return "evil";
+  if (text.includes("random") || text.includes("swap") || text.includes("reverse")) return "chaos";
+  return "neutral";
+}
+
+function updateEventCardPanel(card, stateText = null) {
+  const panel = document.getElementById("eventCardPanel");
+  const title = document.getElementById("eventCardTitle");
+  const description = document.getElementById("eventCardDescription");
+
+  if (!panel || !title || !description) return;
+
+  if (!card) {
+    panel.className = "eventCardPanel none";
+    title.textContent = "No Event Card";
+    description.textContent = stateText || "Waiting for the next event roll...";
+    return;
+  }
+
+  const category = normalizeEventCategory(card);
+  panel.className = `eventCardPanel ${category}`;
+  title.textContent = card.title || card.name || card.id || "Event Card";
+  description.textContent = card.description || card.text || card.effect || "No description provided.";
+}
+
+
 async function loadConfig() {
   const res = await fetch("/api/config");
   config = await res.json();
@@ -192,6 +595,10 @@ async function loadConfig() {
   const subtitleEl = document.getElementById("subtitleText");
   if (subtitleEl) subtitleEl.textContent = config.app?.subtitle || subtitleEl.textContent;
   log("Loaded config.json.");
+}
+
+function syncPageQrControls() {
+  // Page and QR settings are consolidated. QR follows the page setting.
 }
 
 function applyConfigToForm() {
@@ -211,9 +618,229 @@ function applyConfigToForm() {
   document.getElementById("noRepeatMode").value = config.game?.noRepeatFate ? "on" : "off";
   document.getElementById("escalationEnabled").value = config.game?.escalationEnabled ? "on" : "off";
   document.getElementById("escalationPerRound").value = config.game?.escalationPerRound ?? 2;
-  document.getElementById("eventCardsEnabled").value = config.eventCards?.enabled ? "on" : "off";
-  document.getElementById("eventCardChance").value = config.eventCards?.chancePercent ?? 18;
-  document.getElementById("eventCardDisplayMs").value = config.eventCards?.displayDurationMs ?? 4000;
+  const effectiveEventCards = {
+    enabled: config.eventCards?.enabled ?? eventCardsConfig?.enabled ?? false,
+    chancePercent: config.eventCards?.chancePercent ?? eventCardsConfig?.chancePercent ?? 18,
+    displayDurationMs: config.eventCards?.displayDurationMs ?? eventCardsConfig?.displayDurationMs ?? 4000
+  };
+
+  document.getElementById("eventCardsEnabled").value = effectiveEventCards.enabled ? "on" : "off";
+  document.getElementById("eventCardChance").value = effectiveEventCards.chancePercent;
+  document.getElementById("eventCardDisplayMs").value = effectiveEventCards.displayDurationMs;
+
+  const playerPages = config.playerPages || {};
+  document.getElementById("playerPagesEnabled").value = (playerPages.enabled ?? playerPages.qrCodesEnabled ?? true) ? "on" : "off";
+  document.getElementById("playerAutoRefreshMs").value = playerPages.autoRefreshMs ?? 2000;
+  const hostPage = config.hostPage || {};
+  document.getElementById("hostPageEnabled").value = (hostPage.enabled ?? hostPage.qrCodesEnabled ?? true) ? "on" : "off";
+  const audiencePage = config.audiencePage || {};
+  document.getElementById("audiencePageEnabled").value = (audiencePage.enabled ?? audiencePage.qrCodesEnabled ?? true) ? "on" : "off";
+
+  const economy = config.economy || {};
+  document.getElementById("objectiveRewardPoints").value = economy.objectiveRewardPoints ?? 3;
+  document.getElementById("bodyguardRewardPoints").value = economy.bodyguardRewardPoints ?? 2;
+  document.getElementById("blessingCost").value = economy.blessingCost ?? 5;
+  document.getElementById("curseCost").value = economy.curseCost ?? 5;
+  document.getElementById("shieldCost").value = economy.shieldCost ?? 8;
+  document.getElementById("mercyCost").value = economy.mercyCost ?? 6;
+  document.getElementById("audienceTokenGrantAmount").value = economy.audienceTokenGrantAmount ?? 1;
+  document.getElementById("audienceVoteThreshold").value = economy.audienceVoteThreshold ?? 3;
+  document.getElementById("audienceCooldownSeconds").value = economy.audienceCooldownSeconds ?? 20;
+  document.getElementById("audienceMaxVotesPerRound").value = economy.audienceMaxVotesPerRound ?? 1;
+  const tokenCosts = economy.tokenCosts || {};
+  document.getElementById("shieldTokenCost").value = tokenCosts.shield ?? economy.shieldCost ?? 8;
+  document.getElementById("mercyTokenCost").value = tokenCosts.mercy ?? economy.mercyCost ?? 6;
+  document.getElementById("blessingTokenCost").value = tokenCosts.blessing ?? economy.blessingCost ?? 5;
+  document.getElementById("curseTokenCost").value = tokenCosts.curse ?? economy.curseCost ?? 5;
+  document.getElementById("chaosTokenCost").value = tokenCosts.chaos ?? 10;
+  document.getElementById("guaranteeTokenCost").value = tokenCosts.guarantee ?? economy.guaranteeTokenCost ?? economy.guaranteedPickCost ?? 12;
+  document.getElementById("immunityTokenCost").value = tokenCosts.immunity ?? economy.immunityTokenCost ?? 10;
+  document.getElementById("doubleShockTokenCost").value = tokenCosts.doubleShock ?? economy.doubleShockTokenCost ?? 10;
+}
+
+async function loadPlayerObjectivePanel() {
+  const panel = document.getElementById("objectivePanelBody");
+  if (!panel) return;
+  try {
+    const [linksRes, roleLinksRes, objectivesRes] = await Promise.all([
+      fetch("/api/player-links"),
+      fetch("/api/role-links"),
+      fetch("/api/objectives")
+    ]);
+    const linksData = await linksRes.json();
+    const roleLinksData = await roleLinksRes.json();
+    const objectivesData = await objectivesRes.json();
+    if (!linksRes.ok) throw new Error(linksData.error || "Could not load player links");
+    if (!roleLinksRes.ok) throw new Error(roleLinksData.error || "Could not load host/audience links");
+    if (!objectivesRes.ok) throw new Error(objectivesData.error || "Could not load objectives");
+
+    const session = objectivesData.session || {};
+    const assignments = session.objectiveAssignments || {};
+    const defs = new Map((objectivesData.definitions?.objectives || []).map(o => [o.id, o]));
+    const points = session.playerPoints || {};
+    const tokens = session.playerTokens || {};
+    const playerName = id => (linksData.links || []).find(l => String(l.playerId) === String(id))?.name || id || "unknown";
+    const pendingMods = session.pendingRoundModifiers || [];
+    const audienceVotes = session.audienceVotes || [];
+    const objectiveEvents = (session.completedObjectiveEvents || []).filter(e => !e.seen);
+
+    let html = `<div class="objectiveToolbar">
+      <button class="secondary" id="refreshObjectivesBtn" type="button">Refresh</button>
+      <button class="good" id="generateObjectivesBtn" type="button">Generate / reroll objectives</button>
+    </div>`;
+    let stateHtml = ``;
+
+    html += `<div class="objectiveNote">Player pages + QR: <strong>${linksData.enabled ? "enabled" : "disabled"}</strong> · Base URL: <code>${escapeHtml(linksData.publicBaseUrl || "")}</code></div>`;
+
+    if (objectiveEvents.length) {
+      html += `<h4>Objective completions</h4><div class="pendingActionList">`;
+      for (const e of objectiveEvents) {
+        html += `<div class="pendingAction objectiveCompletePopup"><strong>${escapeHtml(playerName(e.playerId))}</strong> completed <strong>${escapeHtml(e.title)}</strong> (+${escapeHtml(e.rewardPoints || 0)} pts) <button class="secondary ackObjectiveBtn" type="button" data-id="${escapeHtml(e.id)}">Acknowledge</button></div>`;
+      }
+      html += `</div>`;
+    }
+
+    stateHtml += `<h4>Pending Next Round effects</h4>`;
+    if (!pendingMods.length) stateHtml += `<div class="objectiveNote">No pending next-round effects.</div>`;
+    else {
+      stateHtml += `<div class="pendingActionList">`;
+      for (const mod of pendingMods) {
+        stateHtml += `<div class="pendingAction"><strong>${escapeHtml(mod.type)}</strong> ${mod.targetPlayerId ? `→ ${escapeHtml(playerName(mod.targetPlayerId))}` : ""}${mod.bodyguardPlayerId ? ` · Bodyguard: ${escapeHtml(playerName(mod.bodyguardPlayerId))}` : ""}</div>`;
+      }
+      stateHtml += `</div>`;
+    }
+
+    stateHtml += `<h4>Audience votes</h4>`;
+    const openVotes = audienceVotes.filter(v => v.status === "open");
+    if (!openVotes.length) stateHtml += `<div class="objectiveNote">No open audience votes.</div>`;
+    else {
+      stateHtml += `<div class="pendingActionList">`;
+      for (const vote of openVotes) {
+        stateHtml += `<div class="pendingAction"><strong>${escapeHtml(vote.type)}</strong>${vote.tokenType ? ` (${escapeHtml(vote.tokenType)} token)` : ""} → ${escapeHtml(playerName(vote.targetPlayerId))} · Votes: ${escapeHtml(vote.count || 0)}
+          <button class="good approveVoteBtn" type="button" data-id="${escapeHtml(vote.id)}">Approve</button>
+          <button class="danger rejectVoteBtn" type="button" data-id="${escapeHtml(vote.id)}">Reject</button></div>`;
+      }
+      stateHtml += `</div>`;
+    }
+    html += `<h4>Host / audience</h4><div class="playerLinkGrid">`;
+    for (const role of ["host", "audience"]) {
+      const item = roleLinksData[role];
+      if (!item) continue;
+      html += `<div class="playerLinkCard">
+        <div class="playerLinkHeader"><strong>${role.toUpperCase()}</strong><span>${item.enabled ? "enabled" : "disabled"}</span></div>
+        <div class="playerUrl"><input readonly value="${escapeHtml(item.url || "")}"></div>
+        ${item.qrDataUrl ? `<img class="qrCode" alt="QR for ${role}" src="${item.qrDataUrl}">` : `<div class="qrDisabled">QR disabled</div>`}
+      </div>`;
+    }
+    html += `</div>`;
+
+    const pending = (session.pendingPlayerActions || []).filter(a => a.status === "pending");
+    stateHtml += `<h4>Pending actions</h4>`;
+    if (!pending.length) stateHtml += `<div class="objectiveNote">No pending player/audience actions.</div>`;
+    else {
+      stateHtml += `<div class="pendingActionList">`;
+      for (const action of pending) {
+        stateHtml += `<div class="pendingAction"><strong>${escapeHtml(action.type)}</strong>${action.tokenType ? ` (${escapeHtml(action.tokenType)} token)` : ""} from ${escapeHtml(playerName(action.playerId || action.bodyguardPlayerId) || action.source || "unknown")} ${action.targetPlayerId ? `→ ${escapeHtml(playerName(action.targetPlayerId))}` : ""}
+          <button class="good approveActionBtn" type="button" data-id="${escapeHtml(action.id)}">Approve</button>
+          <button class="danger rejectActionBtn" type="button" data-id="${escapeHtml(action.id)}">Reject</button>
+        </div>`;
+      }
+      stateHtml += `</div>`;
+    }
+
+    stateHtml += `<h4>Session stats</h4>`;
+    const sessionStats = (linksData.links || []).map(link => ({ link, stats: session.playerStats?.[link.playerId] || {}, points: Number(points[link.playerId] || 0) }))
+      .sort((a, b) => Number(b.stats.shocked || 0) - Number(a.stats.shocked || 0));
+    if (!sessionStats.length) stateHtml += `<div class="objectiveNote">No session stats yet.</div>`;
+    else {
+      stateHtml += `<div class="pendingActionList">`;
+      for (const item of sessionStats) {
+        stateHtml += `<div class="pendingAction"><strong>${escapeHtml(item.link.name)}</strong> · Shocked ${escapeHtml(item.stats.shocked || 0)} · Selected ${escapeHtml(item.stats.selected || 0)} · Vibes ${escapeHtml(item.stats.vibes || 0)} · Points ${escapeHtml(item.points)}</div>`;
+      }
+      stateHtml += `</div>`;
+    }
+
+    html += `<h4>Player links / objectives</h4><div class="playerLinkGrid">`;
+    for (const link of linksData.links || []) {
+      const list = Array.isArray(assignments[link.playerId]) ? assignments[link.playerId] : [];
+      const objectiveText = list.length
+        ? list.map(a => {
+            const def = defs.get(a.objectiveId);
+            const title = def?.title || a.objectiveId;
+            return `${escapeHtml(title)}: ${a.progress ?? 0}/${a.target ?? def?.target ?? "?"}${a.completed ? " ✅" : ""}`;
+          }).join("<br>")
+        : "No objective assigned";
+      const tokenText = Object.entries(tokens[link.playerId] || {}).filter(([,v]) => Number(v) > 0).map(([k,v]) => `${escapeHtml(k)} x${escapeHtml(v)}`).join(" · ") || "No tokens";
+      const role = session.hiddenRoles?.[link.playerId]?.roleId || "not assigned";
+      const multiplier = Number(session.playerMultipliers?.[link.playerId] ?? playerMultipliers?.[link.playerId] ?? 100);
+      html += `<div class="playerLinkCard">
+        <div class="playerLinkHeader"><strong>${escapeHtml(link.name)}</strong><span>${Number(points[link.playerId] || 0)} pts</span></div>
+        <div class="objectiveMini"><strong>Multiplier:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(link.playerId)}" value="${escapeHtml(Math.max(0, Math.min(100, Math.round(Number.isFinite(multiplier) ? multiplier : 100))))}">%</div>
+        <div class="objectiveMini"><strong>Role:</strong> ${escapeHtml(role)}</div>
+        <div class="objectiveMini"><strong>Tokens:</strong> ${tokenText}</div>
+        <div class="objectiveMini">${objectiveText}</div>
+        <div class="playerUrl"><input readonly value="${escapeHtml(link.url)}"></div>
+        ${link.qrDataUrl ? `<img class="qrCode" alt="QR for ${escapeHtml(link.name)}" src="${link.qrDataUrl}">` : `<div class="qrDisabled">QR disabled</div>`}
+      </div>`;
+    }
+    html += `</div>`;
+    panel.innerHTML = html;
+    const gameStatePanel = document.getElementById("gameStatePanelBody");
+    if (gameStatePanel) gameStatePanel.innerHTML = stateHtml || `<div class="objectiveNote">No pending state items.</div>`;
+
+    document.querySelectorAll(".playerMultiplierInput").forEach(input => {
+      input.addEventListener("change", async () => {
+        const id = input.dataset.playerId;
+        if (!id) return;
+        playerMultipliers[id] = getPlayerMultiplierFromInput(input);
+        await savePlayerMultipliers();
+        await loadPlayerObjectivePanel();
+      });
+    });
+
+    document.getElementById("refreshObjectivesBtn")?.addEventListener("click", loadPlayerObjectivePanel);
+    document.getElementById("generateObjectivesBtn")?.addEventListener("click", async () => {
+      const ok = window.confirm("Generate/reroll secret objectives for all players?");
+      if (!ok) return;
+      const res = await fetch("/api/objectives/generate", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ resetExisting: true }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not generate objectives");
+      log("Secret objectives generated.");
+      await loadPlayerObjectivePanel();
+    });
+    document.querySelectorAll(".approveActionBtn,.rejectActionBtn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const approved = btn.classList.contains("approveActionBtn");
+        const res = await fetch("/api/host/action?key=host", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ actionId: btn.dataset.id, approved }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not resolve action");
+        log(`Pending action ${approved ? "approved" : "rejected"}.`);
+        await loadPlayerObjectivePanel();
+      });
+    });
+    document.querySelectorAll(".approveVoteBtn,.rejectVoteBtn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const approved = btn.classList.contains("approveVoteBtn");
+        const res = await fetch("/api/host/audience-vote?key=host", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ voteId: btn.dataset.id, approved }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not resolve audience vote");
+        log(`Audience vote ${approved ? "approved" : "rejected"}.`);
+        await loadPlayerObjectivePanel();
+      });
+    });
+    document.querySelectorAll(".ackObjectiveBtn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const res = await fetch("/api/host/objective-events/ack?key=host", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ ids: [btn.dataset.id] }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not acknowledge objective event");
+        await loadPlayerObjectivePanel();
+      });
+    });
+  } catch (err) {
+    panel.innerHTML = `<div class="warningText">Could not load player/objective panel: ${escapeHtml(err.message)}</div>`;
+    const gameStatePanel = document.getElementById("gameStatePanelBody");
+    if (gameStatePanel) gameStatePanel.innerHTML = `<div class="warningText">Could not load game state: ${escapeHtml(err.message)}</div>`;
+  }
 }
 
 async function loadEventCards() {
@@ -253,7 +880,44 @@ function collectFormToConfig() {
   config.game.escalationPerRound = num("escalationPerRound", 2);
   config.eventCards.enabled = document.getElementById("eventCardsEnabled").value === "on";
   config.eventCards.chancePercent = Math.max(0, Math.min(100, num("eventCardChance", 18)));
-  config.eventCards.displayDurationMs = Math.max(0, num("eventCardDisplayMs", 4000));
+  config.eventCards.displayDurationMs = Math.max(0, numberWithDefault(document.getElementById("eventCardDisplayMs")?.value, config.eventCards.displayDurationMs ?? 4000));
+  config.playerPages = config.playerPages || {};
+  const playerPagesOn = document.getElementById("playerPagesEnabled").value === "on";
+  config.playerPages.enabled = playerPagesOn;
+  delete config.playerPages.qrCodesEnabled;
+  config.playerPages.autoRefreshMs = Math.max(500, num("playerAutoRefreshMs", 2000));
+  config.playerPages.useShockerIdAsAccessKey = Boolean(config.playerPages.useShockerIdAsAccessKey ?? false);
+  config.hostPage = config.hostPage || {};
+  const hostPageOn = document.getElementById("hostPageEnabled").value === "on";
+  config.hostPage.enabled = hostPageOn;
+  delete config.hostPage.qrCodesEnabled;
+  delete config.hostPage.accessKey;
+  config.hostPage.allowManualControl = true;
+  config.audiencePage = config.audiencePage || {};
+  const audiencePageOn = document.getElementById("audiencePageEnabled").value === "on";
+  config.audiencePage.enabled = audiencePageOn;
+  delete config.audiencePage.qrCodesEnabled;
+  delete config.audiencePage.accessKey;
+  config.economy = config.economy || {};
+  config.economy.objectiveRewardPoints = Math.max(0, num("objectiveRewardPoints", 3));
+  config.economy.bodyguardRewardPoints = Math.max(0, num("bodyguardRewardPoints", 2));
+  config.economy.blessingCost = Math.max(0, num("blessingCost", 5));
+  config.economy.curseCost = Math.max(0, num("curseCost", 5));
+  config.economy.shieldCost = Math.max(0, num("shieldCost", 8));
+  config.economy.mercyCost = Math.max(0, num("mercyCost", 6));
+  config.economy.audienceTokenGrantAmount = Math.max(1, num("audienceTokenGrantAmount", 1));
+  config.economy.audienceVoteThreshold = Math.max(1, num("audienceVoteThreshold", 3));
+  config.economy.audienceCooldownSeconds = Math.max(0, num("audienceCooldownSeconds", 20));
+  config.economy.audienceMaxVotesPerRound = Math.max(1, num("audienceMaxVotesPerRound", 1));
+  config.economy.tokenCosts = config.economy.tokenCosts || {};
+  config.economy.tokenCosts.shield = Math.max(0, num("shieldTokenCost", config.economy.shieldCost));
+  config.economy.tokenCosts.mercy = Math.max(0, num("mercyTokenCost", config.economy.mercyCost));
+  config.economy.tokenCosts.blessing = Math.max(0, num("blessingTokenCost", config.economy.blessingCost));
+  config.economy.tokenCosts.curse = Math.max(0, num("curseTokenCost", config.economy.curseCost));
+  config.economy.tokenCosts.chaos = Math.max(0, num("chaosTokenCost", 10));
+  config.economy.tokenCosts.guarantee = Math.max(0, num("guaranteeTokenCost", 12));
+  config.economy.tokenCosts.immunity = Math.max(0, num("immunityTokenCost", 10));
+  config.economy.tokenCosts.doubleShock = Math.max(0, num("doubleShockTokenCost", 10));
 
   config.fateWheel = (config.fateWheel || []).map(f => {
     let min = Number(document.getElementById(`${f.key}_min`)?.value ?? f.min);
@@ -261,7 +925,7 @@ function collectFormToConfig() {
     let weight = Number(document.getElementById(`${f.key}_weight`)?.value ?? f.weight);
     let enabled = document.getElementById(`${f.key}_enabled`)?.checked ?? (f.enabled ?? true);
     let escalates = document.getElementById(`${f.key}_escalates`)?.value ?? f.escalates ?? "neutral";
-    const maxShock = Math.max(1, Math.min(100, Number(config?.safety?.serverMaxShockIntensity ?? 100)));
+    const maxShock = Math.max(1, Math.min(100, Number(config?.safety?.serverMaxShockIntensity ?? 99)));
     min = Math.max(0, Math.min(maxShock, Math.round(Number.isFinite(min) ? min : f.min)));
     max = Math.max(0, Math.min(maxShock, Math.round(Number.isFinite(max) ? max : f.max)));
     if (max < min) [min, max] = [max, min];
@@ -291,6 +955,7 @@ async function saveConfig() {
   }
   config = data.config;
   log("Saved config.json.");
+  loadPlayerObjectivePanel();
 }
 
 function updateConfigPreview(collect=true) {
@@ -323,7 +988,44 @@ function collectPreviewOnly() {
     clone.eventCards = clone.eventCards || {};
     clone.eventCards.enabled = document.getElementById("eventCardsEnabled").value === "on";
     clone.eventCards.chancePercent = Math.max(0, Math.min(100, num("eventCardChance", clone.eventCards.chancePercent ?? 18)));
-    clone.eventCards.displayDurationMs = Math.max(0, num("eventCardDisplayMs", clone.eventCards.displayDurationMs ?? 4000));
+    clone.eventCards.displayDurationMs = Math.max(0, numberWithDefault(document.getElementById("eventCardDisplayMs")?.value, clone.eventCards.displayDurationMs ?? 4000));
+    clone.playerPages = clone.playerPages || {};
+    const playerPagesOn = document.getElementById("playerPagesEnabled").value === "on";
+    clone.playerPages.enabled = playerPagesOn;
+    delete clone.playerPages.qrCodesEnabled;
+    clone.playerPages.autoRefreshMs = Math.max(500, num("playerAutoRefreshMs", clone.playerPages.autoRefreshMs ?? 2000));
+    clone.playerPages.useShockerIdAsAccessKey = Boolean(clone.playerPages.useShockerIdAsAccessKey ?? false);
+    clone.hostPage = clone.hostPage || {};
+    const hostPageOn = document.getElementById("hostPageEnabled").value === "on";
+    clone.hostPage.enabled = hostPageOn;
+    delete clone.hostPage.qrCodesEnabled;
+    delete clone.hostPage.accessKey;
+    clone.hostPage.allowManualControl = true;
+    clone.audiencePage = clone.audiencePage || {};
+    const audiencePageOn = document.getElementById("audiencePageEnabled").value === "on";
+    clone.audiencePage.enabled = audiencePageOn;
+    delete clone.audiencePage.qrCodesEnabled;
+    delete clone.audiencePage.accessKey;
+    clone.economy = clone.economy || {};
+    clone.economy.objectiveRewardPoints = Math.max(0, num("objectiveRewardPoints", clone.economy.objectiveRewardPoints ?? 3));
+    clone.economy.bodyguardRewardPoints = Math.max(0, num("bodyguardRewardPoints", clone.economy.bodyguardRewardPoints ?? 2));
+    clone.economy.blessingCost = Math.max(0, num("blessingCost", clone.economy.blessingCost ?? 5));
+    clone.economy.curseCost = Math.max(0, num("curseCost", clone.economy.curseCost ?? 5));
+    clone.economy.shieldCost = Math.max(0, num("shieldCost", clone.economy.shieldCost ?? 8));
+    clone.economy.mercyCost = Math.max(0, num("mercyCost", clone.economy.mercyCost ?? 6));
+    clone.economy.audienceTokenGrantAmount = Math.max(1, num("audienceTokenGrantAmount", clone.economy.audienceTokenGrantAmount ?? 1));
+    clone.economy.audienceVoteThreshold = Math.max(1, num("audienceVoteThreshold", clone.economy.audienceVoteThreshold ?? 3));
+    clone.economy.audienceCooldownSeconds = Math.max(0, num("audienceCooldownSeconds", clone.economy.audienceCooldownSeconds ?? 20));
+    clone.economy.audienceMaxVotesPerRound = Math.max(1, num("audienceMaxVotesPerRound", clone.economy.audienceMaxVotesPerRound ?? 1));
+    clone.economy.tokenCosts = clone.economy.tokenCosts || {};
+    clone.economy.tokenCosts.shield = Math.max(0, num("shieldTokenCost", clone.economy.tokenCosts.shield ?? clone.economy.shieldCost ?? 8));
+    clone.economy.tokenCosts.mercy = Math.max(0, num("mercyTokenCost", clone.economy.tokenCosts.mercy ?? clone.economy.mercyCost ?? 6));
+    clone.economy.tokenCosts.blessing = Math.max(0, num("blessingTokenCost", clone.economy.tokenCosts.blessing ?? clone.economy.blessingCost ?? 5));
+    clone.economy.tokenCosts.curse = Math.max(0, num("curseTokenCost", clone.economy.tokenCosts.curse ?? clone.economy.curseCost ?? 5));
+    clone.economy.tokenCosts.chaos = Math.max(0, num("chaosTokenCost", clone.economy.tokenCosts.chaos ?? 10));
+    clone.economy.tokenCosts.guarantee = Math.max(0, num("guaranteeTokenCost", clone.economy.tokenCosts.guarantee ?? clone.economy.guaranteeTokenCost ?? clone.economy.guaranteedPickCost ?? 12));
+    clone.economy.tokenCosts.immunity = Math.max(0, num("immunityTokenCost", clone.economy.tokenCosts.immunity ?? clone.economy.immunityTokenCost ?? 10));
+    clone.economy.tokenCosts.doubleShock = Math.max(0, num("doubleShockTokenCost", clone.economy.tokenCosts.doubleShock ?? clone.economy.doubleShockTokenCost ?? 10));
     clone.safety.defaultDurationMs = num("duration", clone.safety.defaultDurationMs);
     clone.fateWheel = getFateConfig(false);
   } catch {}
@@ -380,7 +1082,7 @@ function getFateConfig(escalated=true) {
     let escalates = document.getElementById(`${f.key}_escalates`)?.value ?? f.escalates ?? "neutral";
     let enabled = document.getElementById(`${f.key}_enabled`)?.checked ?? (f.enabled ?? true);
 
-    const maxShock = Math.max(1, Math.min(100, Number(config?.safety?.serverMaxShockIntensity ?? 100)));
+    const maxShock = Math.max(1, Math.min(100, Number(config?.safety?.serverMaxShockIntensity ?? 99)));
     min = Math.max(0, Math.min(maxShock, Math.round(Number.isFinite(min) ? min : f.min)));
     max = Math.max(0, Math.min(maxShock, Math.round(Number.isFinite(max) ? max : f.max)));
     if (max < min) [min, max] = [max, min];
@@ -436,7 +1138,10 @@ function getSegmentColor(seg, index, wheelType) {
     const playerColors = colors.players || ["#2d6cdf","#8e24aa","#039be5","#00897b","#7cb342","#fb8c00"];
     return playerColors[(seg.colorIndex ?? index) % playerColors.length];
   }
-  const fateColors = colors.fate || ["#00acc1","#7cb342","#fdd835","#fb8c00","#e53935","#8e24aa"];
+  const fateByKey = colors.fateByKey || {};
+  if (seg.key && fateByKey[seg.key]) return fateByKey[seg.key];
+  if (seg.key === "deathwish") return colors.deathwish || "#4a0000";
+  const fateColors = colors.fate || ["#00acc1","#7cb342","#fdd835","#fb8c00","#e53935","#8e24aa","#4a0000"];
   return fateColors[index % fateColors.length];
 }
 
@@ -528,26 +1233,78 @@ function drawSegmentLabel(ctx, text, cx, cy, r, start, end) {
 }
 
 
+function numberWithDefault(value, fallback) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
 function getEventRuntimeConfig() {
+  const displayDurationMs = Math.max(0, numberWithDefault(config?.eventCards?.displayDurationMs ?? eventCardsConfig?.displayDurationMs, 4000));
   return {
     enabled: Boolean(config?.eventCards?.enabled ?? eventCardsConfig?.enabled ?? false) && eventCardsConfig?.enabled !== false,
-    chancePercent: Math.max(0, Math.min(100, Number(config?.eventCards?.chancePercent ?? eventCardsConfig?.chancePercent ?? 18))),
-    displayDurationMs: Math.max(0, Number(config?.eventCards?.displayDurationMs ?? eventCardsConfig?.displayDurationMs ?? 4000)),
+    chancePercent: Math.max(0, Math.min(100, numberWithDefault(config?.eventCards?.chancePercent ?? eventCardsConfig?.chancePercent, 18))),
+    displayDurationMs,
     cards: (eventCardsConfig?.cards || []).filter(c => c && c.enabled !== false)
   };
 }
 
-function rollEventCard() {
+function getTriggeredEventDisplayDuration(card) {
   const ec = getEventRuntimeConfig();
-  if (!ec.enabled || !ec.cards.length || !rollPercent(ec.chancePercent)) return null;
-  return weightedPick(ec.cards.map(c => ({ ...c, weight: Math.max(0, Number(c.weight ?? 1)) })));
+  const raw = card?.displayDurationMs ?? card?.durationMs ?? card?.displayMs ?? ec.displayDurationMs;
+  const parsed = Math.max(0, numberWithDefault(raw, ec.displayDurationMs || 4000));
+  // Real event cards should remain visible long enough to read.
+  // Blank/invalid values used to become 0 and made cards flash away instantly.
+  return Math.max(1200, parsed || 4000);
+}
+
+function rollEventCard(force = false) {
+  const ec = getEventRuntimeConfig();
+
+  if (!ec.enabled && !force) {
+    log("Event card roll skipped: event cards are disabled.");
+    return null;
+  }
+
+  if (!ec.cards.length) {
+    log("Event card roll skipped: no enabled event cards found.");
+    return null;
+  }
+
+  const roll = Math.random() * 100;
+  if (!force && roll >= ec.chancePercent) {
+    log(`Event card roll missed: ${roll.toFixed(1)} >= ${ec.chancePercent}%.`);
+    return null;
+  }
+
+  const picked = weightedPick(ec.cards.map(c => ({ ...c, weight: Math.max(0, Number(c.weight ?? 1)) })));
+  if (force) log(`Event card forced by host. Picked: ${picked.title || picked.id}.`);
+  else log(`Event card roll hit: ${roll.toFixed(1)} < ${ec.chancePercent}%. Picked: ${picked.title || picked.id}.`);
+  return picked;
 }
 
 function getEventEffects(card) {
   if (!card) return [];
-  if (Array.isArray(card.effects)) return card.effects.filter(Boolean);
-  if (card.type) return [{ type: card.type }];
-  return [];
+  const rawEffects = [];
+  if (Array.isArray(card.effects)) rawEffects.push(...card.effects);
+  else if (card.effects && typeof card.effects === "object") rawEffects.push(card.effects);
+
+  if (Array.isArray(card.effect)) rawEffects.push(...card.effect);
+  else if (card.effect) rawEffects.push(card.effect);
+
+  if (Array.isArray(card.modifiers)) rawEffects.push(...card.modifiers);
+  else if (card.modifiers && typeof card.modifiers === "object") rawEffects.push(card.modifiers);
+
+  if (card.type) rawEffects.push({ type: card.type });
+
+  return rawEffects.map(effect => {
+    if (!effect) return null;
+    if (typeof effect === "string") return { type: effect };
+    if (typeof effect !== "object") return null;
+    const type = effect.type || effect.name || effect.action || effect.effectType;
+    if (!type) return null;
+    return { ...effect, type: String(type) };
+  }).filter(Boolean);
 }
 
 function cardAffects(card, wheel) {
@@ -605,8 +1362,28 @@ function hideEventOverlay() {
   fateWheel.closest(".wheelCard")?.classList.remove("eventAffected");
 }
 
+function clearActiveEventCardPanel(stateText = "Waiting for the next event roll...") {
+  activeRoundEvent = null;
+  updateEventCardPanel(null, stateText);
+  hideEventOverlay();
+}
+
 function waitForEventContinue(ms) {
   return new Promise(resolve => {
+    const delayMs = Math.max(0, Number(ms || 0));
+
+    // A value of 0 used to show the continue button but never start a timer,
+    // which could leave the round stuck on "Checking for event card...".
+    // Treat 0/blank/invalid as "do not pause for the overlay".
+    if (!delayMs || !eventContinueBtn) {
+      if (eventContinueBtn) {
+        eventContinueBtn.hidden = true;
+        eventContinueBtn.onclick = null;
+      }
+      resolve();
+      return;
+    }
+
     let done = false;
     let timer = null;
     const finish = () => {
@@ -614,11 +1391,12 @@ function waitForEventContinue(ms) {
       done = true;
       if (timer) clearTimeout(timer);
       eventContinueBtn.onclick = null;
+      eventContinueBtn.hidden = true;
       resolve();
     };
     eventContinueBtn.hidden = false;
     eventContinueBtn.onclick = finish;
-    if (ms > 0) timer = setTimeout(finish, ms);
+    timer = setTimeout(finish, delayMs);
   });
 }
 
@@ -692,24 +1470,53 @@ async function resolveInteractiveEvent(card, roundState) {
   }
 }
 
-async function runPreRoundEvent() {
-  activeRoundEvent = null;
-  const card = rollEventCard();
-  const roundState = {
-    card, forcedTarget: null, extraTargets: [], forceValue: null, forceFateKey: null, capFateMax: null,
-    disabledFateKeys: new Set(), fateMultipliers: new Map(), targetMultipliers: [], excludeTargetIds: new Set(),
-    disableTargetTypes: new Set(), skipTargetSpin: false, doubleHitChanceOverride: null, valueMultiplier: 1, valueOffset: 0,
-    forceAllTargets: false, postTargetEffects: []
-  };
-  if (!card) return roundState;
+async function runPreRoundEvent(pendingRoundModifiers = []) {
+  clearActiveEventCardPanel("Checking for event card...");
 
+  const forceEventMod = (pendingRoundModifiers || []).find(m => m && m.type === "forceEventNextRound");
+  const card = rollEventCard(Boolean(forceEventMod));
+
+  const roundState = {
+    card,
+    forcedTarget: null,
+    extraTargets: [],
+    forceValue: null,
+    forceFateKey: null,
+    capFateMax: null,
+    disabledFateKeys: new Set(),
+    fateMultipliers: new Map(),
+    targetMultipliers: [],
+    excludeTargetIds: new Set(),
+    disableTargetTypes: new Set(),
+    skipTargetSpin: false,
+    doubleHitChanceOverride: null,
+    valueMultiplier: 1,
+    valueOffset: 0,
+    forceAllTargets: false,
+    postTargetEffects: [],
+    consumedModifierIds: new Set(),
+    guaranteedTargets: []
+  };
+
+  if (forceEventMod) markRoundModifierConsumed(roundState, forceEventMod, "forced event card");
+  if (!card) {
+    clearActiveEventCardPanel("No event card this round.");
+    return roundState;
+  }
   activeRoundEvent = card;
+  updateEventCardPanel(card);
   showEventOverlay(card);
-  log(`Round ${roundNumber}: Event card triggered: ${card.title || card.id}`);
+  const eventEffects = getEventEffects(card);
+  log(`Round ${roundNumber}: Event card triggered: ${card.title || card.id}${eventEffects.length ? ` (${eventEffects.map(e => e.type).join(", ")})` : " (no parsed effects)"}`);
+  postEventLog({ roundNumber, type: "eventCardTriggered", title: card.title || card.id, description: card.description || card.text || "", metadata: { card, effects: eventEffects } });
+  if (!eventEffects.length) showEventResult("This card has no parsed effects. Check event-cards.json for an effects array or type value.");
   await resolveInteractiveEvent(card, roundState);
   applyEventEffects(card, roundState);
-  await waitForEventContinue(getEventRuntimeConfig().displayDurationMs);
+  activeRoundEvent = roundState.card || card;
+  updateEventCardPanel(activeRoundEvent);
+  await waitForEventContinue(getTriggeredEventDisplayDuration(activeRoundEvent));
   hideEventOverlay();
+  setMainResult("Preparing target spin...");
   return roundState;
 }
 
@@ -725,6 +1532,9 @@ function normalizeFateCap(value) {
 
 function applyEventEffects(card, roundState) {
   for (const effect of getEventEffects(card)) {
+    const originalType = String(effect.type || "");
+    if (["removeSafe", "removeSAFE", "disableSafeTarget", "disableTargetSafe", "noSafeTarget"].includes(originalType)) effect.type = "disableSafe";
+    if (["forceVibe", "vibeOnly", "vibrateOnly"].includes(originalType)) effect.type = "forceVibrateOnly";
     if (effect.type === "forceVibrateOnly" || (effect.type === "forceControlType" && String(effect.controlType || effect.value || "").toLowerCase() === "vibrate")) {
       roundState.forceValue = 0;
       roundState.forceFateKey = effect.fateKey || "vibe";
@@ -820,9 +1630,16 @@ function segmentMatchesTargetMultiplier(segment, effect) {
 
 function buildTargetSegmentsForRound(roundState) {
   let segments = buildTargetSegments();
+  // Bodyguard modifiers are intentionally NOT applied to the wheel labels/segments here.
+  // The wheel should still visibly land on the originally selected protected player.
+  // The redirect is applied after the spin, so the result text can show:
+  // "Original selected → Bodyguard takes the hit."
   if (roundState?.disableTargetSafe) segments = segments.filter(s => s.type !== "safe");
   if (roundState?.disableTargetTypes?.size) segments = segments.filter(s => !roundState.disableTargetTypes.has(s.type));
-  if (roundState?.excludeTargetIds?.size) segments = segments.filter(s => s.type !== "player" || !roundState.excludeTargetIds.has(s.shocker.id));
+  if (roundState?.excludeTargetIds?.size) segments = segments.filter(s => s.type !== "player" || !roundState.excludeTargetIds.has(s.originalShocker?.id || s.shocker.id));
+  if (roundState?.forceEqualTargetWeights) {
+    segments = segments.map(s => s.type === "player" ? { ...s, weight: 1 } : s);
+  }
   if (roundState?.safeWeightMultiplier) {
     segments = segments.map(s => s.type === "safe" ? { ...s, weight: Math.max(0, Number(s.weight || 0)) * roundState.safeWeightMultiplier } : s);
   }
@@ -857,6 +1674,18 @@ function getFateConfigForRound(roundState) {
   return cfg;
 }
 
+function pickFateFromConfigWithNoRepeat(cfg, label = "round") {
+  const activeCfg = (cfg || []).filter(f => f.weight > 0);
+  if (!activeCfg.length) return getFateConfig(false)[0];
+  if (document.getElementById("noRepeatMode").value === "on") {
+    const activeKeys = new Set(activeCfg.map(f => f.key));
+    fateDeck = (fateDeck || []).filter(f => f && activeKeys.has(f.key));
+    if (!fateDeck.length) resetFateDeckForConfig(activeCfg, label);
+    return fateDeck.pop() || weightedPick(activeCfg);
+  }
+  return weightedPick(activeCfg);
+}
+
 function pickFateForRound(roundState) {
   const forcedKey = roundState?.forceFateKey;
   const cfg = getFateConfigForRound(roundState).filter(f => f.weight > 0);
@@ -870,8 +1699,7 @@ function pickFateForRound(roundState) {
   }
   if (!cfg.length) return getFateConfig(false)[0];
 
-  if (document.getElementById("noRepeatMode").value === "on" && !roundState?.card) return pickFate();
-  return weightedPick(cfg);
+  return pickFateFromConfigWithNoRepeat(cfg, roundState?.card ? `event ${roundState.card.id || roundState.card.title || "card"}` : "standard round");
 }
 
 function redrawAllWheels() {
@@ -924,6 +1752,24 @@ function updateStats() {
   document.getElementById("activeStat").textContent = `Active ${activeShockers().length}`;
 }
 
+function getPlayerMultiplierFromInput(input) {
+  const value = Number(input?.value ?? 100);
+  return Math.max(0, Math.min(100, Math.round(Number.isFinite(value) ? value : 100)));
+}
+
+async function savePlayerMultipliers() {
+  try {
+    await fetch("/api/player-multipliers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerMultipliers })
+    });
+    saveSessionState("player multiplier update");
+  } catch (err) {
+    log(`Could not save player multipliers: ${err.message}`);
+  }
+}
+
 function renderPlayers() {
   playersDiv.innerHTML = "";
   shockers.forEach(s => {
@@ -960,6 +1806,7 @@ function renderPlayers() {
       else eliminated.add(s.id);
       renderPlayers();
       redrawAllWheels();
+      saveSessionState("player elimination toggle");
     };
 
     row.appendChild(info);
@@ -968,25 +1815,54 @@ function renderPlayers() {
   });
 }
 
-async function loadShockers() {
-  targetResult.textContent = "Loading collars...";
-  const res = await fetch("/api/shockers");
+async function loadShockers({ preserveSession = true, forceRefresh = false } = {}) {
+  targetResult.textContent = forceRefresh ? "Refreshing collars from OpenShock..." : "Loading collars...";
+  const res = await fetch(`/api/shockers${forceRefresh ? "?refresh=1" : ""}`);
   const data = await res.json();
   shockers = data.shockers || [];
   ensureAllPlayerStats();
-  eliminated.clear();
-  if (config?.game?.autoResetEscalationOnReload !== false) resetGame(false);
-  document.getElementById("sourcePill").textContent = `${data.shockers.length} shockers`;
+
+  if (!preserveSession) {
+    eliminated.clear();
+    if (config?.game?.autoResetEscalationOnReload !== false) resetGame(false, { save: false });
+  } else {
+    eliminated = new Set(Array.from(eliminated).filter(id => shockers.some(s => s.id === id)));
+    lastSelectedTargets = lastSelectedTargets.filter(s => shockers.some(current => current.id === s.id));
+    lastShockedTargets = lastShockedTargets.filter(s => shockers.some(current => current.id === s.id));
+  }
+
+  const cacheNote = data.cached ? "cached" : "live";
+  document.getElementById("sourcePill").textContent = `${data.shockers.length} shockers · ${cacheNote}`;
   renderPlayers();
   redrawAllWheels();
   targetResult.textContent = shockers.length ? `${shockers.length} collars loaded` : "No collars found";
   fateResult.textContent = "Waiting...";
-  setMainResult("Ready");
+  if (roundNumber === 0) setMainResult("Ready");
   if (data.warning) log(data.warning);
+  saveSessionState("shocker reload");
 }
 
 function describeValue(v) {
   return v === 0 ? "VIBE (0)" : `SHOCK ${v}`;
+}
+
+function formatTargetResultText(targetPicked, targets) {
+  const actualNames = (targets || []).filter(Boolean).map(s => s.name).join(" + ");
+
+  if (targetPicked?.bodyguardRedirect) {
+    const originalName = targetPicked.originalShocker?.name || targetPicked.label || "Original target";
+    const bodyguardName = targetPicked.bodyguardShocker?.name || actualNames || "Bodyguard";
+
+    if (targetPicked.type === "all") {
+      return `SHOCK ALL selected · ${originalName} protected by ${bodyguardName}; actual targets: ${actualNames}`;
+    }
+
+    return `${originalName} selected → ${bodyguardName} takes the hit`;
+  }
+
+  if (targetPicked?.type === "all") return "SHOCK ALL selected";
+  if ((targets || []).length > 1) return `${actualNames} selected`;
+  return `${actualNames || targetPicked?.label || "Target"} selected`;
 }
 
 function pickStrengthFromFate(fate) {
@@ -994,15 +1870,18 @@ function pickStrengthFromFate(fate) {
   return randInt(fate.min, fate.max);
 }
 
-function resetFateDeck() {
+function resetFateDeckForConfig(cfg, label = "") {
   fateDeck = [];
-  const cfg = getFateConfig(true);
-  cfg.forEach(f => {
+  (cfg || []).filter(f => f.weight > 0).forEach(f => {
     const count = Math.max(0, Math.round(f.weight));
     for (let i = 0; i < count; i++) fateDeck.push(f);
   });
   fateDeck = shuffle(fateDeck);
-  log(`No-repeat fate deck reset with ${fateDeck.length} weighted entries.`);
+  log(`No-repeat fate deck reset with ${fateDeck.length} weighted entries${label ? ` (${label})` : ""}.`);
+}
+
+function resetFateDeck() {
+  resetFateDeckForConfig(getFateConfig(true));
 }
 
 function pickFate() {
@@ -1043,9 +1922,6 @@ function spinWheelToSegment(canvas, segments, picked, rotationVarName) {
   }
 
   const midDeg = (pickedStart + pickedEnd) / 2;
-
-  // We need: midDeg + finalRotation = needleDeg  (mod 360)
-  // Previous versions added an absolute target each round, causing pointer/result drift.
   const desiredRotationMod = normalizeDeg(needleDeg - midDeg);
   const currentRotation = rotationVarName === "target" ? targetRotation : fateRotation;
   const currentMod = normalizeDeg(currentRotation);
@@ -1110,8 +1986,16 @@ async function resolvePostTargetEffects(roundState, targetPicked, targets) {
       });
       if (volunteer) {
         targets = [volunteer];
-        targetPicked = { type: "player", label: volunteer.name, shocker: volunteer, weight: 1 };
-        showEventResult(`${volunteer.name} takes the hit instead.`);
+        targetPicked = {
+          type: "player",
+          label: primary?.name || targetPicked?.label || "Original target",
+          shocker: primary || targetPicked?.shocker,
+          weight: 1,
+          bodyguardRedirect: true,
+          originalShocker: primary || targetPicked?.shocker,
+          bodyguardShocker: volunteer
+        };
+        showEventResult(`${primary?.name || "The target"} was selected. ${volunteer.name} takes the hit instead.`);
       } else {
         showEventResult("No bodyguard volunteered.");
       }
@@ -1177,7 +2061,12 @@ async function sendControl(shocker, selectedValue) {
 }
 
 async function activateTargets(targets, value, roundState = null) {
-  for (const s of targets) await sendControl(s, value);
+  const appliedById = {};
+  for (const s of targets) {
+    const appliedValue = applyPlayerMultiplier(value, s.id);
+    appliedById[s.id] = appliedValue;
+    await sendControl(s, appliedValue);
+  }
 
   const doubleChance = roundState?.doubleHitChanceOverride !== null && roundState?.doubleHitChanceOverride !== undefined
     ? Math.max(0, Math.min(100, Number(roundState.doubleHitChanceOverride)))
@@ -1186,11 +2075,29 @@ async function activateTargets(targets, value, roundState = null) {
     const secondDelay = randInt(document.getElementById("doubleDelayMinMs").value, document.getElementById("doubleDelayMaxMs").value);
     log(`Hidden double-hit triggered. Second hit in ${secondDelay} ms.`);
     await sleep(secondDelay);
-    for (const s of targets) await sendControl(s, value);
+    for (const s of targets) await sendControl(s, appliedById[s.id] ?? applyPlayerMultiplier(value, s.id));
   }
+  const forcedDoubleIds = roundState?.forcedDoubleShockTargetIds || new Set();
+  const forcedTargets = (targets || []).filter(s => forcedDoubleIds.has(String(s.id)));
+  if (value > 0 && forcedTargets.length) {
+    const secondDelay = randInt(document.getElementById("doubleDelayMinMs").value, document.getElementById("doubleDelayMaxMs").value);
+    log(`Forced double-shock token triggered for ${forcedTargets.map(s => s.name).join(", ")}. Second hit in ${secondDelay} ms.`);
+    await sleep(secondDelay);
+    for (const s of forcedTargets) await sendControl(s, appliedById[s.id] ?? applyPlayerMultiplier(value, s.id));
+    for (const s of forcedTargets) {
+      const mod = (roundState.pendingRoundModifiers || []).find(m => m.type === "forcedDoubleShockNextRound" && String(m.targetPlayerId) === String(s.id));
+      if (mod) markRoundModifierConsumed(roundState, mod, "forced double shock applied");
+    }
+  }
+  return appliedById;
 }
 
 async function spinRound() {
+  if (hostSpinPaused) {
+    log("Spin blocked: host pause is active.");
+    setMainResult("Paused by host");
+    return;
+  }
   collectFormToConfig();
 
   spinBtn.disabled = true;
@@ -1200,9 +2107,28 @@ async function spinRound() {
   roundNumber++;
 
   try {
-    let roundState = await runPreRoundEvent();
+    let serverPendingRoundModifiers = [];
+    try {
+      const serverState = await getServerSessionState();
+      serverPendingRoundModifiers = Array.isArray(serverState.pendingRoundModifiers) ? serverState.pendingRoundModifiers : [];
+    } catch (err) {
+      log(`Pending modifier load skipped: ${err.message}`);
+    }
+    let roundState = await runPreRoundEvent(serverPendingRoundModifiers);
+    roundState.pendingRoundModifiers = serverPendingRoundModifiers;
+    applyPendingModifiersBeforeTarget(roundState);
     const targetSegments = buildTargetSegmentsForRound(roundState);
-    if (!targetSegments.length && !roundState.forcedTarget) return;
+    if (!targetSegments.length && !roundState.forcedTarget) {
+      roundNumber = Math.max(0, roundNumber - 1);
+      targetResult.textContent = "No eligible targets";
+      fateResult.textContent = "Round aborted.";
+      setMainResult("No eligible targets - round aborted.", "safe");
+      log("Round aborted: no eligible targets after filters/modifiers.");
+      redrawAllWheels();
+      saveSessionState("round aborted - no eligible targets");
+      clearActiveEventCardPanel("Round aborted.");
+      return;
+    }
 
     redrawAllWheels();
     drawCanvasWheel(targetWheel, targetSegments, "target");
@@ -1212,7 +2138,7 @@ async function spinRound() {
     if (roundState.forcedTarget) {
       targetResult.textContent = targetPicked.type === "all"
         ? "ALL manually selected"
-        : `${targetPicked.shocker.name} manually selected`;
+        : `${(targetPicked.shockers || [targetPicked.shocker]).filter(Boolean).map(s => s.name).join(" + ")} manually selected`;
       setMainResult(targetResult.textContent, targetPicked.type === "all" ? "all" : "hit");
     } else {
       spinWheelToSegment(targetWheel, targetSegments, targetPicked, "target");
@@ -1225,16 +2151,28 @@ async function spinRound() {
       targetResult.textContent = "SAFE";
       fateResult.textContent = "No fate spin.";
       setMainResult("SAFE - Nobody gets hit.", "safe");
-      log(`Round ${roundNumber}: SAFE${activeRoundEvent ? ` after event ${activeRoundEvent.title || activeRoundEvent.id}` : ""}`);
+      log(`Round ${roundNumber}: SAFE${roundState.card ? ` after event ${roundState.card.title || roundState.card.id}` : ""}`);
       recordSafeRoundForActivePlayers();
       lastSelectedTargets = [];
       lastTargetPicked = targetPicked;
       renderPlayers();
-      redrawAllWheels();
+      // Keep the spun target wheel exactly as it was for this round.
+      // Redrawing here can use the normal/default wheel config instead of the
+      // round-specific segments, which makes the pointer appear to land on the
+      // wrong player after modifiers changed wheel weights.
+      updateStats();
+      await consumeRoundModifiers(consumedRoundModifierIds(roundState));
+      await postRoundResult({ roundNumber, eventId: roundState.card?.id || null, eventTitle: roundState.card?.title || null, resultType: "safe", targets: [] });
+      saveSessionState("safe round");
+      // Keep the active event card banner visible after the round result.
+      // It is reset at the start of the next round when the next event roll begins,
+      // or replaced by "No event card this round" when the next roll misses.
       return;
     }
 
-    let targets = targetPicked.type === "all" ? activeShockers() : [targetPicked.shocker];
+    let targets = targetPicked.type === "all"
+      ? activeShockers()
+      : (targetPicked.type === "multi" ? (targetPicked.shockers || []).filter(Boolean) : [targetPicked.shocker].filter(Boolean));
     if (roundState.extraRandomTargets && targetPicked.type === "player") {
       let candidates = activeShockers().filter(s => !targets.some(t => t.id === s.id));
       for (let i = 0; i < Number(roundState.extraRandomTargets || 0) && candidates.length; i++) {
@@ -1244,13 +2182,35 @@ async function spinRound() {
       }
     }
 
+    if (roundState.extraTargets?.length) {
+      for (const extra of roundState.extraTargets) {
+        if (extra?.id && !targets.some(t => t.id === extra.id)) targets.push(extra);
+      }
+    }
+
+    ({ targetPicked, targets } = applyPendingModifiersAfterTarget(roundState, targetPicked, targets));
     ({ targetPicked, targets } = await resolvePostTargetEffects(roundState, targetPicked, targets));
 
-    targetResult.textContent = targetPicked.type === "all"
-      ? "SHOCK ALL selected"
-      : targets.length > 1
-        ? `${targets.map(s => s.name).join(" + ")} selected`
-        : `${targets[0].name} selected`;
+    const immuneIds = roundState.immuneTargetIds || new Set();
+    const beforeImmunity = targets.length;
+    targets = targets.filter(t => !immuneIds.has(String(t.id)));
+    if (beforeImmunity !== targets.length) {
+      for (const id of immuneIds) markRoundModifierConsumed(roundState, { id: (roundState.pendingRoundModifiers || []).find(m => m.type === "immunityNextRound" && String(m.targetPlayerId) === String(id))?.id }, "immunity applied");
+      log("Immunity token prevented one or more hits this round.");
+    }
+    if (!targets.length) {
+      targetResult.textContent = "IMMUNITY";
+      fateResult.textContent = "No fate spin.";
+      setMainResult("IMMUNITY - Hit ignored.", "safe");
+      lastSelectedTargets = [];
+      lastTargetPicked = { type: "safe", label: "IMMUNITY" };
+      await consumeRoundModifiers(consumedRoundModifierIds(roundState));
+      await postRoundResult({ roundNumber, eventId: roundState.card?.id || null, eventTitle: roundState.card?.title || null, resultType: "immunity", targets: [] });
+      saveSessionState("immunity round");
+      return;
+    }
+
+    targetResult.textContent = formatTargetResultText(targetPicked, targets);
     setMainResult(targetResult.textContent, targetPicked.type === "all" ? "all" : "hit");
 
     const pause = randInt(document.getElementById("pauseMinMs").value, document.getElementById("pauseMaxMs").value);
@@ -1272,35 +2232,52 @@ async function spinRound() {
       : pickStrengthFromFate(fatePicked);
     if (value > 0) {
       value = Math.round((value * Number(roundState.valueMultiplier || 1)) + Number(roundState.valueOffset || 0));
-      const maxShock = Math.max(1, Math.min(100, Number(config?.safety?.serverMaxShockIntensity ?? 100)));
+      const maxShock = Math.max(1, Math.min(100, Number(config?.safety?.serverMaxShockIntensity ?? 99)));
       value = Math.max(1, Math.min(maxShock, value));
     }
-    fateResult.textContent = `${fatePicked.name}: ${describeValue(value)}`;
-    const mainText = targetPicked.type === "all"
-      ? `ALL - ${describeValue(value)}`
-      : `${targets.map(s => s.name).join(" + ")} - ${describeValue(value)}`;
+    const previewAppliedById = Object.fromEntries((targets || []).filter(Boolean).map(s => [s.id, applyPlayerMultiplier(value, s.id)]));
+    const appliedText = describeAppliedValues(targets, value, previewAppliedById);
+    fateResult.textContent = `${fatePicked.name}: ${appliedText}`;
+    const mainText = `${formatTargetResultText(targetPicked, targets)} - ${appliedText}`;
     setMainResult(mainText, value === 0 ? "" : (targetPicked.type === "all" ? "all" : "hit"));
 
     const hitDelay = randInt(document.getElementById("hitDelayMinMs").value, document.getElementById("hitDelayMaxMs").value);
     log(`Round ${roundNumber}: ${mainText}. Activation in ${hitDelay} ms.`);
     await sleep(hitDelay);
 
-    await activateTargets(targets, value, roundState);
-    recordRoundTargets(targets, { value, wasAll: targetPicked.type === "all" });
+    const appliedById = await activateTargets(targets, value, roundState);
+    recordRoundTargets(targets, { value, valueByTargetId: appliedById, wasAll: targetPicked.type === "all" });
     if (value > 0) {
       lastShockedTargets = [...targets];
     }
     lastSelectedTargets = [...targets];
     lastTargetPicked = targetPicked;
-    log(`Round ${roundNumber}: Activated ${targets.length} target(s) with ${describeValue(value)}.`);
+    log(`Round ${roundNumber}: Activated ${targets.length} target(s). ${describeAppliedValues(targets, value, appliedById)}.`);
+    await postRoundResult({
+      roundNumber,
+      eventId: roundState.card?.id || null,
+      eventTitle: roundState.card?.title || null,
+      resultType: value > 0 ? "shock" : "vibe",
+      targets: (targets || []).map(s => ({ playerId: s.id, deviceId: s.id, name: s.name, rolledValue: value, multiplierPercent: getPlayerMultiplier(s.id), appliedValue: appliedById[s.id] ?? applyPlayerMultiplier(value, s.id) }))
+    });
     renderPlayers();
-    redrawAllWheels();
+    // Do not redraw the wheels after the round result is shown.
+    // The target/fate wheels may have used round-specific weights from cards,
+    // curse/chaos/blessing, shield exclusions, etc. A default redraw keeps the
+    // old CSS rotation but changes the segments underneath it, causing visual
+    // mismatches like the pointer showing Shock 2 while the game selected Shock 3.
+    updateStats();
+    await consumeRoundModifiers(consumedRoundModifierIds(roundState));
+    saveSessionState("round completed");
   } catch (err) {
     setMainResult("Error");
     log(err.message);
     hideEventOverlay();
   } finally {
-    activeRoundEvent = null;
+    // Do not clear the event card banner at round end. The banner should keep
+    // showing the event that affected the visible round result. It is only reset
+    // when the next round starts checking for a new event, or when that check
+    // explicitly finds no event card.
     spinBtn.disabled = false;
   }
 }
@@ -1316,6 +2293,7 @@ function eliminateOne() {
   renderPlayers();
   redrawAllWheels();
   log(`Eliminated 1: ${picked.name}`);
+  saveSessionState("random elimination");
 }
 
 async function stopAll() {
@@ -1332,21 +2310,44 @@ async function stopAll() {
   }
 }
 
-function resetGame(writeLog=true) {
+async function resetGame(writeLog=true, { save = true, resetServer = false } = {}) {
+  let freshServerState = null;
+
+  if (resetServer) {
+    const ok = window.confirm("Reset the current game state? The current SQLite session will be archived as JSON with a timestamp.");
+    if (!ok) return;
+
+    sessionSaveEnabled = false;
+    freshServerState = await resetServerSessionState();
+    sessionSaveEnabled = true;
+
+    // Do not clear the visible game if the server-side reset/archive failed.
+    if (!freshServerState) return;
+  }
+
   roundNumber = 0;
   fateDeck = [];
   activeRoundEvent = null;
   lastShockedTargets = [];
   lastSelectedTargets = [];
   lastTargetPicked = null;
+  eliminated.clear();
   playerStats = {};
   ensureAllPlayerStats();
-  targetResult.textContent = shockers.length ? `${shockers.length} collars loaded` : "No collars found";
-  fateResult.textContent = "Waiting...";
-  setMainResult("Ready");
-  renderPlayers();
-  redrawAllWheels();
+
+  if (freshServerState) {
+    applySessionSnapshot(freshServerState);
+  } else {
+    targetResult.textContent = shockers.length ? `${shockers.length} collars loaded` : "No collars found";
+    fateResult.textContent = "Waiting...";
+    setMainResult("Ready");
+    renderPlayers();
+    redrawAllWheels();
+  }
+
   if (writeLog) log("Game reset. Escalation round counter back to 0.");
+  loadPlayerObjectivePanel();
+  if (!resetServer && save) saveSessionState("game reset");
 }
 
 [
@@ -1354,20 +2355,31 @@ function resetGame(writeLog=true) {
   "pauseMinMs","pauseMaxMs","hitDelayMinMs","hitDelayMaxMs",
   "doubleDelayMinMs","doubleDelayMaxMs","duration","noRepeatMode",
   "escalationEnabled","escalationPerRound",
-  "eventCardsEnabled","eventCardChance","eventCardDisplayMs"
+  "eventCardsEnabled","eventCardChance","eventCardDisplayMs",
+  "playerPagesEnabled","playerAutoRefreshMs",
+  "hostPageEnabled",
+  "audiencePageEnabled",
+  "objectiveRewardPoints","bodyguardRewardPoints","blessingCost","curseCost","shieldCost","mercyCost",
+  "audienceTokenGrantAmount","audienceVoteThreshold","audienceCooldownSeconds","audienceMaxVotesPerRound",
+  "shieldTokenCost","mercyTokenCost","blessingTokenCost","curseTokenCost","chaosTokenCost","guaranteeTokenCost"
 ].forEach(id => {
-  document.getElementById(id).addEventListener("change", () => {
+  document.getElementById(id).addEventListener("change", async () => {
+    syncPageQrControls(id);
     redrawAllWheels();
     updateConfigPreview();
+    if (["playerPagesEnabled", "hostPageEnabled", "audiencePageEnabled"].includes(id)) {
+      await saveConfig();
+      log(`${id} saved and applied live.`);
+    }
   });
 });
 
 document.getElementById("saveConfigBtn").onclick = saveConfig;
-document.getElementById("reloadConfigBtn").onclick = async () => { await loadConfig(); renderPlayers(); };
-document.getElementById("resetGameBtn").onclick = () => resetGame(true);
+document.getElementById("reloadConfigBtn").onclick = async () => { await loadConfig(); renderPlayers(); saveSessionState("config reload"); };
+document.getElementById("resetGameBtn").onclick = () => resetGame(true, { resetServer: true });
 document.getElementById("spinBtn").onclick = spinRound;
 document.getElementById("stopBtn").onclick = stopAll;
-document.getElementById("reloadBtn").onclick = loadShockers;
+document.getElementById("reloadBtn").onclick = () => loadShockers({ preserveSession: true, forceRefresh: true });
 document.getElementById("elimOneBtn").onclick = eliminateOne;
 
 document.addEventListener("keydown", (event) => {
@@ -1395,7 +2407,11 @@ document.addEventListener("keydown", (event) => {
 });
 
 (async function init() {
-  await loadConfig();
+  updateEventCardPanel(null);
   await loadEventCards();
-  await loadShockers();
+  await loadConfig();
+  await loadShockers({ preserveSession: true });
+  await loadSessionState();
+  await loadPlayerObjectivePanel();
+  startHostCommandPolling();
 })();

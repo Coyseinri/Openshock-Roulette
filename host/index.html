@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenShock Roulette Host</title>
+  <link rel="stylesheet" href="/player/player.css">
+  <link rel="stylesheet" href="/host/host.css">
+</head>
+<body>
+  <main class="playerShell">
+    <section class="playerCard hostTopCard">
+      <div class="eyebrow">OpenShock Roulette</div>
+      <h1>Host Panel</h1>
+      <div id="roundLine" class="roundLine">Round --</div>
+      <div id="statusLine" class="mutedLine">Updated --:--:--</div>
+      <div class="actionGrid hostPrimaryActions">
+        <button id="hostPauseToggleBtn" class="hostButton" type="button">Pause</button>
+        <button id="hostSpinBtn" class="hostButton" type="button">Request Spin</button>
+        <button id="hostForceEventBtn" class="hostButton" type="button">Force Event</button>
+      </div>
+      <div id="spinnerStatus" class="mutedLine">These controls queue host commands for the main screen.</div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Pending Approval</h2>
+      <div id="pendingActions">Loading...</div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Audience votes</h2>
+      <div id="audienceVotes">Loading...</div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Pending Next Round effects</h2>
+      <div id="pendingModifiers">Loading...</div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Objective completions</h2>
+      <div id="objectiveEvents">Loading...</div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Force select player next round</h2>
+      <div class="manualControl">
+        <label>Player <select id="forcePlayer"></select></label>
+        <button id="forcePlayerBtn" class="hostButton" type="button">Force select next round</button>
+      </div>
+      <div id="forcePlayerStatus" class="mutedLine">Adds a guaranteed pick to the next round.</div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Reward / Bribe player</h2>
+      <div class="manualControl">
+        <label>Player <select id="rewardPlayer"></select></label>
+        <label>Reward <select id="rewardType"><option value="points">Points</option><option value="token">Token</option></select></label>
+        <label>Token <select id="rewardTokenType"></select></label>
+        <label>Amount <input id="rewardAmount" type="number" min="1" max="99" value="1"></label>
+        <button id="rewardSendBtn" class="hostButton" type="button">Reward</button>
+      </div>
+      <div id="rewardStatus" class="mutedLine">Give points or tokens when someone earns favor.</div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Manual control</h2>
+      <div class="manualControl">
+        <label>Shocker <select id="manualPlayer"></select></label>
+        <label>Type <select id="manualType"><option value="Vibrate">Vibrate</option><option value="Shock">Shock</option></select></label>
+        <label>Intensity <input id="manualIntensity" type="number" min="0" max="100" value="5"></label>
+        <label>Duration ms <input id="manualDuration" type="number" min="300" max="5000" value="500"></label>
+        <button id="manualSendBtn" class="hostButton" type="button">Send</button>
+      </div>
+      <div id="manualStatus" class="mutedLine"></div>
+    </section>
+
+    <section class="playerCard">
+      <h2>Session stats</h2>
+      <div id="sessionStats">Loading...</div>
+    </section>
+  </main>
+  <script src="/host/host.js"></script>
+</body>
+</html>

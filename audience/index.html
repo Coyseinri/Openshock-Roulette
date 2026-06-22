@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenShock Roulette Audience</title>
+  <link rel="stylesheet" href="/player/player.css">
+  <link rel="stylesheet" href="/audience/audience.css">
+</head>
+<body>
+  <main class="playerShell">
+    <section class="playerCard" id="loginCard">
+      <div class="eyebrow">OpenShock Roulette</div>
+      <h1>Audience login</h1>
+      <div class="mutedLine">Enter a unique audience name. This is used for vote limits and session logs.</div>
+      <label class="selectLine">Name <input id="audienceNameInput" type="text" maxlength="40" placeholder="e.g. Roy, Table 1, Alex"></label>
+      <div class="actionGrid">
+        <button id="joinBtn" type="button">Join audience</button>
+      </div>
+      <div id="loginStatus" class="mutedLine"></div>
+    </section>
+
+    <section class="playerCard" id="mainCard" hidden>
+      <div class="eyebrow">OpenShock Roulette</div>
+      <h1>Audience</h1>
+      <div id="roundLine" class="roundLine">Loading...</div>
+      <div id="statusLine" class="mutedLine">Waiting for updates...</div>
+      <div id="audienceSessionLine" class="mutedLine">Joining as unique audience member...</div>
+      <button id="changeNameBtn" type="button">Change name</button>
+    </section>
+    <section class="playerCard" id="voteCard" hidden>
+      <h2>Audience votes</h2>
+      <label class="selectLine">Player <select id="targetPlayerSelect"></select></label>
+      <label class="selectLine">Token <select id="tokenTypeSelect"></select></label>
+      <div class="actionGrid">
+        <button id="blessBtn" type="button">Bless</button>
+        <button id="curseBtn" type="button">Curse</button>
+        <button id="tokenBtn" type="button">Give Token</button>
+        <button id="guaranteeBtn" type="button">Guaranteed Pick</button>
+      </div>
+      <div id="actionStatus" class="mutedLine">Votes are grouped; the host can apply the winning vote.</div>
+      <div id="cooldownLine" class="mutedLine"></div>
+      <div id="votesBox" class="pendingBox"></div>
+    </section>
+  </main>
+  <script src="/audience/audience.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+/* Audience page overrides. Base role-page styling comes from /player/player.css. */
+#loginCard, #mainCard, #voteCard {
+  width: 100%;
+}
+#changeNameBtn {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 900;
+  background: #4c1d95;
+  color: white;
+  cursor: pointer;
+  margin-top: 10px;
+}
+#audienceNameInput {
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 10px;
+  padding: 10px;
+  background: #151522;
+  color: #fff;
+}

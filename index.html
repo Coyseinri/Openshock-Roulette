@@ -30,7 +30,13 @@
     </div>
   </header>
 
-  <main class="pageShell">
+    <section id="eventCardPanel" class="eventCardPanel none" aria-live="polite">
+    <div class="eventCardKicker">Event Card</div>
+    <div id="eventCardTitle" class="eventCardTitle">No Event Card</div>
+    <div id="eventCardDescription" class="eventCardDescription">Waiting for the next event roll...</div>
+  </section>
+
+<main class="pageShell">
     <section class="spinnerRow" aria-label="Game spinners">
       <div class="card wheelCard">
         <h2>1. Target Spinner</h2>
@@ -69,6 +75,16 @@
       <div id="players" class="playersGrid"></div>
     </section>
 
+    <details class="card settingsDetails gameStateDetails" id="gameStateDetails">
+      <summary>
+        <span>
+          <strong>Game State / Pending Items</strong>
+          <small>Pending effects, votes, actions and session stats</small>
+        </span>
+      </summary>
+      <div id="gameStatePanelBody" class="objectivePanelBody">Loading game state...</div>
+    </details>
+
     <section class="configRow">
       <details class="card settingsDetails" >
         <summary>
@@ -94,9 +110,6 @@
         </div>
         <div id="fateSettings"></div>
 
-        <div class="buttonLine">
-          <button class="secondary" id="resetGameBtn">Reset game / escalation</button>
-        </div>
       </details>
     </section>
 
@@ -190,12 +203,153 @@
           <label>Event display ms</label>
           <input id="eventCardDisplayMs" type="number" min="0" max="15000">
         </div>
+
+        <div class="row">
+          <label>Player pages + QR</label>
+          <select id="playerPagesEnabled">
+            <option value="off">Off</option>
+            <option value="on">On</option>
+          </select>
+        </div>
+
+
+        <div class="row">
+          <label>Player page refresh ms</label>
+          <input id="playerAutoRefreshMs" type="number" min="500" max="30000">
+        </div>
+
+
+        <div class="row">
+          <label>Host page + QR</label>
+          <select id="hostPageEnabled">
+            <option value="off">Off</option>
+            <option value="on">On</option>
+          </select>
+        </div>
+
+
+        <div class="row">
+          <label>Audience page + QR</label>
+          <select id="audiencePageEnabled">
+            <option value="off">Off</option>
+            <option value="on">On</option>
+          </select>
+        </div>
+
+
+        <div class="row">
+          <label>Objective reward pts</label>
+          <input id="objectiveRewardPoints" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Bodyguard reward pts</label>
+          <input id="bodyguardRewardPoints" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Blessing cost</label>
+          <input id="blessingCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Curse cost</label>
+          <input id="curseCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Shield cost</label>
+          <input id="shieldCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Mercy cost</label>
+          <input id="mercyCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Audience token amount</label>
+          <input id="audienceTokenGrantAmount" type="number" min="1" max="20">
+        </div>
+
+        <div class="row">
+          <label>Audience vote threshold</label>
+          <input id="audienceVoteThreshold" type="number" min="1" max="1000">
+        </div>
+
+        <div class="row">
+          <label>Audience cooldown seconds</label>
+          <input id="audienceCooldownSeconds" type="number" min="0" max="3600">
+        </div>
+
+        <div class="row">
+          <label>Audience max votes / round</label>
+          <input id="audienceMaxVotesPerRound" type="number" min="1" max="100">
+        </div>
+
+        <div class="row">
+          <label>Buy Shield token</label>
+          <input id="shieldTokenCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Buy Mercy token</label>
+          <input id="mercyTokenCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Buy Blessing token</label>
+          <input id="blessingTokenCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Buy Curse token</label>
+          <input id="curseTokenCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Buy Chaos token</label>
+          <input id="chaosTokenCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Buy Guarantee token</label>
+          <input id="guaranteeTokenCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Buy Immunity token</label>
+          <input id="immunityTokenCost" type="number" min="0" max="999">
+        </div>
+
+        <div class="row">
+          <label>Buy Double Shock token</label>
+          <input id="doubleShockTokenCost" type="number" min="0" max="999">
+        </div>
       </div>
 
       <div class="buttonLine">
         <button class="good" id="saveConfigBtn">Save config.json</button>
         <button class="secondary" id="reloadConfigBtn">Reload config</button>
       </div>
+
+      <details class="dangerZone">
+        <summary>Reset / archive game state</summary>
+        <p class="muted">Archives the current session-state.json with a timestamp, then starts a fresh game state.</p>
+        <div class="buttonLine">
+          <button class="danger" id="resetGameBtn">Reset game state</button>
+        </div>
+      </details>
+    </details>
+
+    <details class="card settingsDetails objectiveDetails" id="objectiveDetails">
+      <summary>
+        <span>
+          <strong>Player QR / Secret objectives</strong>
+          <small>Player links, QR codes, points and objective tracking</small>
+        </span>
+      </summary>
+      <div id="objectivePanelBody" class="objectivePanelBody">Loading player/objective panel...</div>
     </details>
 
     <details class="card settingsDetails logDetails">

@@ -1,0 +1,45 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, Segoe UI, sans-serif; background: radial-gradient(circle at top, #2a2338, #09090f 58%); color: #f4f1ff; min-height: 100vh; }
+.playerShell { width: min(760px, 100%); margin: 0 auto; padding: 18px; display: grid; gap: 14px; }
+.playerCard { background: rgba(18, 18, 28, .88); border: 1px solid rgba(255,255,255,.16); border-radius: 20px; padding: 18px; box-shadow: 0 18px 60px rgba(0,0,0,.35); }
+.eyebrow { color: #b7a7ff; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; font-size: .78rem; }
+h1, h2, h3 { margin: 0 0 8px; }
+h1 { font-size: clamp(2rem, 9vw, 4rem); }
+h2 { font-size: 1.2rem; color: #d8d0ff; }
+.roundLine, .pointsLine { font-size: 1.1rem; color: #ddd6ff; font-weight: 800; }
+.objective { border: 1px solid rgba(255,255,255,.18); border-radius: 16px; padding: 14px; background: rgba(255,255,255,.06); }
+.objective.complete { border-color: #4ade80; box-shadow: 0 0 28px rgba(74,222,128,.22); }
+.objective p { color: #ddd; }
+.progressBar { height: 16px; background: rgba(255,255,255,.12); border-radius: 999px; overflow: hidden; margin: 12px 0 6px; }
+.progressBar div { height: 100%; background: linear-gradient(90deg, #8b5cf6, #ec4899); }
+.progressText, .reward { font-weight: 800; color: #f9d36a; }
+.statsGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.statsGrid div { background: rgba(255,255,255,.07); border-radius: 12px; padding: 12px; }
+.statsGrid span { display:block; color:#bdb7d8; font-size:.85rem; }
+.statsGrid strong { font-size:1.4rem; }
+.mutedCard { color: #bdb7d8; }
+.errorBox { color: #fecaca; font-weight: 800; }
+.emptyObjective { color: #ddd6ff; font-weight: 700; }
+.actionGrid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:10px; }
+.actionGrid button, .hostButton, .audienceButton { border:0; border-radius:12px; padding:12px; font-weight:900; background:#8b5cf6; color:white; cursor:pointer; }
+.actionGrid button:hover, .hostButton:hover, .audienceButton:hover { filter:brightness(1.1); }
+.selectLine { display:grid; gap:6px; margin-top:12px; color:#ddd6ff; font-weight:800; }
+.selectLine select, .manualControl input, .manualControl select { border:1px solid rgba(255,255,255,.2); border-radius:10px; padding:10px; background:#151522; color:#fff; }
+.pendingBox { display:grid; gap:8px; margin-top:12px; }
+.pendingItem { background:rgba(255,255,255,.07); border-radius:12px; padding:10px; color:#ddd6ff; }
+.mutedLine { color:#bdb7d8; }
+
+.tokenShop {
+  display: grid;
+  gap: 10px;
+}
+.tokenBuyButton {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.tokenBuyButton span {
+  opacity: .8;
+  font-weight: 800;
+}
