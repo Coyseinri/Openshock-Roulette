@@ -300,7 +300,7 @@ openshock-roulette/
 
 ## Requirements
 
-- Node.js 22+
+- Node.js 22 LTS
 - OpenShock Account
 - OpenShock API Token
 - OpenShock Controller / Hub
