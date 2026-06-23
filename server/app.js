@@ -9,13 +9,13 @@ var SERVER_MODULES = [
   "runtime.js",
   "database-session.js",
   "server-context.js",
+  "validation.js",
+  "config.js",
   "objectives-roles.js",
   "access-pages.js",
   "economy-host-state.js",
   "actions-modifiers.js",
-  "config.js",
   "openshock.js",
-  "validation.js",
   "routes.js"
 ];
 

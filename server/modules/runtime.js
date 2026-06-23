@@ -69,6 +69,12 @@ function clampNumber(n, min, max) {
   return Math.max(min, Math.min(max, Math.round(n)));
 }
 
+function clampInt(n, min, max) {
+  n = Number(n);
+  if (!Number.isFinite(n)) n = min;
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+
 function debugConfig() {
   const cfg = readConfig?.() || {};
   return {
