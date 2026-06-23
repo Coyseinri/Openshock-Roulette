@@ -27,12 +27,10 @@ function getTriggeredEventDisplayDuration(card) {
   const ec = getEventRuntimeConfig();
   const raw = card?.displayDurationMs ?? card?.durationMs ?? card?.displayMs ?? ec.displayDurationMs;
   const parsed = Math.max(0, numberWithDefault(raw, ec.displayDurationMs || 4000));
-  // Real event cards should remain visible long enough to read.
-  // Blank/invalid values used to become 0 and made cards flash away instantly.
   return Math.max(1200, parsed || 4000);
 }
 
-function rollEventCard(force = false) {
+function rollEventCard(force = false, forcedCardId = null) {
   const ec = getEventRuntimeConfig();
 
   if (!ec.enabled && !force) {
@@ -43,6 +41,15 @@ function rollEventCard(force = false) {
   if (!ec.cards.length) {
     log("Event card roll skipped: no enabled event cards found.");
     return null;
+  }
+
+  if (forcedCardId) {
+    const picked = ec.cards.find(c => String(c.id) === String(forcedCardId));
+    if (picked) {
+      log(`Event card forced by host. Picked specific card: ${picked.title || picked.id}.`);
+      return picked;
+    }
+    log(`Host requested unknown event card '${forcedCardId}'. Falling back to weighted forced event roll.`);
   }
 
   const roll = Math.random() * 100;
@@ -166,7 +173,8 @@ async function runPreRoundEvent(pendingRoundModifiers = []) {
   clearActiveEventCardPanel("Checking for event card...");
 
   const forceEventMod = (pendingRoundModifiers || []).find(m => m && m.type === "forceEventNextRound");
-  const card = rollEventCard(Boolean(forceEventMod));
+  const forcedCardId = forceEventMod?.eventCardId || forceEventMod?.cardId || null;
+  const card = rollEventCard(Boolean(forceEventMod), forcedCardId);
 
   const roundState = {
     card,
@@ -191,7 +199,7 @@ async function runPreRoundEvent(pendingRoundModifiers = []) {
     virtualTargets: []
   };
 
-  if (forceEventMod) markRoundModifierConsumed(roundState, forceEventMod, "forced event card");
+  if (forceEventMod) markRoundModifierConsumed(roundState, forceEventMod, forcedCardId ? `forced event card ${forcedCardId}` : "forced event card");
   if (!card) {
     clearActiveEventCardPanel("No event card this round.");
     return roundState;
@@ -341,10 +349,6 @@ function segmentMatchesTargetMultiplier(segment, effect) {
 
 function buildTargetSegmentsForRound(roundState) {
   let segments = buildTargetSegments();
-  // Bodyguard modifiers are intentionally NOT applied to the wheel labels/segments here.
-  // The wheel should still visibly land on the originally selected protected player.
-  // The redirect is applied after the spin, so the result text can show:
-  // "Original selected → Bodyguard takes the hit."
   if (roundState?.disableTargetSafe) segments = segments.filter(s => s.type !== "safe");
   if (roundState?.disableTargetTypes?.size) segments = segments.filter(s => !roundState.disableTargetTypes.has(s.type));
   if (roundState?.excludeTargetIds?.size) segments = segments.filter(s => s.type !== "player" || !roundState.excludeTargetIds.has(s.originalShocker?.id || s.shocker.id));
