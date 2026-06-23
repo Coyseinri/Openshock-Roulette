@@ -76,8 +76,6 @@ var server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { cleared: true });
     }
 
-    // Serve role-page static assets before the dynamic /player/<id> route.
-    // Otherwise /player/player.css and /player/player.js are mistaken for player IDs.
     if (serveRoleStaticFile(req, res, url, { appRoot: APP_ROOT, sendJson })) return;
 
     if (url.pathname === "/player" && req.method === "GET") {
@@ -89,7 +87,6 @@ var server = http.createServer(async (req, res) => {
       if (!playerPagesConfig().enabled) return sendJson(res, 403, { error: "Player pages are disabled" });
       return serveHtmlFile(res, path.join(APP_ROOT, "player", "index.html"));
     }
-
 
     if (url.pathname === "/host" && req.method === "GET") {
       if (!hostPageConfig().enabled) return sendJson(res, 403, { error: "Host page is disabled" });
@@ -109,7 +106,6 @@ var server = http.createServer(async (req, res) => {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       return sendJson(res, 200, await buildPlayerLinks(req));
     }
-
 
     if (url.pathname === "/api/role-links" && req.method === "GET") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
@@ -154,7 +150,6 @@ var server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, modifier });
     }
 
-
     if (url.pathname === "/api/host/spinner" && req.method === "POST") {
       if (!hostPageConfig().enabled) return sendJson(res, 403, { error: "Host page is disabled" });
       if (!validateRoleAccess("host", req, url) && !isLocalRequest(req)) return sendJson(res, 403, { error: "Invalid host key" });
@@ -163,7 +158,17 @@ var server = http.createServer(async (req, res) => {
       if (!["spin", "pause", "resume", "forceEventNextRound"].includes(command)) return sendJson(res, 400, { error: "Unsupported spinner command" });
       const state = readSessionState();
       if (command === "forceEventNextRound") {
-        const modifier = queueRoundModifier(state, { type: "forceEventNextRound", source: "host" });
+        const eventCardId = String(body.eventCardId || "").trim();
+        if (eventCardId) {
+          const card = (readEventCards().cards || []).find(c => c && c.enabled !== false && String(c.id) === eventCardId);
+          if (!card) return sendJson(res, 400, { error: "Unknown or disabled event card" });
+        }
+        const modifier = queueRoundModifier(state, {
+          type: "forceEventNextRound",
+          source: "host",
+          eventCardId: eventCardId || null,
+          reason: eventCardId ? `Host forced event card ${eventCardId}` : "Host forced random event card"
+        });
         writeSessionState(state);
         return sendJson(res, 200, { ok: true, modifier });
       }
@@ -283,7 +288,6 @@ var server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { consumed: true, pendingRoundModifiers: consumeRoundModifiers(body.ids || []) });
     }
 
-
     if (url.pathname === "/api/database/summary" && req.method === "GET") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       const db = getDatabase();
@@ -294,7 +298,6 @@ var server = http.createServer(async (req, res) => {
       }
       return sendJson(res, 200, { schemaVersion: getMeta("schemaVersion"), appVersion: getMeta("appVersion"), storageMode: getMeta("storageMode"), currentGameId: getCurrentGameId(), counts });
     }
-
 
     if (url.pathname === "/api/event-log" && req.method === "POST") {
       if (!validateRoleAccess("host", req, url) && !isLocalRequest(req)) return sendJson(res, 403, { error: "Invalid host key" });
@@ -340,7 +343,6 @@ var server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { saved: true, session: writeSessionState(incoming) });
     }
 
-
     if (url.pathname === "/api/player-multipliers" && req.method === "POST") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       const body = await readBody(req);
@@ -379,7 +381,6 @@ var server = http.createServer(async (req, res) => {
       if (!validateRoleAccess("host", req, url) && !isLocalRequest(req)) return sendJson(res, 403, { error: "Invalid host key" });
       return await handleStopAll(req, res);
     }
-
 
     return serveStaticFile(req, res, url, { appRoot: APP_ROOT, sendJson });
   } catch (err) {
