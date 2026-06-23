@@ -1,6 +1,7 @@
 // OSR host command helpers
 
 const baseWaitForEventContinue = waitForEventContinue;
+const baseShowEventResult = showEventResult;
 let mainGameStatePanelRefreshInFlight = false;
 
 function eventCardRequiresManualContinue(card) {
@@ -8,6 +9,15 @@ function eventCardRequiresManualContinue(card) {
   if (card.requireManualContinue === true || card.manualContinueRequired === true || card.waitForContinue === true) return true;
   return String(card.id || "").toLowerCase() === "hr-complaint";
 }
+
+showEventResult = function showEventResultWithoutWaitCardWarnings(text) {
+  const message = String(text || "");
+  if (eventCardRequiresManualContinue(activeRoundEvent) && message.startsWith("This card has no parsed effects.")) {
+    if (eventResult) eventResult.textContent = "";
+    return;
+  }
+  return baseShowEventResult(text);
+};
 
 waitForEventContinue = function waitForEventContinueWithManualCards(ms, options = {}) {
   const card = options?.card || activeRoundEvent || null;
