@@ -19,20 +19,6 @@ function fillPlayerSelect(select, players) {
   if ([...select.options].some(o => o.value === current)) select.value = current;
 }
 
-function fillEventCardSelect(select, cards) {
-  if (!select) return;
-  const current = select.value;
-  select.innerHTML = "";
-  (cards || []).forEach(card => {
-    const opt = document.createElement("option");
-    opt.value = card.id;
-    opt.textContent = card.title || card.id;
-    if (card.description) opt.title = card.description;
-    select.appendChild(opt);
-  });
-  if ([...select.options].some(o => o.value === current)) select.value = current;
-}
-
 function renderPlayers(players) {
   fillPlayerSelect(document.getElementById("manualPlayer"), players);
   fillPlayerSelect(document.getElementById("rewardPlayer"), players);
@@ -51,6 +37,31 @@ function renderRewardOptions(economy) {
     select.appendChild(opt);
   });
   if ([...select.options].some(o => o.value === current)) select.value = current;
+}
+
+function renderEventCardOptions(cards) {
+  const select = document.getElementById("forceEventCard");
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = "";
+
+  const sorted = (cards || [])
+    .filter(card => card && card.id)
+    .slice()
+    .sort((a, b) => String(a.title || a.id).localeCompare(String(b.title || b.id)));
+
+  sorted.forEach(card => {
+    const opt = document.createElement("option");
+    opt.value = card.id;
+    const flags = [card.targetWheel ? "target" : null, card.fateWheel ? "fate" : null].filter(Boolean).join(" + ");
+    opt.textContent = `${card.title || card.id}${flags ? ` (${flags})` : ""}`;
+    opt.title = card.description || "";
+    select.appendChild(opt);
+  });
+
+  if ([...select.options].some(o => o.value === current)) select.value = current;
+  const status = document.getElementById("forceEventStatus");
+  if (status && !sorted.length) status.textContent = "No enabled event cards found.";
 }
 
 function actionLabel(type) {
@@ -76,12 +87,13 @@ function renderActions(actions) {
   document.querySelectorAll(".approve,.reject").forEach(btn => btn.onclick = () => resolveAction(btn.dataset.id, btn.classList.contains("approve")));
 }
 
+
 function renderModifiers(modifiers) {
   const host = document.getElementById("pendingModifiers");
   if (!host) return;
   if (!modifiers.length) { host.innerHTML = `<div class="mutedLine">No pending next-round effects.</div>`; return; }
   host.innerHTML = modifiers.map(m => `<div class="hostAction">
-    <div><strong>${esc(actionLabel(m.type))}</strong><br><span>${esc(m.eventCardTitle || m.eventCardId || m.targetName || m.playerName || "")}${m.bodyguardName ? ` · Bodyguard: ${esc(m.bodyguardName)}` : ""}</span></div>
+    <div><strong>${esc(actionLabel(m.type))}</strong><br><span>${esc(m.targetName || m.playerName || m.eventTitle || m.eventCardId || "")}${m.bodyguardName ? ` · Bodyguard: ${esc(m.bodyguardName)}` : ""}</span></div>
   </div>`).join("");
 }
 
@@ -116,6 +128,7 @@ function renderAudienceVotes(votes, threshold = null) {
   }).join("");
   document.querySelectorAll(".approveVote,.rejectVote").forEach(btn => btn.onclick = () => resolveVote(btn.dataset.id, btn.classList.contains("approveVote")));
 }
+
 
 function renderSessionStats(stats) {
   const host = document.getElementById("sessionStats");
@@ -153,16 +166,18 @@ async function sendSpinnerCommand(command, extra = {}) {
 }
 
 async function sendSpecificEvent() {
-  const select = document.getElementById("forceEventCard");
-  const status = document.getElementById("forceEventStatus");
-  const eventCardId = select?.value || "";
-  if (!eventCardId) {
-    if (status) status.textContent = "No event card selected.";
-    return;
+  try {
+    const select = document.getElementById("forceEventCard");
+    const eventCardId = select?.value || "";
+    if (!eventCardId) throw new Error("Pick an event card first");
+    const pickedTitle = select?.selectedOptions?.[0]?.textContent || eventCardId;
+    const { res, data } = await sendSpinnerCommand("forceEventNextRound", { eventCardId });
+    if (!res.ok) throw new Error(data.error || "Could not force selected event");
+    document.getElementById("forceEventStatus").textContent = `${pickedTitle} queued for the next round.`;
+    await load();
+  } catch (err) {
+    document.getElementById("forceEventStatus").textContent = err.message;
   }
-  const { res, data } = await sendSpinnerCommand("forceEventNextRound", { eventCardId });
-  if (status) status.textContent = res.ok ? `Queued ${select.selectedOptions[0]?.textContent || eventCardId} for next round.` : (data.error || "Could not queue event card.");
-  await load();
 }
 
 async function resolveAction(actionId, approved) {
@@ -253,8 +268,8 @@ async function load() {
       pauseBtn.dataset.command = data.hostPaused ? "resume" : "pause";
     }
     renderPlayers(data.players || []);
-    fillEventCardSelect(document.getElementById("forceEventCard"), data.eventCards || []);
     renderRewardOptions(data.economy || {});
+    renderEventCardOptions(data.eventCards || []);
     renderModifiers(data.pendingRoundModifiers || []);
     renderAudienceVotes(data.audienceVotes || [], data.audienceVoteThresholdEffective || data.economy?.audienceVoteThreshold || null);
     renderObjectiveEvents(data.completedObjectiveEvents || []);
