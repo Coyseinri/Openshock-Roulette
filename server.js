@@ -10,6 +10,10 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const QRCode = require("qrcode");
+const PACKAGE_JSON = require("./package.json");
+
+const APP_VERSION = String(PACKAGE_JSON.version || "0.0.0");
+const APP_USER_AGENT = `OpenShock-Roulette/${APP_VERSION} (local-party-game)`;
 
 loadEnvFile(path.join(__dirname, ".env"));
 
@@ -215,29 +219,24 @@ const { initializeDatabase, readObjectivesFileNormalized, appendLog } = require(
 
 function getDatabase() {
   if (DB) return DB;
+
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+
   try {
-    const BetterSqlite3 = require("better-sqlite3");
-    DB = new BetterSqlite3(DB_PATH);
-    DB.pragma("journal_mode = WAL");
-    DB.pragma("foreign_keys = OFF");
-  } catch (betterSqliteErr) {
-    try {
-      const { DatabaseSync } = require("node:sqlite");
-      DB = new DatabaseSync(DB_PATH);
-      DB.exec("PRAGMA journal_mode = WAL");
-      DB.exec("PRAGMA foreign_keys = OFF");
-    } catch (nodeSqliteErr) {
-      throw new Error(
-        "Missing SQLite support. Run `npm install` to install better-sqlite3, or use Node.js 22+ with node:sqlite. " +
-        `better-sqlite3: ${betterSqliteErr.message}; node:sqlite: ${nodeSqliteErr.message}`
-      );
-    }
+    const { DatabaseSync } = require("node:sqlite");
+    DB = new DatabaseSync(DB_PATH);
+    DB.exec("PRAGMA journal_mode = WAL");
+    DB.exec("PRAGMA foreign_keys = OFF");
+  } catch (err) {
+    throw new Error(
+      "Missing SQLite support. OSR requires Node.js 22 LTS or newer with node:sqlite support. " +
+      `node:sqlite error: ${err.message}`
+    );
   }
 
   initializeDatabase(DB, {
     schemaVersion: OSR_SCHEMA_VERSION,
-    appVersion: "1.3.0",
+    appVersion: APP_VERSION,
     objectivesPath: OBJECTIVES_PATH,
     objectivesExamplePath: OBJECTIVES_EXAMPLE_PATH,
     configExamplePath: CONFIG_EXAMPLE_PATH,
@@ -453,7 +452,7 @@ function readSessionState() {
   const existing = getStateValue("session");
   if (existing) return hydrateSessionFromStructuredDatabase(validateSessionState(existing));
 
-  // v1.3.0 schema v7 stores the full live session as a SQLite JSON blob.
+  // Current schema stores the full live session as a SQLite JSON blob.
   const fresh = defaultSessionState();
   writeSessionState(fresh);
   return fresh;
@@ -1767,7 +1766,7 @@ function normalizeConfigForRuntime(input) {
   const devices = src.devices || {};
 
   const runtime = { ...src };
-  runtime.version = src.version || "1.3.0";
+  runtime.version = APP_VERSION;
   runtime.server = { ...(src.server || {}) };
   runtime.app = { ...(src.app || {}) };
   runtime.safety = { ...(src.safety || {}) };
@@ -1778,6 +1777,18 @@ function normalizeConfigForRuntime(input) {
   runtime.eventCards = { ...(src.eventCards || src.events?.eventCards || {}) };
 
   runtime.targetWheel = { ...(src.targetWheel || spinners.targetWheel || spinners.target || {}) };
+  // Backward compatibility for older grouped configs:
+  // spinners.target.allWeight and spinners.target.doubleHitChance were early names,
+  // while the live UI/runtime uses targetWheel.shockAllWeight and game.hiddenDoubleHitChancePercent.
+  if (runtime.targetWheel.shockAllWeight === undefined && runtime.targetWheel.allWeight !== undefined) {
+    runtime.targetWheel.shockAllWeight = runtime.targetWheel.allWeight;
+  }
+  delete runtime.targetWheel.allWeight;
+  if (runtime.game.hiddenDoubleHitChancePercent === undefined && runtime.targetWheel.doubleHitChance !== undefined) {
+    runtime.game.hiddenDoubleHitChancePercent = runtime.targetWheel.doubleHitChance;
+  }
+  delete runtime.targetWheel.doubleHitChance;
+
   runtime.fateWheel = Array.isArray(src.fateWheel)
     ? src.fateWheel
     : Array.isArray(spinners.fateWheel)
@@ -1798,19 +1809,25 @@ function normalizeConfigForRuntime(input) {
     runtime.server.userAgent = runtime.server.userAgent || src.api.openshock.userAgent;
   }
 
+  // package.json is the source of truth for OSR's own versioned User-Agent.
+  // If a config file still contains an older shipped OSR User-Agent, normalize it.
+  if (!runtime.server.userAgent || /^OpenShock-Roulette\/\d+\.\d+\.\d+ \(local-party-game\)$/.test(String(runtime.server.userAgent))) {
+    runtime.server.userAgent = APP_USER_AGENT;
+  }
+
   return runtime;
 }
 
 function configForDisk(config) {
   const runtime = validateConfig(normalizeConfigForRuntime(config));
   return {
-    version: "1.3.0",
+    version: APP_VERSION,
     app: runtime.app || {},
     server: runtime.server || {},
     api: {
       openshock: {
         host: runtime.server?.apiHost || "api.openshock.app",
-        userAgent: runtime.server?.userAgent || "OpenShock-Roulette/1.3.0 (local-party-game)"
+        userAgent: runtime.server?.userAgent || APP_USER_AGENT
       }
     },
     safety: runtime.safety || {},
@@ -1884,7 +1901,7 @@ let CONFIG = readConfig();
 const PORT = process.env.PORT || CONFIG.server?.port || 8787;
 const TOKEN = process.env.OPENSHOCK_TOKEN || process.env.OPENSHOCK_API_TOKEN || "";
 const API_HOST = process.env.OPENSHOCK_API_HOST || CONFIG.server?.apiHost || "api.openshock.app";
-const USER_AGENT = process.env.OPENSHOCK_USER_AGENT || CONFIG.server?.userAgent || "OpenShock-Roulette/1.3.0 (local-party-game)";
+const USER_AGENT = process.env.OPENSHOCK_USER_AGENT || CONFIG.server?.userAgent || APP_USER_AGENT;
 
 function safety() {
   return readConfig().safety || {};

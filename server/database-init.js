@@ -3,7 +3,8 @@ const path = require("path");
 
 let DB = null;
 let OSR_SCHEMA_VERSION = "7";
-let APP_VERSION = "1.3.0";
+const PACKAGE_JSON = require("../package.json");
+let APP_VERSION = String(PACKAGE_JSON.version || "0.0.0");
 let OBJECTIVES_PATH = null;
 let OBJECTIVES_EXAMPLE_PATH = null;
 
