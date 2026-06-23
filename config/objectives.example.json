@@ -177,8 +177,8 @@
     {
       "id": "merchant",
       "title": "Merchant",
-      "description": "A dealmaker who thrives on the token economy.",
-      "passiveDescription": "Token purchases cost 1 point less, with a minimum cost of 1 point.",
+      "description": "Sells tiny advantages, buys bigger trouble, and skims value from the token economy.",
+      "passiveDescription": "Token purchases cost 1 point less, with a minimum cost of 1 point. Every shop purchase also counts toward Merchant rewards.",
       "objectiveDescription": "Buy 3 tokens from the shop.",
       "triggerType": "tokensBought",
       "triggerTarget": 3,
