@@ -1,10 +1,9 @@
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
-}
+// OSR shared frontend helpers
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function randInt(min, max) {
-  min = Math.round(Number(min));
-  max = Math.round(Number(max));
+  min = Math.round(Number(min)); max = Math.round(Number(max));
   if (!Number.isFinite(min)) min = 0;
   if (!Number.isFinite(max)) max = min;
   if (max < min) [min, max] = [max, min];
@@ -20,13 +19,7 @@ function shuffle(arr) {
 }
 
 function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, m => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
-  }[m]));
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
 }
 
 function numberWithDefault(value, fallback) {
@@ -47,9 +40,15 @@ function weightedPick(items) {
 }
 
 function rollPercent(percent) {
-  return Math.random() * 100 < Math.max(0, Math.min(100, Number(percent || 0)));
+  return Math.random() * 100 < percent;
 }
 
 function getPercent(id) {
-  return Math.max(0, Math.min(100, Number(document.getElementById(id)?.value || 0)));
+  const value = Number(document.getElementById(id).value || 0);
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function num(id, fallback) {
+  const v = Number(document.getElementById(id).value);
+  return Number.isFinite(v) ? v : fallback;
 }
