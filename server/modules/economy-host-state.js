@@ -83,9 +83,6 @@ function buyPlayerToken(state, playerId, tokenType) {
   addPlayerToken(state, playerId, tokenType, 1, "token_purchase", { cost, baseCost, merchantDiscount: isMerchant ? 1 : 0 });
   writePurchaseLog(state, playerId, "token", tokenType, cost, { tokenType, baseCost, merchantDiscount: isMerchant ? 1 : 0 });
 
-  // Merchant / token-shop progress must be tied to the actual purchase action.
-  // This still counts when the points came from bribes, audience rewards, or host rewards,
-  // because the relevant game action is spending those points in the shop.
   incrementPlayerServerStat(state, playerId, "tokensBought", 1);
   state.playerStats[playerId].tokensOwned = Math.max(clampInt(state.playerStats[playerId].tokensOwned ?? 0, 0, 1000000), totalOwnedTokens(state, playerId));
 
@@ -144,7 +141,6 @@ function pendingActionView(action, shockers = []) {
   };
 }
 
-
 function modifierView(mod, shockers = []) {
   return {
     ...mod,
@@ -192,6 +188,25 @@ function buildSessionStats(state, players = []) {
   })).sort((a, b) => (b.stats.shocked || 0) - (a.stats.shocked || 0));
 }
 
+function hostEventCardsView() {
+  try {
+    return (readEventCards().cards || [])
+      .filter(card => card && card.enabled !== false)
+      .map(card => ({
+        id: card.id,
+        title: card.title || card.id,
+        description: card.description || "",
+        weight: card.weight || 0,
+        targetWheel: Boolean(card.targetWheel),
+        fateWheel: Boolean(card.fateWheel),
+        category: card.category || null
+      }));
+  } catch (err) {
+    console.warn(`WARNING: Could not load host event card list: ${err.message}`);
+    return [];
+  }
+}
+
 async function getHostState() {
   const state = readSessionState();
   const { shockers } = await getShockers();
@@ -202,6 +217,7 @@ async function getHostState() {
     players,
     economy: economyConfig(),
     hostPage: hostPageConfig(),
+    eventCards: hostEventCardsView(),
     audiencePage: audiencePageConfig(),
     audienceVoteThresholdEffective: effectiveAudienceVoteThreshold(state),
     audienceSessions: Object.values(state.audienceSessions || {}),
@@ -215,4 +231,3 @@ async function getHostState() {
     pendingPlayerActions: (state.pendingPlayerActions || []).map(a => pendingActionView(a, shockers)).filter(a => a.status === "pending")
   };
 }
-
