@@ -1,5 +1,47 @@
 // OSR host command helpers
 
+const baseWaitForEventContinue = waitForEventContinue;
+let mainGameStatePanelRefreshInFlight = false;
+
+function eventCardRequiresManualContinue(card) {
+  if (!card) return false;
+  if (card.requireManualContinue === true || card.manualContinueRequired === true || card.waitForContinue === true) return true;
+  return String(card.id || "").toLowerCase() === "hr-complaint";
+}
+
+waitForEventContinue = function waitForEventContinueWithManualCards(ms, options = {}) {
+  const card = options?.card || activeRoundEvent || null;
+  if (!eventCardRequiresManualContinue(card)) return baseWaitForEventContinue(ms);
+
+  return new Promise(resolve => {
+    if (!eventContinueBtn) {
+      resolve();
+      return;
+    }
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      eventContinueBtn.onclick = null;
+      eventContinueBtn.hidden = true;
+      resolve();
+    };
+
+    eventPickerLine.textContent = "Waiting for Continue...";
+    eventContinueBtn.hidden = false;
+    eventContinueBtn.onclick = finish;
+  });
+};
+
+function refreshMainGameStatePanel() {
+  if (mainGameStatePanelRefreshInFlight || typeof loadPlayerObjectivePanel !== "function") return;
+  mainGameStatePanelRefreshInFlight = true;
+  Promise.resolve(loadPlayerObjectivePanel())
+    .catch(() => {})
+    .finally(() => { mainGameStatePanelRefreshInFlight = false; });
+}
+
 function markRoundModifierConsumed(roundState, mod, reason = "used") {
   if (!roundState || !mod?.id) return;
   if (!roundState.consumedModifierIds) roundState.consumedModifierIds = new Set();
@@ -138,6 +180,7 @@ async function pollHostSpinnerCommands() {
         if (!spinBtn.disabled && !hostSpinPaused) spinRound();
       }
     }
+    refreshMainGameStatePanel();
   } catch {}
 }
 
