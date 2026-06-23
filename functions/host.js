@@ -36,6 +36,18 @@ waitForEventContinue = function waitForEventContinueWithManualCards(ms, options 
 
 function refreshMainGameStatePanel() {
   if (mainGameStatePanelRefreshInFlight || typeof loadPlayerObjectivePanel !== "function") return;
+
+  const objectivePanel = document.getElementById("objectivePanelBody");
+  const activeElement = document.activeElement;
+  if (
+    objectivePanel &&
+    activeElement &&
+    objectivePanel.contains(activeElement) &&
+    ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(activeElement.tagName)
+  ) {
+    return;
+  }
+
   mainGameStatePanelRefreshInFlight = true;
   Promise.resolve(loadPlayerObjectivePanel())
     .catch(() => {})
