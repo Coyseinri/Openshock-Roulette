@@ -19,6 +19,20 @@ function fillPlayerSelect(select, players) {
   if ([...select.options].some(o => o.value === current)) select.value = current;
 }
 
+function fillEventCardSelect(select, cards) {
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = "";
+  (cards || []).forEach(card => {
+    const opt = document.createElement("option");
+    opt.value = card.id;
+    opt.textContent = card.title || card.id;
+    if (card.description) opt.title = card.description;
+    select.appendChild(opt);
+  });
+  if ([...select.options].some(o => o.value === current)) select.value = current;
+}
+
 function renderPlayers(players) {
   fillPlayerSelect(document.getElementById("manualPlayer"), players);
   fillPlayerSelect(document.getElementById("rewardPlayer"), players);
@@ -62,13 +76,12 @@ function renderActions(actions) {
   document.querySelectorAll(".approve,.reject").forEach(btn => btn.onclick = () => resolveAction(btn.dataset.id, btn.classList.contains("approve")));
 }
 
-
 function renderModifiers(modifiers) {
   const host = document.getElementById("pendingModifiers");
   if (!host) return;
   if (!modifiers.length) { host.innerHTML = `<div class="mutedLine">No pending next-round effects.</div>`; return; }
   host.innerHTML = modifiers.map(m => `<div class="hostAction">
-    <div><strong>${esc(actionLabel(m.type))}</strong><br><span>${esc(m.targetName || m.playerName || "")}${m.bodyguardName ? ` · Bodyguard: ${esc(m.bodyguardName)}` : ""}</span></div>
+    <div><strong>${esc(actionLabel(m.type))}</strong><br><span>${esc(m.eventCardTitle || m.eventCardId || m.targetName || m.playerName || "")}${m.bodyguardName ? ` · Bodyguard: ${esc(m.bodyguardName)}` : ""}</span></div>
   </div>`).join("");
 }
 
@@ -104,7 +117,6 @@ function renderAudienceVotes(votes, threshold = null) {
   document.querySelectorAll(".approveVote,.rejectVote").forEach(btn => btn.onclick = () => resolveVote(btn.dataset.id, btn.classList.contains("approveVote")));
 }
 
-
 function renderSessionStats(stats) {
   const host = document.getElementById("sessionStats");
   if (!host) return;
@@ -131,12 +143,26 @@ async function acknowledgeObjectives(ids) {
   await load();
 }
 
-async function sendSpinnerCommand(command) {
+async function sendSpinnerCommand(command, extra = {}) {
   const res = await fetch(`/api/host/spinner?key=${encodeURIComponent(key)}`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command })
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command, ...extra })
   });
   const data = await res.json();
   document.getElementById("spinnerStatus").textContent = res.ok ? `${command} requested.` : (data.error || "Command failed");
+  return { res, data };
+}
+
+async function sendSpecificEvent() {
+  const select = document.getElementById("forceEventCard");
+  const status = document.getElementById("forceEventStatus");
+  const eventCardId = select?.value || "";
+  if (!eventCardId) {
+    if (status) status.textContent = "No event card selected.";
+    return;
+  }
+  const { res, data } = await sendSpinnerCommand("forceEventNextRound", { eventCardId });
+  if (status) status.textContent = res.ok ? `Queued ${select.selectedOptions[0]?.textContent || eventCardId} for next round.` : (data.error || "Could not queue event card.");
+  await load();
 }
 
 async function resolveAction(actionId, approved) {
@@ -227,6 +253,7 @@ async function load() {
       pauseBtn.dataset.command = data.hostPaused ? "resume" : "pause";
     }
     renderPlayers(data.players || []);
+    fillEventCardSelect(document.getElementById("forceEventCard"), data.eventCards || []);
     renderRewardOptions(data.economy || {});
     renderModifiers(data.pendingRoundModifiers || []);
     renderAudienceVotes(data.audienceVotes || [], data.audienceVoteThresholdEffective || data.economy?.audienceVoteThreshold || null);
@@ -247,6 +274,7 @@ async function load() {
 document.getElementById("manualSendBtn").onclick = sendManual;
 document.getElementById("rewardSendBtn")?.addEventListener("click", sendReward);
 document.getElementById("forcePlayerBtn")?.addEventListener("click", sendForcePlayer);
+document.getElementById("hostForceSpecificEventBtn")?.addEventListener("click", sendSpecificEvent);
 load();
 
 
