@@ -1,0 +1,283 @@
+function readObjectives() {
+  return readObjectivesFileNormalized();
+}
+
+function statValueForObjective(stats, objective, state) {
+  stats = stats || {};
+  switch (objective.type) {
+    case "selected": return clampInt(stats.selected ?? 0, 0, 1000000);
+    case "shocked": return clampInt(stats.shocked ?? 0, 0, 1000000);
+    case "vibes": return clampInt(stats.vibes ?? 0, 0, 1000000);
+    case "safe": return clampInt(stats.safe ?? 0, 0, 1000000);
+    case "allTargeted": return clampInt(stats.allTargeted ?? 0, 0, 1000000);
+    case "totalIntensity": return clampInt(stats.totalIntensity ?? 0, 0, 100000000);
+    case "bodyguards": return clampInt(stats.bodyguards ?? 0, 0, 1000000);
+    case "cursesUsed": return clampInt(stats.cursesUsed ?? 0, 0, 1000000);
+    case "chaosUsed": return clampInt(stats.chaosUsed ?? 0, 0, 1000000);
+    case "tokensBought": return clampInt(stats.tokensBought ?? 0, 0, 1000000);
+    case "roundsSinceSelected": return stats.lastSelectedRound ? Math.max(0, clampInt(state.roundNumber ?? 0, 0, 1000000) - clampInt(stats.lastSelectedRound, 0, 1000000)) : 0;
+    case "roundsSinceShocked": return stats.lastShockedRound ? Math.max(0, clampInt(state.roundNumber ?? 0, 0, 1000000) - clampInt(stats.lastShockedRound, 0, 1000000)) : 0;
+    default: return clampInt(stats[objective.type] ?? 0, 0, 100000000);
+  }
+}
+
+var CUMULATIVE_OBJECTIVE_TYPES = new Set(["selected", "shocked", "vibes", "safe", "allTargeted", "totalIntensity", "bodyguards", "cursesUsed", "chaosUsed", "tokensBought", "tokensOwned", "highPlusSurvived", "eventCardsExperienced", "sabotageEffects", "redirectedHits"]);
+
+function objectiveBaselineValue(stats, objective, state) {
+  return CUMULATIVE_OBJECTIVE_TYPES.has(String(objective?.type || ""))
+    ? statValueForObjective(stats, objective, state)
+    : 0;
+}
+
+function objectiveProgressValue(stats, objective, state, assignment = {}) {
+  const current = statValueForObjective(stats, objective, state);
+  if (!CUMULATIVE_OBJECTIVE_TYPES.has(String(objective?.type || ""))) return current;
+  return Math.max(0, current - clampInt(assignment.baseline ?? 0, 0, 100000000));
+}
+
+function makeObjectiveAssignment(def, stats, state) {
+  return {
+    objectiveId: def.id,
+    assignedAt: new Date().toISOString(),
+    baseline: objectiveBaselineValue(stats, def, state),
+    progress: 0,
+    target: def.target,
+    completed: false,
+    rewardClaimed: false
+  };
+}
+
+function objectiveById(id) {
+  return readObjectives().objectives.find(o => o.id === id) || null;
+}
+
+function getHiddenRoleDefs() {
+  return readObjectivesFileNormalized().hiddenRoles || [];
+}
+
+function hiddenRoleById(id) {
+  return getHiddenRoleDefs().find(r => r.id === id) || null;
+}
+
+function playerRoleId(state, playerId) {
+  const assignment = state?.hiddenRoles?.[playerId];
+  return assignment?.roleId ? String(assignment.roleId) : null;
+}
+
+function playerHasRole(state, playerId, roleId) {
+  return playerRoleId(state, playerId) === String(roleId);
+}
+
+function ensureRolePassiveState(state, playerId) {
+  state.rolePassiveState = state.rolePassiveState && typeof state.rolePassiveState === "object" ? state.rolePassiveState : {};
+  state.rolePassiveState[playerId] = state.rolePassiveState[playerId] && typeof state.rolePassiveState[playerId] === "object" ? state.rolePassiveState[playerId] : {};
+  return state.rolePassiveState[playerId];
+}
+
+function addRolePassivePoints(state, playerId, points, roleId, title, metadata = {}) {
+  points = clampInt(points, 0, 999);
+  if (!points) return;
+  addPlayerPoints(state, playerId, points, "role_passive", { roleId, ...metadata });
+  pushObjectiveEvent(state, {
+    playerId,
+    objectiveId: `role-passive:${roleId}:${Date.now()}`,
+    title: title || `Role passive: ${roleId}`,
+    rewardPoints: points,
+    rewardDescription: `Role passive awarded ${points} point${points === 1 ? "" : "s"}.`
+  });
+}
+
+function totalOwnedTokens(state, playerId) {
+  const bucket = state?.playerTokens?.[playerId] || {};
+  return Object.values(bucket).reduce((sum, v) => sum + clampInt(v, 0, 1000000), 0);
+}
+
+function roleFateKeyForValue(value) {
+  value = clampInt(value, 0, 1000);
+  if (value <= 0) return "vibe";
+  const fate = (CONFIG?.fateWheel || []).find(f => value >= clampInt(f.min, 0, 1000) && value <= clampInt(f.max, 0, 1000));
+  return fate?.key || (value >= 91 ? "deathwish" : value >= 76 ? "brutal" : value >= 61 ? "high" : value >= 36 ? "medium" : value >= 16 ? "low" : "warmup");
+}
+
+function processRolePassivesForRoundResult(state, result = {}) {
+  if (!state || typeof state !== "object") return state;
+  const roundNumber = clampInt(result.roundNumber ?? state.roundNumber ?? 0, 0, 1000000);
+  const processedKey = `round:${roundNumber}`;
+  state.rolePassiveState = state.rolePassiveState && typeof state.rolePassiveState === "object" ? state.rolePassiveState : {};
+  state.rolePassiveState.__processedRoundResults = state.rolePassiveState.__processedRoundResults && typeof state.rolePassiveState.__processedRoundResults === "object" ? state.rolePassiveState.__processedRoundResults : {};
+  if (state.rolePassiveState.__processedRoundResults[processedKey]) return state;
+  state.rolePassiveState.__processedRoundResults[processedKey] = new Date().toISOString();
+
+  const targets = Array.isArray(result.targets) ? result.targets : [];
+  const targetIds = new Set(targets.map(t => String(t.playerId || t.id || t.deviceId || "")).filter(Boolean));
+  const eventActive = Boolean(result.eventId || result.eventTitle);
+  const resultType = String(result.resultType || "");
+
+  for (const [playerId, assignment] of Object.entries(state.hiddenRoles || {})) {
+    if (!assignment || typeof assignment !== "object") continue;
+    const roleId = String(assignment.roleId || "");
+    const roleState = ensureRolePassiveState(state, playerId);
+    const isTargeted = targetIds.has(String(playerId));
+
+    if (roleId === "survivor") {
+      if (isTargeted) {
+        roleState.survivorAvoidStreak = 0;
+      } else {
+        roleState.survivorAvoidStreak = clampInt(roleState.survivorAvoidStreak ?? 0, 0, 1000000) + 1;
+        if (roleState.survivorAvoidStreak >= 3) {
+          roleState.survivorAvoidStreak = 0;
+          addRolePassivePoints(state, playerId, 1, roleId, "Survivor passive", { roundNumber });
+        }
+      }
+    }
+
+    if (roleId === "chaos-agent" && eventActive && Math.random() < 0.20) {
+      addRolePassivePoints(state, playerId, 1, roleId, "Chaos Agent passive", { roundNumber, eventId: result.eventId || null });
+    }
+  }
+
+  for (const target of targets) {
+    const playerId = String(target.playerId || target.id || target.deviceId || "");
+    if (!playerId) continue;
+    const roleId = playerRoleId(state, playerId);
+    const rolledValue = clampInt(target.rolledValue ?? target.value ?? result.value ?? 0, 0, 1000);
+    const fateKey = roleFateKeyForValue(rolledValue);
+
+    if (roleId === "gambler" && resultType === "shock") {
+      const points = fateKey === "deathwish" ? 3 : fateKey === "brutal" ? 2 : fateKey === "high" ? 1 : 0;
+      if (points > 0) {
+        incrementPlayerServerStat(state, playerId, "highPlusSurvived", 1);
+        addRolePassivePoints(state, playerId, points, roleId, "Gambler passive", { roundNumber, fateKey, rolledValue });
+      }
+    }
+
+    if (roleId === "cultist" && eventActive) {
+      incrementPlayerServerStat(state, playerId, "eventCardsExperienced", 1);
+      addRolePassivePoints(state, playerId, 1, roleId, "Cultist passive", { roundNumber, eventId: result.eventId || null });
+    }
+
+    if (roleId === "chaos-agent" && eventActive) {
+      incrementPlayerServerStat(state, playerId, "eventCardsExperienced", 1);
+    }
+  }
+
+  return state;
+}
+
+function assignHiddenRolesToPlayers(state, shockers, { resetExisting = false } = {}) {
+  state.hiddenRoles = state.hiddenRoles && typeof state.hiddenRoles === "object" ? state.hiddenRoles : {};
+  let deck = getHiddenRoleDefs().slice().sort(() => Math.random() - 0.5);
+  for (const s of shockers || []) {
+    if (!resetExisting && state.hiddenRoles[s.id]) continue;
+    if (!deck.length) deck = getHiddenRoleDefs().slice().sort(() => Math.random() - 0.5);
+    const role = deck.pop();
+    if (!role) {
+      delete state.hiddenRoles[s.id];
+      continue;
+    }
+    state.hiddenRoles[s.id] = {
+      roleId: role.id,
+      assignedAt: new Date().toISOString(),
+      baseline: role.triggerType ? statValueForObjective(state.playerStats?.[s.id] || {}, { type: role.triggerType }, state) : 0,
+      claims: 0
+    };
+  }
+}
+
+function pushObjectiveEvent(state, event) {
+  state.completedObjectiveEvents = Array.isArray(state.completedObjectiveEvents) ? state.completedObjectiveEvents : [];
+  const id = `${event.playerId}:${event.objectiveId}:${Date.now()}:${Math.random().toString(16).slice(2, 8)}`;
+  const item = { id, createdAt: new Date().toISOString(), seen: false, ...event };
+  state.completedObjectiveEvents.push(item);
+  if (state.completedObjectiveEvents.length > 50) state.completedObjectiveEvents = state.completedObjectiveEvents.slice(-50);
+  writeObjectiveEventDatabase(item);
+}
+
+function evaluateHiddenRoles(state) {
+  if (!state || typeof state !== "object") return state;
+  state.hiddenRoles = state.hiddenRoles && typeof state.hiddenRoles === "object" ? state.hiddenRoles : {};
+  state.playerPoints = state.playerPoints && typeof state.playerPoints === "object" ? state.playerPoints : {};
+  state.playerTokens = state.playerTokens && typeof state.playerTokens === "object" ? state.playerTokens : {};
+
+  for (const [playerId, assignment] of Object.entries(state.hiddenRoles)) {
+    if (!assignment || typeof assignment !== "object") continue;
+    const role = hiddenRoleById(assignment.roleId);
+    if (!role || !role.triggerType || role.triggerTarget <= 0) continue;
+    const stats = state.playerStats?.[playerId] || {};
+    const current = statValueForObjective(stats, { type: role.triggerType }, state);
+    const baseline = clampInt(assignment.baseline ?? current, 0, 100000000);
+    const progress = Math.max(0, current - baseline);
+    const earnedClaims = role.repeatable ? Math.floor(progress / role.triggerTarget) : (progress >= role.triggerTarget ? 1 : 0);
+    const previousClaims = clampInt(assignment.claims ?? 0, 0, 1000000);
+    const newClaims = Math.max(0, earnedClaims - previousClaims);
+    const remainderProgress = role.repeatable ? (progress % role.triggerTarget) : Math.min(progress, role.triggerTarget);
+    assignment.progress = newClaims > 0 ? role.triggerTarget : remainderProgress;
+    assignment.target = role.triggerTarget;
+    if (newClaims > 0) {
+      for (let i = 0; i < newClaims; i++) {
+        if (role.rewardPoints > 0) addPlayerPoints(state, playerId, role.rewardPoints, "hidden_role_reward", { roleId: role.id });
+        if (role.rewardToken && role.rewardTokenAmount > 0) addPlayerToken(state, playerId, role.rewardToken, role.rewardTokenAmount, "hidden_role_reward", { roleId: role.id });
+        if (role.rewardModifier) queueRoundModifier(state, { ...role.rewardModifier, playerId, source: "hiddenRole", roleId: role.id });
+        pushObjectiveEvent(state, {
+          playerId,
+          objectiveId: `hidden-role:${role.id}`,
+          title: `Hidden role: ${role.title}`,
+          rewardPoints: role.rewardPoints,
+          rewardToken: role.rewardToken || null,
+          rewardTokenAmount: role.rewardTokenAmount || 0,
+          rewardDescription: role.rewardDescription || ""
+        });
+      }
+      assignment.claims = previousClaims + newClaims;
+      if (!role.repeatable) assignment.completed = true;
+    }
+  }
+  return state;
+}
+
+function evaluateObjectives(state) {
+  if (!state || typeof state !== "object") return state;
+  const assignments = state.objectiveAssignments && typeof state.objectiveAssignments === "object" ? state.objectiveAssignments : {};
+  state.playerPoints = state.playerPoints && typeof state.playerPoints === "object" ? state.playerPoints : {};
+
+  for (const [playerId, assignmentList] of Object.entries(assignments)) {
+    const list = Array.isArray(assignmentList) ? assignmentList : [assignmentList].filter(Boolean);
+    const stats = state.playerStats?.[playerId] || {};
+    const defs = readObjectives().objectives;
+    const usedIds = new Set(list.map(a => String(a.objectiveId || a.id || "")).filter(Boolean));
+    assignments[playerId] = list.map(a => {
+      const def = objectiveById(a.objectiveId || a.id);
+      if (!def) return a;
+      const withBaseline = { ...a, baseline: a.baseline ?? objectiveBaselineValue(stats, def, state) };
+      const progress = Math.min(def.target, objectiveProgressValue(stats, def, state, withBaseline));
+      const wasCompleted = Boolean(a.completed);
+      const completed = progress >= def.target;
+      if (completed && !wasCompleted && a.rewardClaimed !== true) {
+        const rewardPoints = clampInt(def.rewardPoints ?? 0, 0, 999);
+        addPlayerPoints(state, playerId, rewardPoints, "objective_reward", { objectiveId: def.id });
+        pushObjectiveEvent(state, { playerId, objectiveId: def.id, title: def.title, rewardPoints });
+
+        // Completed objectives are immediately replaced so players always have something to work toward.
+        const replacementPool = defs.filter(candidate => candidate.id !== def.id && !usedIds.has(candidate.id));
+        const replacement = replacementPool.length ? replacementPool[Math.floor(Math.random() * replacementPool.length)] : null;
+        if (replacement) {
+          usedIds.delete(def.id);
+          usedIds.add(replacement.id);
+          return makeObjectiveAssignment(replacement, stats, state);
+        }
+      }
+      return {
+        objectiveId: def.id,
+        assignedAt: a.assignedAt || new Date().toISOString(),
+        baseline: withBaseline.baseline,
+        progress,
+        target: def.target,
+        completed,
+        rewardClaimed: Boolean(a.rewardClaimed ?? completed)
+      };
+    });
+  }
+  state.objectiveAssignments = assignments;
+  return state;
+}
+
