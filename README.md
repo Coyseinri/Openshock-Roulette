@@ -49,6 +49,7 @@ Version 1.3.0 transforms OpenShock Roulette from a simple roulette wheel into a 
 - QR-code access
 - Persistent game sessions
 - SQLite-backed persistence
+- Cleaner modular codebase
 - Diagnostics dashboard
 - Expanded event card system
 
@@ -234,7 +235,9 @@ See `EVENT_CARDS.md` for the full reference.
 
 ## Persistent Sessions
 
-OSR stores active game state in SQLite.
+OSR stores active game state in SQLite using a simple session-blob style model.
+
+SQLite is used as a reliable save/session store, not as a giant relational monster hiding under the table.
 
 The following survive server restarts:
 
@@ -277,6 +280,10 @@ The Host already knew why you got shocked.
 
 ## Project Structure
 
+OSR has been split into smaller frontend and backend modules.
+
+The main entry files still exist, but most of the actual work now lives in more focused files:
+
 ```text
 openshock-roulette/
 ├── config/
@@ -285,7 +292,20 @@ openshock-roulette/
 ├── host/
 ├── player/
 ├── audience/
+├── functions/
+│   ├── core.js
+│   ├── api.js
+│   ├── players.js
+│   ├── wheels.js
+│   ├── ui.js
+│   ├── events.js
+│   ├── host.js
+│   └── private-player-info.js
 ├── server/
+│   ├── app.js
+│   ├── paths.js
+│   ├── static-files.js
+│   └── modules/
 ├── app.js
 ├── server.js
 ├── index.html
@@ -295,6 +315,14 @@ openshock-roulette/
 ├── README.md
 └── EVENT_CARDS.md
 ```
+
+Frontend modules handle browser-side game logic, wheel rendering, UI updates, player panels, host controls and API calls.
+
+Backend modules handle config loading, routing, OpenShock communication, session persistence, access pages, objectives, roles, economy, diagnostics and validation.
+
+This keeps the game easier to work on without turning `server.js` and `app.js` into cursed scrolls of doom.
+
+Same chaos. Less spaghetti.
 
 ---
 
