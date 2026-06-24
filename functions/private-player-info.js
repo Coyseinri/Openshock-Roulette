@@ -101,9 +101,10 @@ async function loadPlayerObjectivePanel() {
 
     html += `<h4>Player links / QR codes</h4><div class="playerLinkGrid">`;
     for (const link of links) {
+      const multiplier = Number(session.playerMultipliers?.[link.playerId] ?? playerMultipliers?.[link.playerId] ?? 100);
       html += `<div class="playerLinkCard">
         <div class="playerLinkHeader"><strong>${escapeHtml(link.name)}</strong><span>QR / link</span></div>
-        <div class="objectiveMini"><strong>Multiplier:</strong> private host control</div>
+        <div class="objectiveMini"><strong>Multiplier:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(link.playerId)}" value="${escapeHtml(Math.max(0, Math.min(100, Math.round(Number.isFinite(multiplier) ? multiplier : 100))))}">%</div>
         <div class="playerUrl"><input readonly value="${escapeHtml(link.url)}"></div>
         ${link.qrDataUrl ? `<img class="qrCode" alt="QR for ${escapeHtml(link.name)}" src="${link.qrDataUrl}">` : `<div class="qrDisabled">QR disabled</div>`}
       </div>`;
@@ -130,10 +131,8 @@ async function loadPlayerObjectivePanel() {
         : "No objective assigned";
       const tokenText = Object.entries(tokens[link.playerId] || {}).filter(([,v]) => Number(v) > 0).map(([k,v]) => `${escapeHtml(k)} x${escapeHtml(v)}`).join(" · ") || "No tokens";
       const role = session.hiddenRoles?.[link.playerId]?.roleId || "not assigned";
-      const multiplier = Number(session.playerMultipliers?.[link.playerId] ?? playerMultipliers?.[link.playerId] ?? 100);
       privateHtml += `<div class="playerLinkCard">
         <div class="playerLinkHeader"><strong>${escapeHtml(link.name)}</strong><span>${Number(points[link.playerId] || 0)} pts</span></div>
-        <div class="objectiveMini"><strong>Multiplier:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(link.playerId)}" value="${escapeHtml(Math.max(0, Math.min(100, Math.round(Number.isFinite(multiplier) ? multiplier : 100))))}">%</div>
         <div class="objectiveMini"><strong>Role:</strong> ${escapeHtml(role)}</div>
         <div class="objectiveMini"><strong>Tokens:</strong> ${tokenText}</div>
         <div class="objectiveMini">${objectiveText}</div>
@@ -143,7 +142,7 @@ async function loadPlayerObjectivePanel() {
 
     html += `<details class="dangerZone privatePlayerInfoDetails">
       <summary>Private player info</summary>
-      <p class="muted">Hidden roles, objectives, tokens, points and multiplier controls. Keep this closed when players can see the main screen.</p>
+      <p class="muted">Hidden roles, objectives, tokens, points and progress. Keep this closed when players can see the main screen.</p>
       ${privateHtml}
     </details>`;
 
