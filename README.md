@@ -282,35 +282,23 @@ The Host already knew why you got shocked.
 
 OSR has been split into smaller frontend and backend modules.
 
-The main entry files still exist, but most of the actual work now lives in more focused files:
+The main entry files still exist, but most of the actual work now lives in more focused folders:
 
 ```text
 openshock-roulette/
-├── config/
-├── data/
-├── logs/
-├── host/
-├── player/
-├── audience/
-├── functions/
-│   ├── core.js
-│   ├── api.js
-│   ├── players.js
-│   ├── wheels.js
-│   ├── ui.js
-│   ├── events.js
-│   ├── host.js
-│   └── private-player-info.js
-├── server/
-│   ├── app.js
-│   ├── paths.js
-│   ├── static-files.js
-│   └── modules/
-├── app.js
-├── server.js
-├── index.html
-├── style.css
-├── package.json
+├── config/      # Game config defaults and live config files
+├── data/        # Runtime data, SQLite database and session archives
+├── logs/        # Runtime logs and diagnostics output
+├── host/        # Host dashboard page
+├── player/      # Player dashboard page
+├── audience/    # Audience dashboard page
+├── functions/   # Main browser-side game logic and UI modules
+├── server/      # Backend app, routes, persistence and OpenShock API handling
+├── app.js       # Browser entry point
+├── server.js    # Node.js server entry point
+├── index.html   # Main game screen
+├── style.css    # Main game styling
+├── package.json # Node.js package metadata and scripts
 ├── LICENSE
 ├── README.md
 └── EVENT_CARDS.md
