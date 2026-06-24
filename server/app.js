@@ -16,6 +16,7 @@ var SERVER_MODULES = [
   "economy-host-state.js",
   "actions-modifiers.js",
   "openshock.js",
+  "host-dashboard-actions.js",
   "routes.js"
 ];
 
