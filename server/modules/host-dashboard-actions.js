@@ -2,7 +2,13 @@
 // Loaded after OpenShock helpers and before routes.
 
 const Readable = require("stream").Readable;
+const baseGetHostState = getHostState;
 const baseResolveHostAction = resolveHostAction;
+
+getHostState = async function getHostStateWithSafety() {
+  const snapshot = await baseGetHostState();
+  return { ...snapshot, safety: safety() };
+};
 
 function getPlayerMultiplierPercentFromState(state, playerId) {
   const multipliers = state?.playerMultipliers && typeof state.playerMultipliers === "object" ? state.playerMultipliers : {};
