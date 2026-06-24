@@ -6,8 +6,7 @@ let mainGameStatePanelRefreshInFlight = false;
 
 function eventCardRequiresManualContinue(card) {
   if (!card) return false;
-  if (card.requireManualContinue === true || card.manualContinueRequired === true || card.waitForContinue === true) return true;
-  return String(card.id || "").toLowerCase() === "hr-complaint";
+  return card.waitOnly === true || card.requireManualContinue === true || card.manualContinueRequired === true || card.waitForContinue === true;
 }
 
 showEventResult = function showEventResultWithoutWaitCardWarnings(text) {
