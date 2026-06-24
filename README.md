@@ -1,4 +1,4 @@
-# OpenShock Roulette (OSR) v1.3.0
+# OpenShock Roulette (OSR) v1.3.1
 
 > ## AI Notice
 >
@@ -32,32 +32,28 @@ What could possibly go wrong? - Historically, quite a lot.
 
 ---
 
-## What's New in v1.3.0
+## What's New in v1.3.1
 
-Version 1.3.0 transforms OpenShock Roulette from a simple roulette wheel into a complete multiplayer party game.
+Version 1.3.1 is a stability and cleanup release for the v1.3 game system.
 
-### New Features
+The big thing here is not a shiny new chaos machine. The big thing is that the existing chaos machine is now less likely to fold itself into a cursed pretzel.
 
-- Host dashboard
-- Player dashboard
-- Audience dashboard
-- Hidden roles
-- Secret objectives
-- Token economy
-- Per-player intensity multipliers
-- Audience voting and approvals
-- QR-code access
-- Persistent game sessions
-- SQLite-backed persistence
-- Cleaner modular codebase
-- Diagnostics dashboard
-- Expanded event card system
+### Updated Core Functions
 
-Things escalated quickly.
+- Frontend code split into focused browser-side modules
+- Backend code split into focused server modules
+- Cleaner `app.js` and `server.js` entry points
+- Host dashboard layout and control improvements
+- Private player information moved into a safer collapsible panel
+- Manual event card controls added to the host dashboard
+- Main screen game-state and pending-item updates improved
+- Wait-only event card support added for cards that pause until Continue is pressed
+- Default configuration and example config cleanup
+- Event card documentation updated to match the current parser
 
-The original roadmap ended somewhere around "spin wheel, shock player".
+This is still v1.3 gameplay.
 
-We may have deviated slightly.
+It just has fewer wires sticking out of the walls.
 
 ---
 
@@ -96,6 +92,7 @@ Responsibilities include:
 - Managing players
 - Triggering manual shocks
 - Managing game settings
+- Forcing a specific event card for the next round
 - Claiming every bad outcome was intentional
 
 The host is not responsible for the outcome of the game.
@@ -116,6 +113,8 @@ Features include:
 - Pending actions
 
 Players will quickly discover seventeen reasons why they should not be the target this round.
+
+Private player information can be tucked away so the host can open player links and objectives without immediately putting everyone's secret nonsense on the big screen.
 
 ### Audience Dashboard
 
@@ -181,9 +180,9 @@ The rolled value is adjusted before being sent to OpenShock.
 
 Examples:
 
-- 50% multiplier → Roll 80 → Sends 40
-- 75% multiplier → Roll 80 → Sends 60
-- 100% multiplier → Roll 80 → Sends 80
+- 50% multiplier -> Roll 80 -> Sends 40
+- 75% multiplier -> Roll 80 -> Sends 60
+- 100% multiplier -> Roll 80 -> Sends 80
 
 This allows individual balancing for players with different tolerance levels while keeping the game fair for everyone.
 
@@ -226,8 +225,11 @@ Examples include:
 - Protection effects
 - Audience effects
 - Fate manipulation
+- Wait-only pauses that require Continue before the round moves on
 
 Every round has the potential to become significantly worse.
+
+Some cards change the wheels. Some cards ask the host or target to make a choice. Some cards do nothing except make everyone stop and consider what led them here.
 
 See `EVENT_CARDS.md` for the full reference.
 
@@ -274,7 +276,7 @@ Useful for checking:
 
 Useful when investigating reports such as:
 "It shocked me for no reason."
-The Host already knew why you got shocked. 
+The Host already knew why you got shocked.
 
 ---
 
@@ -378,7 +380,7 @@ If automatic discovery fails, devices can be configured manually in config/shock
 5. Confirm the correct player screams - This step is more important than it sounds.
 6. Start the OSR server.
 7. Open the main screen.
-7. Let players and audience scan their QR codes.
+8. Let players and audience scan their QR codes.
 9. Begin regretting your life choices.
 
 ---
@@ -440,7 +442,7 @@ The STOP ALL button is traditionally discovered approximately one round later th
 - Event cards
 - Expanded gameplay modifiers
 
-### v1.3
+### v1.3.0
 
 - Host dashboard
 - Player dashboard
@@ -454,6 +456,16 @@ The STOP ALL button is traditionally discovered approximately one round later th
 - Persistent progression
 - Diagnostics dashboard
 - Lots more
+
+### v1.3.1
+
+- Frontend and backend modular cleanup
+- Host dashboard improvements
+- Manual event card controls
+- Private player information panel improvements
+- Better main-screen state updates
+- Wait-only event card support
+- Documentation and configuration cleanup
 
 Things escalated quickly.
 
