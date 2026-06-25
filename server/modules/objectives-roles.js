@@ -59,6 +59,140 @@ function hiddenRoleById(id) {
   return getHiddenRoleDefs().find(r => r.id === id) || null;
 }
 
+function getPublicObjectiveDefs() {
+  return (readObjectivesFileNormalized().publicObjectives || [])
+    .filter(o => o && o.enabled !== false && o.id && o.type && clampInt(o.target ?? 0, 0, 1000000) > 0)
+    .map(o => ({
+      ...o,
+      id: String(o.id),
+      type: String(o.type),
+      target: clampInt(o.target ?? 0, 1, 1000000)
+    }));
+}
+
+function publicObjectiveById(id) {
+  return getPublicObjectiveDefs().find(o => String(o.id) === String(id)) || null;
+}
+
+function publicObjectiveCurrentValue(state, objective, players = []) {
+  const type = String(objective?.type || "");
+  const statsByPlayer = state?.playerStats && typeof state.playerStats === "object" ? state.playerStats : {};
+  const stats = Object.values(statsByPlayer).filter(s => s && typeof s === "object");
+
+  if (type === "rounds" || type === "roundNumber") return clampInt(state?.roundNumber ?? 0, 0, 1000000);
+  if (type === "activePlayers") return Array.isArray(players) ? players.length : 0;
+  if (type === "audienceVotesApproved") return (state?.audienceVotes || []).filter(v => v && v.status === "approved").length;
+  if (type === "audienceVotesOpen") return (state?.audienceVotes || []).filter(v => v && v.status === "open").length;
+  if (type === "objectiveCompletions") return (state?.completedObjectiveEvents || []).filter(e => e && !String(e.objectiveId || "").startsWith("public:")).length;
+
+  return stats.reduce((sum, item) => sum + statValueForObjective(item, objective, state), 0);
+}
+
+function publicObjectiveBaselineValue(state, objective, players = []) {
+  const type = String(objective?.type || "");
+  return CUMULATIVE_OBJECTIVE_TYPES.has(type) || ["rounds", "roundNumber", "audienceVotesApproved", "audienceVotesOpen", "objectiveCompletions"].includes(type)
+    ? publicObjectiveCurrentValue(state, objective, players)
+    : 0;
+}
+
+function ensurePublicObjectiveProgress(state, players = []) {
+  state.publicObjectiveProgress = state.publicObjectiveProgress && typeof state.publicObjectiveProgress === "object" ? state.publicObjectiveProgress : {};
+  const defs = getPublicObjectiveDefs();
+  const validIds = new Set(defs.map(def => def.id));
+
+  for (const key of Object.keys(state.publicObjectiveProgress)) {
+    if (!validIds.has(String(key))) delete state.publicObjectiveProgress[key];
+  }
+
+  for (const def of defs) {
+    const current = state.publicObjectiveProgress[def.id] && typeof state.publicObjectiveProgress[def.id] === "object" ? state.publicObjectiveProgress[def.id] : {};
+    state.publicObjectiveProgress[def.id] = {
+      objectiveId: def.id,
+      assignedAt: current.assignedAt || new Date().toISOString(),
+      baseline: current.baseline ?? publicObjectiveBaselineValue(state, def, players),
+      progress: clampInt(current.progress ?? 0, 0, def.target),
+      target: def.target,
+      completed: Boolean(current.completed),
+      rewardClaimed: Boolean(current.rewardClaimed)
+    };
+  }
+
+  return state.publicObjectiveProgress;
+}
+
+function publicObjectiveRewardPoints(def) {
+  if (def?.reward && typeof def.reward === "object") return clampInt(def.reward.points ?? def.rewardPoints ?? 0, 0, 999);
+  return clampInt(def?.rewardPoints ?? 0, 0, 999);
+}
+
+function awardPublicObjectiveReward(state, def, players = []) {
+  const rewardPoints = publicObjectiveRewardPoints(def);
+  const rewardDescription = def.rewardDescription || (rewardPoints ? `Public objective awarded ${rewardPoints} point${rewardPoints === 1 ? "" : "s"} to each active player.` : "Public objective completed.");
+
+  if (rewardPoints > 0) {
+    for (const player of players || []) {
+      if (!player?.id) continue;
+      addPlayerPoints(state, player.id, rewardPoints, "public_objective_reward", { objectiveId: def.id });
+    }
+  }
+
+  pushObjectiveEvent(state, {
+    playerId: "public",
+    objectiveId: `public:${def.id}`,
+    title: `Public objective: ${def.title || def.id}`,
+    rewardPoints,
+    rewardDescription
+  });
+}
+
+function evaluatePublicObjectives(state, players = []) {
+  if (!state || typeof state !== "object") return state;
+  const progressState = ensurePublicObjectiveProgress(state, players);
+
+  for (const def of getPublicObjectiveDefs()) {
+    const current = progressState[def.id];
+    if (!current) continue;
+    const baseline = clampInt(current.baseline ?? publicObjectiveBaselineValue(state, def, players), 0, 100000000);
+    const raw = publicObjectiveCurrentValue(state, def, players);
+    const progress = Math.min(def.target, Math.max(0, raw - baseline));
+    const wasCompleted = Boolean(current.completed);
+    const completed = progress >= def.target;
+
+    current.objectiveId = def.id;
+    current.baseline = baseline;
+    current.progress = progress;
+    current.target = def.target;
+    current.completed = completed;
+
+    if (completed && !wasCompleted && current.rewardClaimed !== true) {
+      awardPublicObjectiveReward(state, def, players);
+      current.rewardClaimed = true;
+      current.completedAt = new Date().toISOString();
+    }
+  }
+
+  return state;
+}
+
+function publicObjectiveViews(state, players = []) {
+  evaluatePublicObjectives(state, players);
+  return getPublicObjectiveDefs().map(def => {
+    const progress = state.publicObjectiveProgress?.[def.id] || {};
+    return {
+      id: def.id,
+      title: def.title || def.id,
+      description: def.description || "",
+      type: def.type,
+      progress: clampInt(progress.progress ?? 0, 0, def.target),
+      target: def.target,
+      completed: Boolean(progress.completed),
+      rewardClaimed: Boolean(progress.rewardClaimed),
+      rewardPoints: publicObjectiveRewardPoints(def),
+      rewardDescription: def.rewardDescription || def.reward || ""
+    };
+  });
+}
+
 function playerRoleId(state, playerId) {
   const assignment = state?.hiddenRoles?.[playerId];
   return assignment?.roleId ? String(assignment.roleId) : null;
@@ -280,4 +414,3 @@ function evaluateObjectives(state) {
   state.objectiveAssignments = assignments;
   return state;
 }
-
