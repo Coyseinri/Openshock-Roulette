@@ -211,6 +211,8 @@ async function getHostState() {
   const state = readSessionState();
   const { shockers } = await getShockers();
   const players = await publicPlayers(shockers, state);
+  const publicObjectives = publicObjectiveViews(state, players);
+  writeSessionState(state);
   return {
     roundNumber: state.roundNumber,
     updatedAt: state.updatedAt,
@@ -218,6 +220,7 @@ async function getHostState() {
     economy: economyConfig(),
     hostPage: hostPageConfig(),
     eventCards: hostEventCardsView(),
+    publicObjectives,
     audiencePage: audiencePageConfig(),
     audienceVoteThresholdEffective: effectiveAudienceVoteThreshold(state),
     audienceSessions: Object.values(state.audienceSessions || {}),
