@@ -189,7 +189,13 @@
     }
   },
   "shockers": {
-    "cacheTtlMs": 30000
+    "cacheTtlMs": 30000,
+    "grouping": {
+      "enabled": false,
+      "separator": " - ",
+      "trimParts": true,
+      "fallbackUngrouped": true
+    }
   },
   "debug": {
     "enabled": true,

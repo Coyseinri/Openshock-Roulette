@@ -105,29 +105,36 @@ handleControl = async function handleControlWithManualMultiplier(req, res) {
   // selectedValue 1-serverMaxShockIntensity = Shock intensity
   const selectedValue = clampInt(body.selectedValue, 0, maxShock);
 
-  if (!id) return sendJson(res, 400, { error: "Missing shocker id" });
+  if (!id) return sendJson(res, 400, { error: "Missing player or shocker id" });
 
   const type = selectedValue === 0 ? "Vibrate" : "Shock";
-  let multiplierPercent = null;
-  let intensity = selectedValue === 0
-    ? clampInt(s.serverMaxVibrateIntensity ?? 100, 1, 100)
-    : selectedValue;
+  const devices = await resolveLogicalControlDevices(id);
+  if (!devices.length) return sendJson(res, 404, { error: "Unknown player or shocker id" });
 
-  if (type === "Shock" && body.applyPlayerMultiplier === true) {
-    const state = readSessionState();
-    multiplierPercent = getPlayerMultiplierPercentFromState(state, id);
-    intensity = applyManualPlayerMultiplier(selectedValue, multiplierPercent);
-    intensity = clampInt(intensity, 1, maxShock);
-  }
+  const state = body.applyPlayerMultiplier === true ? readSessionState() : null;
+  const shocks = devices.map(device => {
+    let multiplierPercent = null;
+    let intensity = selectedValue === 0
+      ? clampInt(s.serverMaxVibrateIntensity ?? 100, 1, 100)
+      : selectedValue;
+
+    if (type === "Shock" && body.applyPlayerMultiplier === true) {
+      multiplierPercent = getPlayerMultiplierPercentFromState(state, device.id);
+      intensity = applyManualPlayerMultiplier(selectedValue, multiplierPercent);
+      intensity = clampInt(intensity, 1, maxShock);
+    }
+
+    return { id: device.id, type, intensity, duration, exclusive, selectedValue, maxShock, multiplierPercent, playerId: device.playerId, playerName: device.playerName, deviceName: device.name };
+  });
 
   const requestBody = {
-    shocks: [{ id, type, intensity, duration, exclusive }]
+    shocks: shocks.map(({ id, type, intensity, duration, exclusive }) => ({ id, type, intensity, duration, exclusive }))
   };
 
-  debugState.counters.shockCommands += 1;
+  debugState.counters.shockCommands += shocks.length;
   const result = await requestOpenShock("POST", "/2/shockers/control", requestBody, { action: type === "Vibrate" ? "vibrate" : "shock" });
   sendJson(res, result.statusCode, {
-    sent: { id, type, intensity, selectedValue, maxShock, multiplierPercent, duration, exclusive },
+    sent: shocks.length === 1 ? shocks[0] : { id, type, selectedValue, duration, exclusive, deviceCount: shocks.length, devices: shocks },
     openshock: result.body
   });
 };

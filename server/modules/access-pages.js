@@ -16,14 +16,17 @@ async function cachedQrDataUrl(value, options = { margin: 1, width: 220 }) {
 async function buildPlayerLinks(req) {
   const pages = playerPagesConfig();
   const { shockers } = await getShockers();
+  const players = buildLogicalPlayersFromShockers(shockers);
   const base = getPublicBaseUrl(req);
   const links = [];
-  for (const s of shockers) {
+  for (const s of players) {
     const playerKey = getPlayerAccessKey(s.id);
     const url = `${base}/player/${encodeURIComponent(s.id)}?key=${encodeURIComponent(playerKey)}`;
     links.push({
       playerId: s.id,
       name: s.name,
+      devices: s.devices || [],
+      isGrouped: Boolean(s.isGrouped),
       url,
       qrDataUrl: pages.qrCodesEnabled ? await cachedQrDataUrl(url) : null
     });
@@ -92,11 +95,12 @@ function getPlayerState(playerId) {
 async function assignObjectivesToPlayers({ resetExisting = false } = {}) {
   const defs = readObjectives().objectives;
   const { shockers } = await getShockers();
+  const players = buildLogicalPlayersFromShockers(shockers);
   const state = readSessionState();
-  assignHiddenRolesToPlayers(state, shockers, { resetExisting });
+  assignHiddenRolesToPlayers(state, players, { resetExisting });
   state.objectiveAssignments = state.objectiveAssignments || {};
   const count = readObjectives().assignmentsPerPlayer || 1;
-  for (const s of shockers) {
+  for (const s of players) {
     if (!resetExisting && Array.isArray(state.objectiveAssignments[s.id]) && state.objectiveAssignments[s.id].length) continue;
     const shuffled = defs.slice().sort(() => Math.random() - 0.5).slice(0, count);
     const stats = state.playerStats?.[s.id] || {};

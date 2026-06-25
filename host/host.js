@@ -13,14 +13,39 @@ function fillPlayerSelect(select, players) {
   players.forEach(p => {
     const opt = document.createElement("option");
     opt.value = p.id;
-    opt.textContent = p.name;
+    const devices = Array.isArray(p.devices) && p.devices.length > 1 ? ` (${p.devices.length} devices)` : "";
+    opt.textContent = `${p.name}${devices}`;
     select.appendChild(opt);
   });
   if ([...select.options].some(o => o.value === current)) select.value = current;
 }
 
+function fillManualControlSelect(select, players) {
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = "";
+
+  (players || []).forEach(p => {
+    const groupOpt = document.createElement("option");
+    groupOpt.value = p.id;
+    groupOpt.textContent = p.name;
+    select.appendChild(groupOpt);
+
+    if (Array.isArray(p.devices) && p.devices.length > 1) {
+      p.devices.forEach(device => {
+        const opt = document.createElement("option");
+        opt.value = device.id;
+        opt.textContent = ` - ${device.name || device.memberName || device.id}`;
+        select.appendChild(opt);
+      });
+    }
+  });
+
+  if ([...select.options].some(o => o.value === current)) select.value = current;
+}
+
 function renderPlayers(players) {
-  fillPlayerSelect(document.getElementById("manualPlayer"), players);
+  fillManualControlSelect(document.getElementById("manualPlayer"), players);
   fillPlayerSelect(document.getElementById("rewardPlayer"), players);
   fillPlayerSelect(document.getElementById("forcePlayer"), players);
 }
@@ -168,7 +193,10 @@ function renderSessionStats(stats) {
   const host = document.getElementById("sessionStats");
   if (!host) return;
   if (!stats.length) { host.innerHTML = `<div class="mutedLine">No session stats yet.</div>`; return; }
-  host.innerHTML = stats.map(p => `<div class="pendingItem"><strong>${esc(p.name)}</strong> · Shocked ${esc(p.stats?.shocked || 0)} · Selected ${esc(p.stats?.selected || 0)} · Points ${esc(p.points || 0)}</div>`).join("");
+  host.innerHTML = stats.map(p => {
+    const devices = Array.isArray(p.devices) && p.devices.length > 1 ? `<br><span>${esc(p.devices.map(d => d.memberName || d.name).join(" · "))}</span>` : "";
+    return `<div class="pendingItem"><strong>${esc(p.name)}</strong>${p.isGrouped ? " · grouped" : ""} · Shocked ${esc(p.stats?.shocked || 0)} · Selected ${esc(p.stats?.selected || 0)} · Points ${esc(p.points || 0)}${devices}</div>`;
+  }).join("");
 }
 
 async function sendPublicObjectiveAction(objectiveId, actionType) {

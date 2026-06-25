@@ -236,7 +236,8 @@ var server = http.createServer(async (req, res) => {
       const playerId = decodeURIComponent(playerStateMatch[1]);
       if (!validatePlayerAccess(req, playerId, url)) return sendJson(res, 403, { error: "Invalid player key" });
       const { shockers } = await getShockers();
-      const player = shockers.find(s => s.id === playerId) || { id: playerId, name: "Unknown player" };
+      const players = buildLogicalPlayersFromShockers(shockers);
+      const player = findLogicalPlayerById(players, playerId) || shockers.find(s => String(s.id) === String(playerId)) || { id: playerId, name: "Unknown player", devices: [] };
       const sessionState = readSessionState();
       const pendingActions = (sessionState.pendingPlayerActions || [])
         .filter(a => a.status === "pending")
@@ -246,7 +247,6 @@ var server = http.createServer(async (req, res) => {
         .filter(m => m.status !== "consumed" && m.type === "bodyguardNextRound")
         .filter(m => String(m.bodyguardPlayerId) === String(playerId) || String(m.targetPlayerId) === String(playerId))
         .map(m => modifierView(m, shockers));
-      const players = shockers.map(s => ({ id: s.id, name: s.name }));
       return sendJson(res, 200, { player, players, ...getPlayerState(playerId), playerPages: playerPagesConfig(), economy: economyConfig(), pendingActions, activeBodyguards });
     }
 

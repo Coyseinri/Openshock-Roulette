@@ -11,6 +11,7 @@ var SERVER_MODULES = [
   "server-context.js",
   "validation.js",
   "config.js",
+  "grouping.js",
   "objectives-roles.js",
   "access-pages.js",
   "economy-host-state.js",
