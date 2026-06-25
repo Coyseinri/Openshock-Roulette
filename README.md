@@ -48,6 +48,7 @@ The big thing here is not a shiny new chaos machine. The big thing is that the e
 - Manual event card controls added to the host dashboard
 - Main screen game-state and pending-item updates improved
 - Wait-only event card support added for cards that pause until Continue is pressed
+- Grouped shocker support added for multi-device players and teams
 - Default configuration and example config cleanup
 - Event card documentation updated to match the current parser
 
@@ -78,8 +79,51 @@ It just has fewer wires sticking out of the walls.
 - OpenShock API proxy through Node.js
 - Automatic device discovery
 - Multiple shocker support
+- Prefix-based grouped shockers for multi-device players or teams
+- Per-device multipliers, even when devices are grouped
 - Local API token protection
 - Fallback shocker configuration
+
+### Grouped Shockers
+
+OSR can group multiple OpenShock devices into one logical player or team by using a name prefix.
+
+Example OpenShock device names:
+
+```text
+Alice - Arm
+Alice - Leg
+Team Red - Player 1
+Team Red - Player 2
+```
+
+With grouped shockers enabled, the target wheel shows the shared prefix as the player or team name. The individual devices stay attached underneath that group.
+
+When a grouped player is selected, OSR expands the hit to every device in that group. Each physical shocker still keeps its own multiplier, so one device can run at 50% while another runs at 75%, because apparently fairness now requires spreadsheet energy.
+
+The host manual shock control can target either the grouped player or one individual device under that group.
+
+Grouping is configured in `config/config.json` / `config/config.example.json`:
+
+```json
+"shockers": {
+  "grouping": {
+    "enabled": true,
+    "separator": " - ",
+    "trimParts": true,
+    "fallbackUngrouped": true
+  }
+}
+```
+
+Reloading shockers also rebuilds the groups, so renaming devices in OpenShock and reloading them is enough to update the logical player list.
+
+Use this for:
+
+- One player wearing multiple devices
+- Team-based games
+- Group dashboards with shared points, roles, objectives and stats
+- Still blaming one person even when two devices fired
 
 ### Host Dashboard
 
@@ -111,6 +155,8 @@ Features include:
 - Player statistics
 - Round history
 - Pending actions
+
+Grouped players share the same dashboard, points, tokens, hidden role, objectives and stats. Individual devices remain visible where it matters, especially for multiplier and manual control decisions.
 
 Players will quickly discover seventeen reasons why they should not be the target this round.
 
@@ -172,6 +218,16 @@ Objectives are private and only visible to the player who owns them.
 
 ---
 
+## Public Objectives
+
+Public objectives give the whole group shared goals to work toward.
+
+Only a configured number of public objectives are active at once. When one is completed, OSR rewards the active players and rolls in a new public objective from the pool.
+
+The host can also manually complete or reroll public objectives when the table has clearly achieved greatness, or at least argued convincingly enough.
+
+---
+
 ## Per-Player Multipliers
 
 Each player can have their own intensity multiplier.
@@ -183,6 +239,8 @@ Examples:
 - 50% multiplier -> Roll 80 -> Sends 40
 - 75% multiplier -> Roll 80 -> Sends 60
 - 100% multiplier -> Roll 80 -> Sends 80
+
+For grouped shockers, the rolled value is expanded to every device in the group and then each device's own multiplier is applied.
 
 This allows individual balancing for players with different tolerance levels while keeping the game fair for everyone.
 
@@ -354,6 +412,21 @@ The server automatically attempts to load devices from OpenShock.
 If the hub, controller, your smart fridge, your toaster, or some other appliance appears as a player, use exclusions in the configuration.
 If your toaster gets selected multiple times in a row, we recommend keeping it away from any nearby bathtubs.
 
+Grouped shockers are enabled by default. Use OpenShock device name prefixes to create logical players or teams:
+
+```text
+Player Name - Device Name
+```
+
+Examples:
+
+```text
+Alice - Arm
+Alice - Leg
+Team Red - Alice
+Team Red - Bob
+```
+
 If automatic discovery fails, devices can be configured manually in config/shockers.json
 
 ```json
@@ -465,6 +538,8 @@ The STOP ALL button is traditionally discovered approximately one round later th
 - Private player information panel improvements
 - Better main-screen state updates
 - Wait-only event card support
+- Grouped shocker support
+- Public objectives
 - Documentation and configuration cleanup
 
 Things escalated quickly.
