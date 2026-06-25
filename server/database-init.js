@@ -98,17 +98,20 @@ function readJsonFile(filePath, fallback) {
 function normalizeObjectives(raw = {}) {
   const objectives = Array.isArray(raw.objectives) ? raw.objectives : [];
   const hiddenRoles = Array.isArray(raw.hiddenRoles) ? raw.hiddenRoles : [];
+  const publicObjectives = Array.isArray(raw.publicObjectives) ? raw.publicObjectives : [];
   return {
     enabled: raw.enabled !== false,
     assignmentsPerPlayer: Number.isFinite(Number(raw.assignmentsPerPlayer)) ? Number(raw.assignmentsPerPlayer) : 1,
+    publicObjectivesActiveCount: Number.isFinite(Number(raw.publicObjectivesActiveCount)) ? Number(raw.publicObjectivesActiveCount) : 2,
     objectives: objectives.filter(o => o && o.enabled !== false && o.id),
+    publicObjectives: publicObjectives.filter(o => o && o.enabled !== false && o.id),
     hiddenRoles: hiddenRoles.filter(r => r && r.enabled !== false && r.id)
   };
 }
 
 function readObjectivesFileNormalized() {
   const source = fs.existsSync(OBJECTIVES_PATH || "") ? OBJECTIVES_PATH : OBJECTIVES_EXAMPLE_PATH;
-  return normalizeObjectives(readJsonFile(source, { enabled: true, assignmentsPerPlayer: 1, objectives: [], hiddenRoles: [] }));
+  return normalizeObjectives(readJsonFile(source, { enabled: true, assignmentsPerPlayer: 1, objectives: [], publicObjectives: [], hiddenRoles: [] }));
 }
 
 function appendLog(db, type, title, description, data = {}) {

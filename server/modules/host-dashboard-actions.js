@@ -20,6 +20,30 @@ function applyManualPlayerMultiplier(value, multiplierPercent) {
   return Math.max(1, Math.round(value * (multiplierPercent / 100)));
 }
 
+
+async function resolvePublicObjectiveHostAction(req, res, body) {
+  const objectiveId = String(body.objectiveId || body.id || "");
+  const publicAction = String(body.actionType || body.type || "");
+  if (!objectiveId) return sendJson(res, 400, { error: "Missing public objective id" });
+
+  const state = readSessionState();
+  const { shockers } = await getShockers();
+  const players = await publicPlayers(shockers, state);
+  let result = null;
+
+  if (publicAction === "completePublicObjective") {
+    result = completePublicObjective(state, objectiveId, players, { source: "host" });
+  } else if (publicAction === "rerollPublicObjective") {
+    result = rerollPublicObjective(state, objectiveId, players);
+  } else {
+    return sendJson(res, 400, { error: "Unsupported public objective action" });
+  }
+
+  if (!result?.ok) return sendJson(res, 400, { error: result?.error || "Could not update public objective" });
+  writeSessionState(state);
+  return sendJson(res, 200, { ok: true, result, state: await getHostState() });
+}
+
 async function cancelRoundModifierFromHost(req, res, body) {
   const modifierId = String(body.modifierId || body.id || "");
   if (!modifierId) return sendJson(res, 400, { error: "Missing modifier id" });
@@ -44,8 +68,12 @@ async function cancelRoundModifierFromHost(req, res, body) {
 resolveHostAction = async function resolveHostActionWithModifierCancel(req, res, url) {
   if (!validateRoleAccess("host", req, url) && !isLocalRequest(req)) return sendJson(res, 403, { error: "Invalid host key" });
   const body = await readBody(req);
-  if (String(body.actionType || body.type || "") === "cancelRoundModifier") {
+  const actionType = String(body.actionType || body.type || "");
+  if (actionType === "cancelRoundModifier") {
     return await cancelRoundModifierFromHost(req, res, body);
+  }
+  if (actionType === "completePublicObjective" || actionType === "rerollPublicObjective") {
+    return await resolvePublicObjectiveHostAction(req, res, body);
   }
 
   const replay = new Readable();

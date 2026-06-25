@@ -146,6 +146,9 @@ function defaultSessionState() {
     lastTargetPicked: null,
     fateDeckKeys: [],
     objectiveAssignments: {},
+    publicObjectiveProgress: {},
+    publicObjectiveActiveIds: [],
+    publicObjectiveCompletedIds: [],
     playerPoints: {},
     playerTokens: {},
     playerMultipliers: {},
@@ -206,6 +209,9 @@ function validateSessionState(data) {
   }
   state.playerStats = cleanStats;
   state.objectiveAssignments = data.objectiveAssignments && typeof data.objectiveAssignments === "object" ? data.objectiveAssignments : {};
+  state.publicObjectiveProgress = data.publicObjectiveProgress && typeof data.publicObjectiveProgress === "object" ? data.publicObjectiveProgress : {};
+  state.publicObjectiveActiveIds = Array.isArray(data.publicObjectiveActiveIds) ? data.publicObjectiveActiveIds.map(String).filter(Boolean) : [];
+  state.publicObjectiveCompletedIds = Array.isArray(data.publicObjectiveCompletedIds) ? data.publicObjectiveCompletedIds.map(String).filter(Boolean) : [];
   state.playerPoints = data.playerPoints && typeof data.playerPoints === "object" ? data.playerPoints : {};
   state.playerTokens = data.playerTokens && typeof data.playerTokens === "object" ? data.playerTokens : {};
   state.playerMultipliers = data.playerMultipliers && typeof data.playerMultipliers === "object" ? data.playerMultipliers : {};
