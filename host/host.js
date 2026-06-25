@@ -109,6 +109,28 @@ function renderObjectiveEvents(events) {
   document.querySelectorAll(".ackObjective").forEach(btn => btn.onclick = () => acknowledgeObjectives([btn.dataset.id]));
 }
 
+function renderPublicObjectives(objectives) {
+  const host = document.getElementById("publicObjectives");
+  if (!host) return;
+  const list = Array.isArray(objectives) ? objectives : [];
+  if (!list.length) {
+    host.innerHTML = `<div class="mutedLine">No public objectives configured.</div>`;
+    return;
+  }
+
+  host.innerHTML = list.map(o => {
+    const progress = Number(o.progress || 0);
+    const target = Math.max(1, Number(o.target || 1));
+    const percent = Math.max(0, Math.min(100, Math.round((progress / target) * 100)));
+    const reward = o.rewardPoints ? ` · Reward: ${esc(o.rewardPoints)} point${Number(o.rewardPoints) === 1 ? "" : "s"} each` : "";
+    return `<div class="pendingItem publicObjectiveItem">
+      <strong>${esc(o.title || o.id)}</strong>${o.completed ? " ✅" : ""}<br>
+      <span>${esc(o.description || "")}</span><br>
+      <span>Progress: ${esc(progress)}/${esc(target)} (${esc(percent)}%)${reward}</span>
+    </div>`;
+  }).join("");
+}
+
 function renderAudienceVotes(votes, threshold = null) {
   const host = document.getElementById("audienceVotes");
   if (!host) return;
@@ -273,6 +295,7 @@ async function load() {
     renderModifiers(data.pendingRoundModifiers || []);
     renderAudienceVotes(data.audienceVotes || [], data.audienceVoteThresholdEffective || data.economy?.audienceVoteThreshold || null);
     renderObjectiveEvents(data.completedObjectiveEvents || []);
+    renderPublicObjectives(data.publicObjectives || []);
     renderActions(data.pendingPlayerActions || []);
     renderSessionStats(data.sessionStats || []);
     setStatus(`Updated ${new Date().toLocaleTimeString()}`);
@@ -286,7 +309,6 @@ async function load() {
   }
 }
 
-document.getElementById("manualSendBtn").onclick = sendManual;
 document.getElementById("rewardSendBtn")?.addEventListener("click", sendReward);
 document.getElementById("forcePlayerBtn")?.addEventListener("click", sendForcePlayer);
 document.getElementById("hostForceSpecificEventBtn")?.addEventListener("click", sendSpecificEvent);
