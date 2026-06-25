@@ -18,6 +18,7 @@ var SERVER_MODULES = [
   "actions-modifiers.js",
   "openshock.js",
   "host-dashboard-actions.js",
+  "diagnostics.js",
   "routes.js"
 ];
 

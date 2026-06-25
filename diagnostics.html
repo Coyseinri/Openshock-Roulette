@@ -3,43 +3,410 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OpenShock Roulette Diagnostics</title>
+  <title>OpenShock Roulette Diagnostics + Test</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 24px; background: #111; color: #eee; }
-    h1, h2 { margin-bottom: 8px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-    .card { background: #1d1d1d; border: 1px solid #333; border-radius: 12px; padding: 14px; }
-    .metric { font-size: 28px; font-weight: 700; }
-    .muted { color: #aaa; }
+    :root { color-scheme: dark; --bg:#101114; --panel:#1b1d22; --panel2:#24272e; --border:#343844; --text:#f1f3f4; --muted:#aeb4bf; --ok:#35c46f; --warn:#ffbf47; --bad:#ff5c70; --accent:#7aa7ff; --purple:#b388ff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
+    header { position: sticky; top: 0; z-index: 10; background: rgba(16,17,20,.96); border-bottom: 1px solid var(--border); padding: 14px 18px; display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: 22px; }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    h3 { margin: 12px 0 8px; font-size: 15px; }
+    main { padding: 18px; max-width: 1580px; margin: 0 auto; }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .tab { border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 9px 12px; border-radius: 999px; cursor: pointer; }
+    .tab.active { border-color: var(--accent); color: #fff; box-shadow: 0 0 0 1px var(--accent) inset; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button, select, input { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
+    button { cursor: pointer; font-weight: 700; }
+    button:hover { border-color: var(--accent); }
+    button.danger { background: #50141d; border-color: #9d2737; color: #fff; }
+    button.warn { background: #4e3515; border-color: #9b6a23; color: #fff; }
+    button.ok { background: #123f27; border-color: #247d4b; color: #fff; }
+    button.purple { background: #2e214b; border-color: #6b4ec7; color: #fff; }
+    .stopAll { font-size: 18px; padding: 14px 18px; border-radius: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 12px; }
+    .wideGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; }
+    .inspectorGrid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .qrGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .qrCard { text-align: center; }
+    .qrCard img { width: 180px; height: 180px; background: #fff; padding: 8px; border-radius: 10px; margin: 8px auto; display: block; }
+    .apiActionGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; overflow: hidden; margin-bottom: 12px; }
+    .metric { font-size: 28px; font-weight: 800; margin-top: 4px; }
+    .status { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--border); padding: 4px 8px; border-radius: 999px; font-size: 12px; margin: 2px; }
+    .status.ok { color: var(--ok); border-color: rgba(53,196,111,.5); }
+    .status.warn { color: var(--warn); border-color: rgba(255,191,71,.5); }
+    .status.bad { color: var(--bad); border-color: rgba(255,92,112,.5); }
+    .section { display: none; }
+    .section.active { display: block; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { border-bottom: 1px solid #333; padding: 6px; text-align: left; vertical-align: top; }
-    code { background: #222; padding: 2px 4px; border-radius: 4px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 7px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 700; }
+    code, pre { background: #0b0c0f; border: 1px solid #252934; border-radius: 8px; }
+    code { padding: 2px 5px; }
+    pre { padding: 12px; overflow: auto; max-height: 560px; white-space: pre-wrap; }
+    details { border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: rgba(255,255,255,.02); margin: 8px 0; }
+    summary { cursor: pointer; font-weight: 700; }
+    .group { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 8px 0; background: rgba(255,255,255,.02); }
+    .device { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0 5px 14px; border-left: 2px solid var(--border); margin-left: 6px; }
+    .warningList li { margin: 6px 0; }
+    .resultBox { margin-top: 12px; }
+    .toast { position: fixed; right: 16px; bottom: 16px; max-width: 520px; background: #15171c; border: 1px solid var(--border); padding: 12px 14px; border-radius: 12px; display: none; box-shadow: 0 10px 30px rgba(0,0,0,.35); z-index: 20; }
+    .bar { height: 12px; background: #0b0c0f; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+    .bar span { display:block; height:100%; background: linear-gradient(90deg, var(--accent), var(--purple)); }
+    .twoCol { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 900px) { .twoCol { grid-template-columns: 1fr; } .wideGrid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
-  <h1>OpenShock Roulette Diagnostics</h1>
-  <p class="muted">Auto-refreshes every 3 seconds. Raw data: <code>/api/debug/stats</code></p>
-  <div id="content">Loading...</div>
-  <script>
-    function esc(v) { return String(v ?? '').replace(/[&<>"']/g, function(m) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]); }); }
-    function row(r) { return '<tr><td>'+esc(r.time)+'</td><td>'+esc(r.method || '')+'</td><td><code>'+esc(r.path)+'</code></td><td>'+esc(r.statusCode || r.status)+'</td><td>'+esc(r.responseTimeMs)+'</td></tr>'; }
-    async function load() {
-      const res = await fetch('/api/debug/stats');
-      const d = await res.json();
-      document.getElementById('content').innerHTML =
-        '<div class="grid">' +
-          '<div class="card"><div class="muted">Incoming API calls</div><div class="metric">'+d.counters.incomingTotal+'</div></div>' +
-          '<div class="card"><div class="muted">OpenShock live calls</div><div class="metric">'+d.counters.openShockTotal+'</div></div>' +
-          '<div class="card"><div class="muted">Cache hits / misses</div><div class="metric">'+d.counters.openShockCacheHits+' / '+d.counters.openShockCacheMisses+'</div></div>' +
-          '<div class="card"><div class="muted">Slow requests</div><div class="metric">'+d.counters.slowRequests+'</div></div>' +
-          '<div class="card"><div class="muted">Cached shockers</div><div class="metric">'+d.cache.cachedShockers+'</div><div class="muted">expires in '+Math.round((d.cache.expiresInMs || 0)/1000)+'s</div></div>' +
-          '<div class="card"><div class="muted">Avg OpenShock response</div><div class="metric">'+d.averages.openShockResponseMs+'ms</div></div>' +
-        '</div>' +
-        '<h2>Recent OpenShock calls</h2><table><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>ms</th></tr></thead><tbody>'+d.recent.openShockCalls.map(row).join('')+'</tbody></table>' +
-        '<h2>Slow requests</h2><table><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>ms</th></tr></thead><tbody>'+d.recent.slowRequests.map(row).join('')+'</tbody></table>' +
-        '<h2>Recent incoming requests</h2><table><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>ms</th></tr></thead><tbody>'+d.recent.incomingRequests.map(row).join('')+'</tbody></table>';
-    }
-    load(); setInterval(load, 3000);
-  </script>
+  <header>
+    <div>
+      <h1>OSR Diagnostics + Test</h1>
+      <div class="muted small" id="lastUpdated">Loading...</div>
+    </div>
+    <div class="toolbar">
+      <button id="refreshBtn">Refresh</button>
+      <button id="reloadShockersBtn">Reload Shockers</button>
+      <button id="preflightBtn" class="purple">Run Pre-flight</button>
+      <button id="exportBtn">Export JSON</button>
+      <button id="copyBtn">Copy JSON</button>
+      <label class="small muted" style="display:flex;align-items:center;gap:6px;"><input id="autoRefreshToggle" type="checkbox" checked> Auto-refresh</label>
+      <button id="stopAllTopBtn" class="danger stopAll">STOP ALL</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="preflight">Pre-flight</button>
+      <button class="tab" data-tab="devices">Devices & Groups</button>
+      <button class="tab" data-tab="tests">Safe Tests</button>
+      <button class="tab" data-tab="api">API Explorer</button>
+      <button class="tab" data-tab="inspectors">Inspectors</button>
+      <button class="tab" data-tab="simulator">Simulator & Odds</button>
+      <button class="tab" data-tab="config">Config</button>
+      <button class="tab" data-tab="storage">Storage</button>
+      <button class="tab" data-tab="links">QR/Links</button>
+      <button class="tab" data-tab="session">Session</button>
+      <button class="tab" data-tab="logs">Logs</button>
+      <button class="tab" data-tab="developer">Developer</button>
+      <button class="tab" data-tab="future">Future Tools</button>
+      <button class="tab" data-tab="raw">Raw JSON</button>
+    </div>
+
+    <section id="overview" class="section active"></section>
+    <section id="preflight" class="section"></section>
+    <section id="devices" class="section"></section>
+    <section id="tests" class="section"></section>
+    <section id="api" class="section"></section>
+    <section id="inspectors" class="section"></section>
+    <section id="simulator" class="section"></section>
+    <section id="config" class="section"></section>
+    <section id="storage" class="section"></section>
+    <section id="links" class="section"></section>
+    <section id="session" class="section"></section>
+    <section id="logs" class="section"></section>
+    <section id="developer" class="section"></section>
+    <section id="future" class="section"></section>
+    <section id="raw" class="section"></section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+let snapshot = null;
+let autoTimer = null;
+let autoRefreshEnabled = localStorage.getItem('osrDiagAutoRefresh') !== 'false';
+let lastDetailsState = JSON.parse(localStorage.getItem('osrDiagDetails') || '{}');
+let lastTestResultData = null;
+let lastSimulationResultData = null;
+const interactiveTabs = new Set(['tests', 'api', 'inspectors', 'simulator', 'links', 'raw']);
+
+function esc(value) { return String(value ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+function fmtMs(ms) { ms = Number(ms || 0); return ms >= 1000 ? `${Math.round(ms/100)/10}s` : `${Math.round(ms)}ms`; }
+function fmtBytes(bytes) { bytes = Number(bytes || 0); if (bytes > 1024*1024) return `${Math.round(bytes/1024/102.4)/10} MB`; if (bytes > 1024) return `${Math.round(bytes/102.4)/10} KB`; return `${bytes} B`; }
+function statusPill(ok, text) { return `<span class="status ${ok ? 'ok' : 'bad'}">${ok ? '✓' : '✕'} ${esc(text)}</span>`; }
+function warnPill(text) { return `<span class="status warn">! ${esc(text)}</span>`; }
+function toast(text, kind='') { const el = document.getElementById('toast'); el.innerHTML = esc(text); el.style.display = 'block'; el.style.borderColor = kind === 'bad' ? 'var(--bad)' : kind === 'ok' ? 'var(--ok)' : 'var(--border)'; clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 4200); }
+function queryKey() { return new URLSearchParams(location.search).get('key') || ''; }
+function apiUrl(path) { const key = queryKey(); return key ? `${path}${path.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}` : path; }
+async function api(path, options={}) { const res = await fetch(apiUrl(path), { cache: 'no-store', ...options }); const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`); return data; }
+async function post(path, body={}) { return api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+function metricCard(label, value, detail='') { return `<div class="card"><div class="muted">${esc(label)}</div><div class="metric">${esc(value)}</div>${detail ? `<div class="muted small">${detail}</div>` : ''}</div>`; }
+function detailsBlock(id, title, body, open=false) { return `<details data-diag-id="${esc(id)}" ${open ? 'open' : ''}><summary>${esc(title)}</summary>${body}</details>`; }
+function table(headers, rows) { if (!rows || !rows.length) return '<p class="muted">Nothing to show.</p>'; return `<table><thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${String(cell ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`; }
+function bar(percent) { percent = Math.max(0, Math.min(100, Number(percent || 0))); return `<div class="bar"><span style="width:${percent}%"></span></div><div class="small muted">${percent}%</div>`; }
+
+function captureDetailsState() { document.querySelectorAll('details[data-diag-id]').forEach(d => { lastDetailsState[d.dataset.diagId] = d.open; }); localStorage.setItem('osrDiagDetails', JSON.stringify(lastDetailsState)); }
+function restoreDetailsState() { document.querySelectorAll('details[data-diag-id]').forEach(d => { if (Object.prototype.hasOwnProperty.call(lastDetailsState, d.dataset.diagId)) d.open = Boolean(lastDetailsState[d.dataset.diagId]); d.ontoggle = () => { lastDetailsState[d.dataset.diagId] = d.open; localStorage.setItem('osrDiagDetails', JSON.stringify(lastDetailsState)); }; }); }
+
+function renderOverview(d) {
+  const warnings = d.configValidation?.warnings || [];
+  const openShockOk = Boolean(d.server?.tokenConfigured) && !(d.shockers?.warning);
+  document.getElementById('overview').innerHTML = `
+    <div class="grid">
+      ${metricCard('App version', d.system.appVersion, d.system.packageName)}
+      ${metricCard('Node', d.system.nodeVersion, `${d.system.platform} ${d.system.arch}`)}
+      ${metricCard('Uptime', `${Math.round((d.system.uptimeSeconds || 0)/60)}m`, `PID ${d.system.pid}`)}
+      ${metricCard('Memory RSS', `${d.system.memory.rssMb} MB`, `Heap ${d.system.memory.heapUsedMb}/${d.system.memory.heapTotalMb} MB`)}
+      ${metricCard('Physical shockers', d.shockers.physicalCount, `Source: ${esc(d.shockers.source || 'unknown')}`)}
+      ${metricCard('Logical players', d.shockers.logicalCount, `${d.shockers.groups.filter(g => g.isGrouped).length} grouped`)}
+      ${metricCard('OpenShock calls', d.debug.counters.openShockTotal, `${d.debug.counters.openShockErrors} errors, avg ${d.debug.averages.openShockResponseMs}ms`)}
+      ${metricCard('Incoming calls', d.debug.counters.incomingTotal, `${d.debug.counters.incomingErrors} errors, avg ${d.debug.averages.incomingResponseMs}ms`)}
+    </div>
+    <div class="wideGrid" style="margin-top:12px;">
+      <div class="card"><h2>Health</h2>
+        <p>${statusPill(d.database.ok, 'SQLite')} ${statusPill(d.server.tokenConfigured, 'OpenShock token')} ${statusPill(openShockOk, 'OpenShock/device load')} ${statusPill(d.tools.preflight.ready, 'Pre-flight')}</p>
+        <p>${d.shockers.cached ? warnPill('Using cached shockers') : statusPill(true, 'Fresh/current shocker state')} ${d.server.adminLocalhostOnly ? statusPill(true, 'Admin localhost only') : warnPill('Admin remote access enabled')}</p>
+        ${d.shockers.warning ? `<p class="status bad">${esc(d.shockers.warning)}</p>` : ''}
+      </div>
+      <div class="card"><h2>Warnings</h2>
+        ${warnings.length ? `<ul class="warningList">${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '<p class="muted">No config warnings found. Suspiciously calm.</p>'}
+      </div>
+    </div>`;
+}
+
+function renderPreflight(d) {
+  const p = d.tools.preflight;
+  document.getElementById('preflight').innerHTML = `
+    <div class="card"><h2>OSR Pre-flight Check</h2>
+      <p>${p.ready ? statusPill(true, 'READY TO PLAY') : statusPill(false, 'NOT READY')} ${warnPill(`${p.warnings} warnings`)} ${p.failed ? statusPill(false, `${p.failed} blockers`) : statusPill(true, 'No blockers')}</p>
+      <button id="runPreflightInner" class="purple">Run fresh pre-flight</button>
+    </div>
+    <div class="card">${table(['Status','Check','Severity','Details'], p.checks.map(c => [c.ok ? statusPill(true, 'OK') : (c.severity === 'error' ? statusPill(false, 'FAIL') : warnPill('WARN')), esc(c.label), esc(c.severity), `<pre>${esc(JSON.stringify(c.details ?? '', null, 2))}</pre>`]))}</div>`;
+  document.getElementById('runPreflightInner').onclick = runPreflight;
+}
+
+function renderDevices(d) {
+  const groups = d.shockers.groups || [];
+  document.getElementById('devices').innerHTML = `
+    <div class="card"><h2>OpenShock / Grouping</h2>
+      <p>${statusPill(Boolean(d.shockers.physicalCount), `${d.shockers.physicalCount} physical devices`)} ${statusPill(Boolean(d.shockers.logicalCount), `${d.shockers.logicalCount} logical players`)} ${d.shockers.grouping.enabled ? statusPill(true, `Grouping enabled: ${d.shockers.grouping.separator}`) : warnPill('Grouping disabled')}</p>
+      <p class="muted small">Reload Shockers also rebuilds grouped players from current OpenShock names.</p>
+    </div>
+    <div class="wideGrid">
+      <div class="card"><h2>Grouped View</h2>
+        ${groups.length ? groups.map(g => `<div class="group"><strong>${esc(g.name)}</strong> ${g.isGrouped ? `<span class="muted">(${g.devices.length} devices)</span>` : '<span class="muted">(standalone)</span>'}<div class="small muted">ID: <code>${esc(g.id)}</code></div>${g.devices.map(dev => `<div class="device"><span>${esc(dev.memberName)}<br><span class="small muted">${esc(dev.name)} · <code>${esc(dev.id)}</code></span></span><span>${esc(dev.multiplier)}%</span></div>`).join('')}</div>`).join('') : '<p class="muted">No devices loaded.</p>'}
+      </div>
+      <div class="card"><h2>Physical Devices</h2>${table(['Name','ID'], d.shockers.physical.map(s => [esc(s.name), `<code>${esc(s.id)}</code>`]))}</div>
+    </div>`;
+}
+
+function testTargetOptions(d) {
+  const opts = [];
+  opts.push(`<optgroup label="Grouped / logical players">${(d.shockers.groups || []).map(g => `<option value="group:${esc(g.id)}">${esc(g.name)}${g.isGrouped ? ` (${g.devices.length} devices)` : ''}</option>`).join('')}</optgroup>`);
+  opts.push(`<optgroup label="Individual devices">${(d.shockers.groups || []).flatMap(g => g.devices.map(dev => `<option value="device:${esc(dev.id)}">${esc(g.name)} - ${esc(dev.memberName)}</option>`)).join('')}</optgroup>`);
+  opts.push(`<option value="all:*">ALL DEVICES</option>`);
+  return opts.join('');
+}
+function captureTestForm() {
+  return {
+    target: document.getElementById('testTarget')?.value || localStorage.getItem('osrDiagTestTarget') || '',
+    mode: document.getElementById('testMode')?.value || localStorage.getItem('osrDiagTestMode') || 'Vibrate',
+    intensity: document.getElementById('testIntensity')?.value || localStorage.getItem('osrDiagTestIntensity') || '5',
+    duration: document.getElementById('testDuration')?.value || localStorage.getItem('osrDiagTestDuration') || ''
+  };
+}
+function restoreTestForm(form) {
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (!el || value === undefined || value === null || value === '') return;
+    if ([...el.options || []].some(o => o.value === value) || el.tagName !== 'SELECT') el.value = value;
+  };
+  set('testTarget', form.target);
+  set('testMode', form.mode);
+  set('testIntensity', form.intensity);
+  set('testDuration', form.duration);
+}
+function saveTestForm() {
+  const form = captureTestForm();
+  localStorage.setItem('osrDiagTestTarget', form.target);
+  localStorage.setItem('osrDiagTestMode', form.mode);
+  localStorage.setItem('osrDiagTestIntensity', form.intensity);
+  localStorage.setItem('osrDiagTestDuration', form.duration);
+}
+function renderTests(d) {
+  const savedForm = captureTestForm();
+  const maxShock = Number(d.safety.serverMaxShockIntensity || 99);
+  const minDur = Number(d.safety.minDurationMs || 300);
+  const maxDur = Number(d.safety.maxDurationMs || 1000);
+  document.getElementById('tests').innerHTML = `
+    <div class="card"><h2>Safe Test Controls</h2>
+      <p class="muted">Default is vibrate. Shock tests are capped by server safety and still apply device multipliers.</p>
+      <div class="toolbar">
+        <label>Target<br><select id="testTarget">${testTargetOptions(d)}</select></label>
+        <label>Action<br><select id="testMode"><option value="Vibrate">Vibrate</option><option value="Shock">Shock</option></select></label>
+        <label>Intensity<br><input id="testIntensity" type="number" min="1" max="${esc(maxShock)}" value="5"></label>
+        <label>Duration ms<br><input id="testDuration" type="number" min="${esc(minDur)}" max="${esc(maxDur)}" value="${esc(d.safety.defaultDurationMs || 700)}"></label>
+      </div>
+      <div class="toolbar" style="margin-top:12px;"><button id="previewTestBtn">Preview Plan</button><button id="sendTestBtn" class="ok">Send Test</button><button id="stopSelectedBtn" class="warn">Stop Selected</button><button id="stopAllBtn" class="danger stopAll">STOP ALL</button></div>
+      <div id="testResult" class="resultBox"></div>
+    </div>
+    <div class="card"><h2>Danger Zone</h2><p class="muted">These are setup tools. They should not be used as gameplay controls unless everyone involved knows what is happening.</p><button id="resetSessionBtn" class="danger">Archive and Reset Session</button> <button id="clearCacheBtn" class="warn">Clear Shocker Cache</button> <button id="clearDebugBtn" class="warn">Clear Debug Counters</button></div>`;
+  restoreTestForm(savedForm);
+  if (lastTestResultData) renderTestResult(lastTestResultData);
+  wireTestButtons();
+  ['testTarget','testMode','testIntensity','testDuration'].forEach(id => document.getElementById(id)?.addEventListener('change', saveTestForm));
+}
+function selectedTargetPayload() { const raw = document.getElementById('testTarget').value; const [targetType, targetId] = raw.split(':'); return { targetType, targetId }; }
+function renderTestResult(data) { lastTestResultData = data; const rows = (data.sent || []).map(s => [esc(s.playerName || ''), esc(s.deviceName || s.id), esc(s.type), esc(s.selectedValue ?? ''), s.multiplierPercent == null ? '' : `${esc(s.multiplierPercent)}%`, esc(s.intensity), esc(s.duration)]); document.getElementById('testResult').innerHTML = detailsBlock('tests:last-result', 'Last test result', `${table(['Player','Device','Type','Selected','Multiplier','Sent','Duration'], rows)}<pre>${esc(JSON.stringify(data, null, 2))}</pre>`, true); restoreDetailsState(); }
+function previewDiagnosticPlan() { saveTestForm(); const target = document.getElementById('testTarget').selectedOptions[0]?.textContent || ''; const mode = document.getElementById('testMode').value; const intensity = Number(document.getElementById('testIntensity').value || 5); const duration = Number(document.getElementById('testDuration').value || 700); document.getElementById('testResult').innerHTML = detailsBlock('tests:preview', 'Shock Plan Preview', `<p><strong>Target:</strong> ${esc(target)}</p><p><strong>Action:</strong> ${esc(mode)}</p><p><strong>Selected value:</strong> ${esc(intensity)}</p><p><strong>Duration:</strong> ${esc(duration)}ms</p><p class="muted">Final device values are shown after server-side validation because multipliers and caps live on the server.</p>`, true); restoreDetailsState(); }
+function wireTestButtons() {
+  document.getElementById('previewTestBtn').onclick = previewDiagnosticPlan;
+  document.getElementById('sendTestBtn').onclick = async () => { saveTestForm(); const payload = { ...selectedTargetPayload(), mode: document.getElementById('testMode').value, selectedValue: Number(document.getElementById('testIntensity').value || 5), duration: Number(document.getElementById('testDuration').value || 700) }; if (payload.mode === 'Shock' && !confirm(`Send a SHOCK test to ${document.getElementById('testTarget').selectedOptions[0].textContent}?`)) return; try { const data = await post('/api/diagnostics/test', payload); renderTestResult(data); toast('Test sent', 'ok'); await load(false); } catch (err) { toast(err.message, 'bad'); } };
+  document.getElementById('stopSelectedBtn').onclick = async () => { saveTestForm(); try { const data = await post('/api/diagnostics/test', { ...selectedTargetPayload(), mode: 'Stop' }); renderTestResult(data); toast('Stop sent', 'ok'); await load(false); } catch (err) { toast(err.message, 'bad'); } };
+  document.getElementById('stopAllBtn').onclick = stopAll;
+  document.getElementById('resetSessionBtn').onclick = async () => { if (!confirm('Archive and reset the current session?')) return; try { const data = await post('/api/diagnostics/archive-reset-session'); toast(`Session reset. Archived to ${data.archivedTo || 'archive'}`, 'ok'); await load(true); } catch (err) { toast(err.message, 'bad'); } };
+  document.getElementById('clearCacheBtn').onclick = async () => { try { await post('/api/diagnostics/clear-shocker-cache'); toast('Shocker cache cleared', 'ok'); await load(true); } catch (err) { toast(err.message, 'bad'); } };
+  document.getElementById('clearDebugBtn').onclick = async () => { try { await post('/api/diagnostics/clear-debug'); toast('Debug counters cleared', 'ok'); await load(true); } catch (err) { toast(err.message, 'bad'); } };
+}
+
+function renderApi(d) {
+  const routes = d.tools.apiExplorer.routes || [];
+  const recent = d.tools.apiExplorer.recentRequests || [];
+  const os = d.tools.apiExplorer.recentOpenShock || [];
+  const routeOptions = routes.map(r => `<option value="${esc(r.method)} ${esc(r.path)}">${esc(r.method)} ${esc(r.path)}</option>`).join('');
+  const openShockEmpty = !os.length ? '<p class="muted">No OpenShock calls have been logged yet. Use Safe Tests or normal gameplay, then come back here to inspect request history.</p>' : '';
+  document.getElementById('api').innerHTML = `
+    <div class="card"><h2>What this page does</h2><p class="muted">This is a guided API explorer for OSR diagnostics. It does not replace Postman; it shows the routes OSR exposes, recent browser/API traffic, and recent OpenShock calls. Use the quick actions below to generate known-safe diagnostics traffic.</p>
+      <div class="apiActionGrid">
+        <div class="card"><h3>Quick route lookup</h3><select id="routeLookup">${routeOptions}</select><pre id="routeLookupResult"></pre></div>
+        <div class="card"><h3>Quick actions</h3><div class="toolbar"><button id="apiRunPreflight">Run Pre-flight</button><button id="apiReloadShockers">Reload Shockers</button><button id="apiCopyCatalog">Copy Route Catalog</button></div><p class="muted small">Shock/test actions stay in Safe Tests where the safety warnings are visible.</p></div>
+      </div>
+    </div>
+    <div class="wideGrid"><div class="card"><h2>Route Catalog</h2>${table(['Method','Path','Category','Description'], routes.map(r => [esc(r.method), `<code>${esc(r.path)}</code>`, esc(r.category), esc(r.description)]))}</div><div class="card"><h2>OpenShock API Explorer</h2>${openShockEmpty}${table(['Time','Method','Path','Status','ms','Action'], os.map(x => [esc(x.time || ''), esc(x.method || x.type || ''), esc(x.path || ''), esc(x.statusCode || x.status || ''), esc(x.responseTimeMs || x.durationMs || ''), esc(x.action || x.error || '')]))}</div></div>
+    <div class="card"><h2>Recent OSR Requests</h2>${table(['Time','Method','Path','Status','ms','User Agent'], recent.map(x => [esc(x.time || ''), esc(x.method || ''), esc(x.path || ''), esc(x.statusCode || ''), esc(x.responseTimeMs || ''), esc(x.userAgent || '')]))}</div>`;
+  const lookup = document.getElementById('routeLookup');
+  const out = document.getElementById('routeLookupResult');
+  const updateLookup = () => {
+    const [method, ...pathParts] = lookup.value.split(' ');
+    const path = pathParts.join(' ');
+    const r = routes.find(item => item.method === method && item.path === path);
+    out.textContent = JSON.stringify(r || {}, null, 2);
+  };
+  lookup.onchange = updateLookup;
+  updateLookup();
+  document.getElementById('apiRunPreflight').onclick = runPreflight;
+  document.getElementById('apiReloadShockers').onclick = document.getElementById('reloadShockersBtn').onclick;
+  document.getElementById('apiCopyCatalog').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(routes, null, 2)); toast('Route catalog copied', 'ok'); } catch { toast('Clipboard copy failed', 'bad'); } };
+}
+
+function renderInspectors(d) {
+  const i = d.tools.inspector;
+  const cardDetails = i.eventCards.cards.map(c => detailsBlock(`card:${c.id}`, `Raw card: ${c.title}`, `<pre>${esc(JSON.stringify(c.raw, null, 2))}</pre>`)).join('');
+  const objectiveDetails = i.objectives.private.map(o => detailsBlock(`objective:${o.id}`, `Raw objective: ${o.title}`, `<pre>${esc(JSON.stringify(o.raw, null, 2))}</pre>`)).join('');
+  const publicDetails = i.objectives.public.map(o => detailsBlock(`public-objective:${o.id}`, `Raw public objective: ${o.title}`, `<pre>${esc(JSON.stringify(o.raw, null, 2))}</pre>`)).join('');
+  const roleDetails = i.objectives.roles.map(r => detailsBlock(`role:${r.id}`, `Raw role: ${r.title}`, `<pre>${esc(JSON.stringify(r.raw, null, 2))}</pre>`)).join('');
+  document.getElementById('inspectors').innerHTML = `<div class="card"><h2>Inspectors</h2><p class="muted">Read-only inspectors. Wider layout, less sardine can. Expand raw entries only when you need the gory details.</p></div><div class="inspectorGrid">
+    <div class="card"><h2>Event Card Inspector</h2><p class="muted">Use host manual event controls to queue cards. This view is for validation and preview.</p>${table(['Title','ID','Enabled','Weight','Effects','Type','Category'], i.eventCards.cards.map(c => [esc(c.title), `<code>${esc(c.id)}</code>`, c.enabled ? 'Yes' : 'No', esc(c.weight), esc(c.effectsCount), esc(c.type || ''), esc(c.category || '')]))}${cardDetails}</div>
+    <div class="card"><h2>Private Objective Inspector</h2>${table(['Title','ID','Type','Target','Reward','Enabled'], i.objectives.private.map(o => [esc(o.title), `<code>${esc(o.id)}</code>`, esc(o.type), esc(o.target), esc(o.rewardPoints), o.enabled ? 'Yes' : 'No']))}${objectiveDetails}</div>
+    <div class="card"><h2>Public Objective Inspector</h2>${table(['Title','ID','Type','Target','Reward','Enabled'], i.objectives.public.map(o => [esc(o.title), `<code>${esc(o.id)}</code>`, esc(o.type), esc(o.target), esc(o.rewardPoints), o.enabled ? 'Yes' : 'No']))}${publicDetails}</div>
+    <div class="card"><h2>Role Ability Inspector</h2>${table(['Title','ID','Trigger','Target','Points','Token'], i.objectives.roles.map(r => [esc(r.title), `<code>${esc(r.id)}</code>`, esc(r.triggerType || ''), esc(r.triggerTarget || ''), esc(r.rewardPoints), esc(r.rewardToken || '')]))}${roleDetails}</div>
+  </div>`;
+}
+
+function oddsTable(prob) { return table(['Name','Weight','Odds'], (prob?.segments || []).map(s => [esc(s.name || s.key), esc(s.weight), `${esc(s.probabilityPercent)}%`])); }
+function simulationTable(results) { return table(['Name','Hits','Percent'], (results || []).map(r => [esc(r.name), esc(r.hits), `${esc(r.percent)}%`])); }
+function renderSimulationResult(r) {
+  if (!r) return '';
+  return `<div class="wideGrid"><div class="card"><h2>Target Results (${esc(r.rounds)} rounds)</h2>${simulationTable(r.target.results)}</div><div class="card"><h2>Fate Results (${esc(r.rounds)} rounds)</h2>${simulationTable(r.fate.results)}</div></div>`;
+}
+function renderSimulator(d) {
+  const sim = d.tools.simulator.preview || {};
+  const roundsValue = localStorage.getItem('osrDiagSimRounds') || '1000';
+  document.getElementById('simulator').innerHTML = `<div class="wideGrid"><div class="card"><h2>Current Target Odds</h2>${oddsTable(sim.targetOdds)}</div><div class="card"><h2>Current Fate Odds</h2>${oddsTable(sim.fateOdds)}</div></div><div class="card"><h2>Fake Round Simulator</h2><p class="muted">Dry-run only. This does not shock, mutate rounds, or consume event cards.</p><div class="toolbar"><label>Rounds <input id="simRounds" type="number" min="1" max="100000" value="${esc(roundsValue)}"></label><button id="runSimBtn">Run Simulation</button><button id="clearSimBtn">Clear Result</button></div><div id="simResult" class="resultBox">${renderSimulationResult(lastSimulationResultData)}</div></div>`;
+  document.getElementById('simRounds').onchange = e => localStorage.setItem('osrDiagSimRounds', e.target.value || '1000');
+  document.getElementById('clearSimBtn').onclick = () => { lastSimulationResultData = null; document.getElementById('simResult').innerHTML = ''; };
+  document.getElementById('runSimBtn').onclick = async () => { try { const rounds = Number(document.getElementById('simRounds').value || 1000); localStorage.setItem('osrDiagSimRounds', String(rounds)); const r = await post('/api/diagnostics/simulate', { rounds }); lastSimulationResultData = r; document.getElementById('simResult').innerHTML = renderSimulationResult(r); toast('Simulation complete', 'ok'); } catch (err) { toast(err.message, 'bad'); } };
+}
+
+function renderConfig(d) {
+  const files = d.configValidation.files || [];
+  const checks = d.configValidation.checks || [];
+  const diff = d.tools.configDiff || {};
+  document.getElementById('config').innerHTML = `<div class="wideGrid"><div class="card"><h2>Config Files</h2>${table(['Status','Label','Path','Size/Error'], files.map(f => [f.ok ? statusPill(true, 'OK') : statusPill(false, f.exists ? 'Invalid' : 'Missing'), esc(f.label), `<code>${esc(f.path)}</code>`, f.error ? esc(f.error) : fmtBytes(f.sizeBytes)]))}</div><div class="card"><h2>Runtime Config Checks</h2>${table(['Status','Label','Details'], checks.map(c => [c.ok ? statusPill(true, 'OK') : statusPill(false, 'Fail'), esc(c.label), `<pre>${esc(JSON.stringify(c.details || '', null, 2))}</pre>`]))}</div><div class="card"><h2>Config Compare</h2><p>${diff.ok ? statusPill(diff.missingFromLive.length === 0, `${diff.missingFromLive.length} missing keys`) : statusPill(false, 'Compare failed')} ${diff.ok ? warnPill(`${diff.extraInLive.length} extra live keys`) : ''}</p>${detailsBlock('config:missing', 'Missing from live config', `<pre>${esc(JSON.stringify(diff.missingFromLive || [], null, 2))}</pre>`)}${detailsBlock('config:extra', 'Extra in live config', `<pre>${esc(JSON.stringify(diff.extraInLive || [], null, 2))}</pre>`)}</div></div>`;
+}
+
+function renderStorage(d) {
+  const st = d.tools.storage;
+  document.getElementById('storage').innerHTML = `<div class="wideGrid"><div class="card"><h2>Storage Explorer</h2>${table(['Exists','Path','Size/Error'], st.files.map(f => [f.exists ? statusPill(true, 'Yes') : statusPill(false, 'No'), `<code>${esc(f.path)}</code>`, f.error ? esc(f.error) : fmtBytes(f.sizeBytes)]))}</div><div class="card"><h2>SQLite Summary</h2><p>${statusPill(st.database.ok, 'Database')}</p><pre>${esc(JSON.stringify(st.database, null, 2))}</pre></div></div>`;
+}
+
+function qrCard(title, url, qr) {
+  return `<div class="card qrCard"><h3>${esc(title)}</h3>${qr ? `<img alt="QR for ${esc(title)}" src="${esc(qr)}">` : '<p class="muted">QR unavailable</p>'}<code>${esc(url)}</code></div>`;
+}
+function renderLinks(d) {
+  const l = d.tools.links;
+  const playerCards = (l.players || []).map(p => qrCard(p.name, p.url, p.qrDataUrl)).join('');
+  document.getElementById('links').innerHTML = `<div class="card"><h2>QR / Link Diagnostics</h2><p class="muted">Use these to verify what the QR/link layer thinks the URLs should be. These are generated from the same keys the access pages use.</p><div class="toolbar"><button id="copyLinksBtn">Copy all links</button></div></div><div class="qrGrid">${qrCard('Host', l.host, l.qrs?.host)}${qrCard('Audience', l.audience, l.qrs?.audience)}${qrCard('Diagnostics', l.diagnostics, l.qrs?.diagnostics)}</div><div class="card"><h2>Player QR Codes</h2><div class="qrGrid">${playerCards || '<p class="muted">No player links available.</p>'}</div></div><div class="card"><h2>Raw URLs</h2>${table(['Type','URL'], [['Base URL', `<code>${esc(l.baseUrl)}</code>`], ['Host', `<code>${esc(l.host)}</code>`], ['Audience', `<code>${esc(l.audience)}</code>`], ['Diagnostics', `<code>${esc(l.diagnostics)}</code>`]])}<h3>Player URLs</h3>${table(['Player','URL'], l.players.map(p => [esc(p.name), `<code>${esc(p.url)}</code>`]))}</div>`;
+  document.getElementById('copyLinksBtn').onclick = async () => { const text = [l.host, l.audience, l.diagnostics, ...l.players.map(p => `${p.name}: ${p.url}`)].join('\n'); try { await navigator.clipboard.writeText(text); toast('Links copied', 'ok'); } catch { toast('Clipboard copy failed', 'bad'); } };
+}
+
+function renderSession(d) {
+  const s = d.game.session;
+  document.getElementById('session').innerHTML = `<div class="grid">${metricCard('Round', s.roundNumber)}${metricCard('Players', s.players, `${s.groupedPlayers} grouped / ${s.physicalDevices} devices`)}${metricCard('Public objectives', s.publicObjectivesActive, `${s.publicObjectivesCompleted} completed`)}${metricCard('Pending actions', s.pendingPlayerActions, `${s.pendingRoundModifiers} next-round effects`)}${metricCard('Audience sessions', s.audienceSessions, `${s.audienceVotes} votes`)}${metricCard('Host paused', s.hostPaused ? 'Yes' : 'No', s.updatedAt || '')}</div><div class="wideGrid" style="margin-top:12px;"><div class="card"><h2>Public Objectives</h2>${table(['Title','Progress','Reward','State'], (d.game.publicObjectives || []).map(o => [esc(o.title), `${esc(o.progress)}/${esc(o.target)}`, o.rewardPoints ? `${esc(o.rewardPoints)} points` : '', o.completed ? 'Completed' : 'Active']))}</div><div class="card"><h2>Current State Summary</h2><pre>${esc(JSON.stringify(s, null, 2))}</pre></div></div>${detailsBlock('session:raw', 'Raw Session State', `<pre>${esc(JSON.stringify(d.game.rawSession, null, 2))}</pre>`)}`;
+}
+
+function logRows(items) { return (items || []).map(x => [esc(x.time || x.created_at || ''), esc(x.method || x.type || ''), esc(x.path || x.title || ''), esc(x.statusCode || x.status || ''), esc(x.responseTimeMs || x.durationMs || ''), esc(x.error || x.description || '')]); }
+function renderLogs(d) { document.getElementById('logs').innerHTML = `<div class="card"><h2>Timeline</h2>${table(['Time','Type','Title','Description'], (d.tools.timeline || []).map(x => [esc(x.time), esc(x.type), esc(x.title), esc(x.description)]))}</div><div class="card"><h2>Recent OpenShock Calls</h2>${table(['Time','Method/Type','Path/Title','Status','ms','Error/Description'], logRows(d.logs.openshock))}</div><div class="card"><h2>Recent Incoming Requests</h2>${table(['Time','Method','Path','Status','ms','Error/Description'], logRows(d.logs.incoming))}</div><div class="card"><h2>Slow Requests</h2>${table(['Time','Method','Path','Status','ms','Error/Description'], logRows(d.logs.slow))}</div><div class="card"><h2>Database Events</h2>${table(['Time','Type','Title','Status','ms','Description'], logRows(d.logs.databaseEvents))}</div>`; }
+
+function renderDeveloper(d) {
+  const dev = d.tools.developer;
+  document.getElementById('developer').innerHTML = `<div class="wideGrid"><div class="card"><h2>Developer Mode</h2><p class="muted">Contained diagnostics helpers. Anything that could mutate real gameplay stays disabled until it gets a dedicated safe implementation.</p>${table(['Tool','Available','Notes'], Object.entries(dev).filter(([k]) => typeof dev[k] === 'object').map(([k,v]) => [esc(k), v.available ? statusPill(true, 'Yes') : warnPill('Planned'), esc(v.note || v.endpoint || '')]))}</div><div class="card"><h2>Release Sanity Check</h2>${table(['Check','Status'], [['Syntax checks', warnPill('Run locally: node --check server.js')], ['Config diff', d.tools.configDiff.missingFromLive.length ? warnPill('Live config missing keys') : statusPill(true, 'OK')], ['Pre-flight', d.tools.preflight.ready ? statusPill(true, 'Ready') : statusPill(false, 'Blocked')]])}</div><div class="card"><h2>Fake Data Tools</h2><p class="muted">Planned: fake players, fake audience, fake roles, benchmark runs. Not active yet, because fake chaos should not accidentally become real chaos.</p></div></div>`;
+}
+
+function renderFuture(d) {
+  const planned = [
+    ['Performance Profiler', 'Track render time, route latency, slow actions, event-card execution time and wheel update timing.', 'active-ish: route/log metrics shown'],
+    ['API Benchmark Runner', 'Run controlled checks against OSR endpoints and OpenShock calls without starting a real round.', 'partial: API catalog and recent calls shown'],
+    ['Database Browser', 'Read-only SQLite/session explorer with table/blob views and export helpers.', 'partial: storage explorer shown'],
+    ['Event Card Simulator', 'Pick a card, fake a round context, preview modifiers/results.', 'partial: inspector shown'],
+    ['Objective Progress Inspector', 'Show why private/public objectives did or did not progress.', 'partial: objective data shown'],
+    ['Role Ability Inspector', 'Show hidden role triggers, passive progress, rewards and pending role effects.', 'partial: role inspector shown'],
+    ['Grouped Shocker Visualizer', 'Graph logical players, member devices, multipliers and final send calculations.', 'active: grouped view and test preview'],
+    ['Multiplier Calculator', 'Preview selected value → device multiplier → server cap → final OpenShock value.', 'active after test send'],
+    ['Shock Plan Preview', 'Before sending a test, show exactly which physical devices will receive values.', 'active: safe tests preview'],
+    ['Fake Round Simulator', 'Dry-run rounds using current config to test odds and event frequency.', 'active: simulator tab'],
+    ['Config Diff Viewer', 'Compare config.json with config.example.json and show missing/new/defaulted keys.', 'active: config tab'],
+    ['Config Editor', 'Careful future tool for editing safe live settings from the browser.', 'planned'],
+    ['OpenShock Latency Monitor', 'Track API latency, failures, cache usage and last successful send.', 'partial: API/logs shown'],
+    ['Network / Access Check', 'Show detected local URLs, publicBaseUrl, QR reachability and remote warnings.', 'partial: links tab'],
+    ['QR / Link Verifier', 'Validate host, player and audience links, keys and expected access behavior.', 'partial: links tab'],
+    ['Audience Simulator', 'Generate fake audience sessions/votes in dry-run mode to test thresholds.', 'planned'],
+    ['Token Economy Inspector', 'Show point/token balances, costs, purchases and reward events.', 'partial: session/raw JSON'],
+    ['Session Restore Tool', 'Browse archived sessions and restore one intentionally.', 'planned'],
+    ['Backup Bundle Export', 'Export config, session summary, logs and diagnostics into one zip.', 'planned; JSON export exists'],
+    ['Log Search & Filters', 'Filter logs by request path, device, status code or error text.', 'planned'],
+    ['Safety Checklist', 'Pre-game checklist for consent, device test, max intensity, STOP ALL and controller location.', 'active: pre-flight + tests'],
+    ['Release Sanity Check', 'Run syntax/config/readiness checks before pushing or packaging.', 'partial: developer tab'],
+    ['Sensor Diagnostics', 'Reserved for future microphone/sensor framework if the screaming-machine returns from exile.', 'planned'],
+    ['Plugin / Custom Card Inspector', 'Validate custom card packs or plugin hooks before they touch gameplay.', 'planned']
+  ];
+  document.getElementById('future').innerHTML = `<div class="card"><h2>Future Diagnostics Tools</h2><p class="muted">This list is now also a map of what is already partially built into diagnostics. Planned means not active; active-ish means useful now but not perfect.</p></div><div class="wideGrid">${planned.map(([name, desc, status], idx) => `<div class="card">${detailsBlock(`future:${idx}`, name, `<p class="muted">${esc(desc)}</p><p>Status: ${esc(status)}</p>`, true)}</div>`).join('')}</div>`;
+}
+
+function renderRaw(d) { document.getElementById('raw').innerHTML = `<div class="card"><h2>Raw Diagnostics JSON</h2><p class="muted">Auto-refresh will not overwrite this panel while the Raw JSON tab is open. Use the button below when you want a fresh snapshot.</p><div class="toolbar" style="margin-bottom:10px;"><button id="refreshRawBtn">Refresh Raw JSON</button><button id="copyRawBtn">Copy Raw JSON</button></div><pre id="rawJson">${esc(JSON.stringify(d, null, 2))}</pre></div>`; document.getElementById('refreshRawBtn').onclick = () => load(true); document.getElementById('copyRawBtn').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2)); toast('Raw JSON copied', 'ok'); } catch { toast('Clipboard copy failed', 'bad'); } }; }
+
+function activeTabName() { return document.querySelector('.tab.active')?.dataset?.tab || 'overview'; }
+function render(d, { force = false } = {}) { captureDetailsState(); const tab = activeTabName(); const holdInteractive = !force && interactiveTabs.has(tab) && document.getElementById(tab)?.innerHTML.trim(); snapshot = d; document.getElementById('lastUpdated').textContent = `Updated ${new Date(d.generatedAt).toLocaleString()} · auto-refresh ${autoRefreshEnabled ? 'every 5 seconds' : 'paused'}${holdInteractive ? ' · active tool held still' : ''}`; const maybe = (name, fn) => { if (holdInteractive && tab === name) return; fn(d); }; maybe('overview', renderOverview); maybe('preflight', renderPreflight); maybe('devices', renderDevices); maybe('tests', renderTests); maybe('api', renderApi); maybe('inspectors', renderInspectors); maybe('simulator', renderSimulator); maybe('config', renderConfig); maybe('storage', renderStorage); maybe('links', renderLinks); maybe('session', renderSession); maybe('logs', renderLogs); maybe('developer', renderDeveloper); maybe('future', renderFuture); if (force || tab !== 'raw' || !document.getElementById('rawJson')) renderRaw(d); restoreDetailsState(); }
+async function load(force=false) { if (!force && !autoRefreshEnabled) return; try { const d = await api(`/api/diagnostics/state${force ? '?refresh=true' : ''}`); render(d, { force }); } catch (err) { toast(err.message, 'bad'); document.getElementById('overview').innerHTML = `<div class="card"><h2>Diagnostics failed</h2><p>${esc(err.message)}</p></div>`; } }
+async function stopAll() { if (!confirm('Send STOP ALL to every loaded shocker?')) return; try { const data = await post('/api/diagnostics/stop-all'); toast(`STOP ALL sent to ${data.stopped} devices`, 'ok'); await load(false); } catch (err) { toast(err.message, 'bad'); } }
+async function runPreflight() { try { const p = await api('/api/diagnostics/preflight'); toast(p.ready ? 'Pre-flight ready' : 'Pre-flight found blockers', p.ready ? 'ok' : 'bad'); await load(true); } catch (err) { toast(err.message, 'bad'); } }
+
+function setupTabs() { const saved = localStorage.getItem('osrDiagTab') || 'overview'; document.querySelectorAll('.tab').forEach(btn => { btn.onclick = () => { captureDetailsState(); document.querySelectorAll('.tab').forEach(b => b.classList.remove('active')); document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.tab).classList.add('active'); localStorage.setItem('osrDiagTab', btn.dataset.tab); if (snapshot) render(snapshot, { force: false }); }; if (btn.dataset.tab === saved) setTimeout(() => btn.click(), 0); }); }
+
+document.getElementById('refreshBtn').onclick = () => load(true);
+document.getElementById('reloadShockersBtn').onclick = async () => { try { await post('/api/diagnostics/reload-shockers'); toast('Shockers reloaded', 'ok'); await load(true); } catch (err) { toast(err.message, 'bad'); } };
+document.getElementById('preflightBtn').onclick = runPreflight;
+document.getElementById('exportBtn').onclick = () => { location.href = apiUrl('/api/diagnostics/export'); };
+document.getElementById('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2)); toast('Diagnostics JSON copied', 'ok'); } catch { toast('Clipboard copy failed', 'bad'); } };
+document.getElementById('autoRefreshToggle').checked = autoRefreshEnabled;
+document.getElementById('autoRefreshToggle').onchange = (event) => { autoRefreshEnabled = Boolean(event.target.checked); localStorage.setItem('osrDiagAutoRefresh', String(autoRefreshEnabled)); if (snapshot) render(snapshot, { force: false }); };
+document.getElementById('stopAllTopBtn').onclick = stopAll;
+setupTabs(); load(true); autoTimer = setInterval(() => load(false), 5000);
+</script>
 </body>
 </html>
