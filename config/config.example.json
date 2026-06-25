@@ -191,7 +191,7 @@
   "shockers": {
     "cacheTtlMs": 30000,
     "grouping": {
-      "enabled": false,
+      "enabled": true,
       "separator": " - ",
       "trimParts": true,
       "fallbackUngrouped": true
