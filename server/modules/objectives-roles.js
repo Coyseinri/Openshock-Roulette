@@ -23,6 +23,13 @@ function statValueForObjective(stats, objective, state) {
 
 var CUMULATIVE_OBJECTIVE_TYPES = new Set(["selected", "shocked", "vibes", "safe", "allTargeted", "totalIntensity", "bodyguards", "cursesUsed", "chaosUsed", "tokensBought", "tokensOwned", "highPlusSurvived", "eventCardsExperienced", "sabotageEffects", "redirectedHits"]);
 
+var DEFAULT_PUBLIC_OBJECTIVES = [
+  { id: "public-survive-3-rounds", title: "Still Standing", description: "The group survives 3 rounds together.", type: "rounds", target: 3, reward: { points: 1 }, enabled: true },
+  { id: "public-use-3-shields", title: "Safety First", description: "Use 3 shields as a group.", type: "bodyguards", target: 3, reward: { points: 2 }, enabled: true },
+  { id: "public-audience-5-votes", title: "Mob Rule", description: "Audience gets 5 votes approved.", type: "audienceVotesApproved", target: 5, reward: { points: 2 }, enabled: true },
+  { id: "public-shock-all-once", title: "Everybody Gets One", description: "Shock all active players once.", type: "allTargeted", target: 1, reward: { points: 2 }, enabled: true }
+];
+
 function objectiveBaselineValue(stats, objective, state) {
   return CUMULATIVE_OBJECTIVE_TYPES.has(String(objective?.type || ""))
     ? statValueForObjective(stats, objective, state)
@@ -59,8 +66,21 @@ function hiddenRoleById(id) {
   return getHiddenRoleDefs().find(r => r.id === id) || null;
 }
 
+function readObjectiveCatalogRaw() {
+  try {
+    ensureLocalFilesFromExamples();
+    const source = fs.existsSync(OBJECTIVES_PATH || "") ? OBJECTIVES_PATH : OBJECTIVES_EXAMPLE_PATH;
+    return source && fs.existsSync(source) ? JSON.parse(fs.readFileSync(source, "utf8")) : {};
+  } catch (err) {
+    console.warn(`WARNING: Could not read public objectives: ${err.message}`);
+    return {};
+  }
+}
+
 function getPublicObjectiveDefs() {
-  return (readObjectivesFileNormalized().publicObjectives || [])
+  const raw = readObjectiveCatalogRaw();
+  const publicObjectives = Array.isArray(raw.publicObjectives) && raw.publicObjectives.length ? raw.publicObjectives : DEFAULT_PUBLIC_OBJECTIVES;
+  return publicObjectives
     .filter(o => o && o.enabled !== false && o.id && o.type && clampInt(o.target ?? 0, 0, 1000000) > 0)
     .map(o => ({
       ...o,
