@@ -2,11 +2,111 @@
 // Loaded after host-dashboard-actions.js and before routes.js.
 
 function diagnosticsAccessAllowed(req, url) {
-  return isLocalRequest(req) || validateRoleAccess("host", req, url);
+  // Diagnostics can expose config, session and device metadata. Keep it local only.
+  return isLocalRequest(req);
 }
 
 function diagnosticStatus(ok, label, details = null) {
   return { ok: Boolean(ok), label, details };
+}
+
+
+function diagnosticSeverity(ok, severity = "warning") {
+  if (ok) return "ok";
+  return severity === "error" ? "error" : "warning";
+}
+
+const DIAGNOSTIC_KNOWN_EVENT_EFFECTS = new Set([
+  "manualTargetByLastShocked", "manualTargetByHost", "groupVoteTarget",
+  "excludeLastTarget", "excludeLastShocked", "forcePreviousTarget", "forceLastShockedTarget",
+  "forceLeastShockedTarget", "forceMostShockedTarget", "forceLeastSelectedTarget", "forceMostSelectedTarget",
+  "forceLeastVibedTarget", "forceMostVibedTarget", "forceLowestIntensityTarget", "forceHighestIntensityTarget",
+  "forceLongestNotSelectedTarget", "forceLongestNotShockedTarget", "forceTargetBySelector",
+  "multiplyTargetWeight", "disableTargetType", "addVirtualTarget", "doubleTarget", "addRandomTargets",
+  "forceAllTargets", "sharePain", "bodyguard", "duel", "chooseFateByTarget", "chooseTargetByTarget",
+  "targetChoosesOpponent", "forceVibrateOnly", "forceControlType", "disableFate", "multiplyFateWeight",
+  "capFateMax", "capFateCategory", "doubleSafeWeight", "disableSafe", "noMercy", "mercyRound",
+  "forceFate", "equalFateWeights", "invertFateWeights", "forceRandomFate", "guaranteedDoubleHit",
+  "setDoubleHitChance", "valueMultiplier", "valueOffset", "lastWords",
+  "removeSafe", "removeSAFE", "disableSafeTarget", "disableTargetSafe", "noSafeTarget",
+  "forceVibe", "vibeOnly", "vibrateOnly"
+]);
+
+const DIAGNOSTIC_OBJECTIVE_TYPES = new Set([
+  "selected", "shocked", "vibes", "safe", "allTargeted", "bodyguards", "cursesUsed",
+  "chaosUsed", "tokensBought", "tokensOwned", "highPlusSurvived", "eventCardsExperienced",
+  "sabotageEffects", "redirectedHits", "roundsSinceSelected", "roundsSinceShocked",
+  "totalIntensity", "publicProgress", "manual"
+]);
+
+function duplicateIds(items) {
+  const seen = new Set();
+  const duplicates = new Set();
+  for (const item of items || []) {
+    const id = String(item?.id || "").trim();
+    if (!id) continue;
+    if (seen.has(id)) duplicates.add(id);
+    seen.add(id);
+  }
+  return [...duplicates].sort();
+}
+
+function validateDiagnosticEventCards(cardsData) {
+  const cards = cardsData?.cards || [];
+  const checks = [];
+  const warnings = [];
+  const duplicates = duplicateIds(cards);
+  checks.push({ id: "event-duplicate-ids", label: "No duplicate event card IDs", ok: duplicates.length === 0, severity: diagnosticSeverity(duplicates.length === 0), details: duplicates });
+
+  for (const card of cards) {
+    const cardId = card?.id || "unknown";
+    if (!card?.title) warnings.push(`Event card ${cardId} has no title.`);
+    if (!card?.description && !card?.text) warnings.push(`Event card ${cardId} has no description.`);
+    if (clampInt(card?.weight ?? 0, 0, 1000000) === 0 && card?.enabled !== false) warnings.push(`Event card ${cardId} is enabled but has weight 0.`);
+    const effects = Array.isArray(card?.effects) ? card.effects : [];
+    for (const effect of effects) {
+      const type = String(effect?.type || "").trim();
+      if (!type) warnings.push(`Event card ${cardId} contains an effect without a type.`);
+      else if (!DIAGNOSTIC_KNOWN_EVENT_EFFECTS.has(type)) warnings.push(`Event card ${cardId} references unknown effect type '${type}'.`);
+    }
+  }
+
+  checks.push({ id: "event-effect-types", label: "Event effect types look known", ok: !warnings.some(w => w.includes("unknown effect type") || w.includes("without a type")), severity: warnings.some(w => w.includes("unknown")) ? "warning" : "ok", details: warnings.filter(w => w.includes("effect")) });
+  return { total: cards.length, enabled: cards.filter(c => c?.enabled !== false).length, checks, warnings };
+}
+
+function validateDiagnosticObjectives(objectivesData) {
+  const privateObjectives = objectivesData?.objectives || [];
+  const publicObjectives = objectivesData?.publicObjectives || [];
+  const hiddenRoles = objectivesData?.hiddenRoles || [];
+  const checks = [];
+  const warnings = [];
+  const privateDuplicates = duplicateIds(privateObjectives);
+  const publicDuplicates = duplicateIds(publicObjectives);
+  const roleDuplicates = duplicateIds(hiddenRoles);
+  checks.push({ id: "objective-duplicate-ids", label: "No duplicate private objective IDs", ok: privateDuplicates.length === 0, severity: diagnosticSeverity(privateDuplicates.length === 0), details: privateDuplicates });
+  checks.push({ id: "public-objective-duplicate-ids", label: "No duplicate public objective IDs", ok: publicDuplicates.length === 0, severity: diagnosticSeverity(publicDuplicates.length === 0), details: publicDuplicates });
+  checks.push({ id: "role-duplicate-ids", label: "No duplicate hidden role IDs", ok: roleDuplicates.length === 0, severity: diagnosticSeverity(roleDuplicates.length === 0), details: roleDuplicates });
+
+  const inspectObjective = (objective, label) => {
+    const id = objective?.id || "unknown";
+    if (!objective?.title) warnings.push(`${label} ${id} has no title.`);
+    if (objective?.enabled !== false && clampInt(objective?.target ?? 1, 0, 1000000) <= 0) warnings.push(`${label} ${id} has an impossible target.`);
+    const type = String(objective?.type || "").trim();
+    if (type && !DIAGNOSTIC_OBJECTIVE_TYPES.has(type)) warnings.push(`${label} ${id} uses unknown type '${type}'.`);
+  };
+  privateObjectives.forEach(o => inspectObjective(o, "Private objective"));
+  publicObjectives.forEach(o => inspectObjective(o, "Public objective"));
+  for (const role of hiddenRoles) {
+    const id = role?.id || "unknown";
+    if (!role?.title) warnings.push(`Hidden role ${id} has no title.`);
+    const trigger = String(role?.triggerType || "").trim();
+    if (trigger && !DIAGNOSTIC_OBJECTIVE_TYPES.has(trigger)) warnings.push(`Hidden role ${id} uses unknown triggerType '${trigger}'.`);
+    if (role?.enabled !== false && clampInt(role?.triggerTarget ?? 1, 0, 1000000) <= 0) warnings.push(`Hidden role ${id} has an impossible trigger target.`);
+  }
+
+  checks.push({ id: "objective-types", label: "Objective and role types look known", ok: !warnings.some(w => w.includes("unknown type") || w.includes("unknown triggerType")), severity: "warning", details: warnings.filter(w => w.includes("unknown")) });
+  return { privateCount: privateObjectives.length, publicCount: publicObjectives.length, hiddenRoleCount: hiddenRoles.length, checks, warnings };
 }
 
 function safeReadJsonFile(filePath, label) {
@@ -93,7 +193,10 @@ function getConfigValidationSummary() {
 
   try {
     const cards = readEventCards();
+    const cardValidation = validateDiagnosticEventCards(cards);
     checks.push(diagnosticStatus(true, "Event cards loaded", { count: (cards.cards || []).length, enabled: cards.enabled }));
+    checks.push(...cardValidation.checks);
+    warnings.push(...cardValidation.warnings);
   } catch (err) {
     checks.push(diagnosticStatus(false, "Event cards failed", err.message));
     warnings.push(`Event card error: ${err.message}`);
@@ -101,11 +204,14 @@ function getConfigValidationSummary() {
 
   try {
     const objectives = readObjectives();
+    const objectiveValidation = validateDiagnosticObjectives(objectives);
     checks.push(diagnosticStatus(true, "Objectives loaded", {
       privateObjectives: (objectives.objectives || []).length,
       publicObjectives: (objectives.publicObjectives || []).length,
       hiddenRoles: (objectives.hiddenRoles || []).length
     }));
+    checks.push(...objectiveValidation.checks);
+    warnings.push(...objectiveValidation.warnings);
   } catch (err) {
     checks.push(diagnosticStatus(false, "Objectives failed", err.message));
     warnings.push(`Objective error: ${err.message}`);
@@ -201,6 +307,96 @@ function groupDeviceViews(players, state) {
   }));
 }
 
+
+function redactSecretText(value) {
+  return String(value || "").replace(/([?&](?:key|token|access_key|api_key)=)[^&\s]+/gi, "$1[REDACTED]");
+}
+
+function redactDiagnosticsValue(value, key = "") {
+  const lowered = String(key || "").toLowerCase();
+  if (["token", "apikey", "api_key", "openshock_token", "openshock_api_token"].some(s => lowered.includes(s))) return "[REDACTED]";
+  if (lowered.includes("accesskey") || lowered === "key" || lowered.endsWith("key")) return "[REDACTED]";
+  if (typeof value === "string") return redactSecretText(value);
+  if (Array.isArray(value)) return value.map(item => redactDiagnosticsValue(item, key));
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [childKey, childValue] of Object.entries(value)) out[childKey] = redactDiagnosticsValue(childValue, childKey);
+    return out;
+  }
+  return value;
+}
+
+function redactDiagnosticsExport(data) {
+  const redacted = redactDiagnosticsValue(data);
+  redacted.export = { redacted: true, redactedAt: new Date().toISOString(), note: "Access keys, tokens and query-string credentials are replaced with [REDACTED]." };
+  return redacted;
+}
+
+function buildApiKeyCheckSummary(shockerResult = null) {
+  const source = String(shockerResult?.source || "");
+  const loadedFromOpenShock = source.startsWith("/") && !shockerResult?.warning;
+  return {
+    tokenConfigured: Boolean(TOKEN),
+    apiHost: API_HOST,
+    readOwnShockers: {
+      ok: Boolean(TOKEN) && loadedFromOpenShock,
+      tested: Boolean(TOKEN),
+      source: shockerResult?.source || null,
+      shockerCount: (shockerResult?.shockers || []).length,
+      warning: shockerResult?.warning || null,
+      errors: shockerResult?.errors || []
+    },
+    controlPermission: {
+      ok: null,
+      tested: false,
+      safeTestAvailable: true,
+      note: "Use the API key check endpoint with control=true. It sends Stop only, never shock/vibrate."
+    }
+  };
+}
+
+async function runApiKeyPermissionCheck({ testControl = false } = {}) {
+  const result = buildApiKeyCheckSummary(null);
+  result.checkedAt = new Date().toISOString();
+  if (!TOKEN) {
+    result.readOwnShockers = { ok: false, tested: false, error: "No OpenShock token configured" };
+    return result;
+  }
+
+  clearShockerCache();
+  let shockerResult = null;
+  try {
+    shockerResult = await getShockers({ forceRefresh: true });
+    Object.assign(result, buildApiKeyCheckSummary(shockerResult));
+  } catch (err) {
+    result.readOwnShockers = { ok: false, tested: true, error: err.message };
+  }
+
+  if (!testControl) return result;
+  const first = (shockerResult?.shockers || [])[0];
+  if (!first?.id) {
+    result.controlPermission = { ok: false, tested: true, error: "No shocker available for safe Stop permission test" };
+    return result;
+  }
+
+  const s = safety();
+  const requestBody = { shocks: [{ id: first.id, type: "Stop", intensity: 0, duration: s.minDurationMs ?? 300, exclusive: true }] };
+  try {
+    const control = await requestOpenShock("POST", "/2/shockers/control", requestBody, { action: "diagnostics:apiKeyStopPermission" });
+    result.controlPermission = {
+      ok: control.statusCode >= 200 && control.statusCode < 300,
+      tested: true,
+      statusCode: control.statusCode,
+      deviceName: first.name,
+      deviceId: first.id,
+      responseSummary: summarizeOpenShockResponse(control.body)
+    };
+  } catch (err) {
+    result.controlPermission = { ok: false, tested: true, error: err.message, deviceName: first.name, deviceId: first.id };
+  }
+  return result;
+}
+
 async function buildDiagnosticsState({ forceRefresh = false } = {}) {
   CONFIG = readConfig();
   const state = readSessionState();
@@ -225,6 +421,7 @@ async function buildDiagnosticsState({ forceRefresh = false } = {}) {
   const links = await buildQrLinkDiagnostics(players);
   const preflight = buildPreflightChecks(state, players, shockerResult, configValidation, db);
   const developer = buildDeveloperToolsSummary(players);
+  const apiKeyCheck = buildApiKeyCheckSummary(shockerResult);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -243,6 +440,7 @@ async function buildDiagnosticsState({ forceRefresh = false } = {}) {
       git: getGitInfo()
     },
     server: {
+      access: { diagnosticsLocalhostOnly: true },
       port: PORT,
       host: CONFIG.server?.host || "0.0.0.0",
       publicBaseUrl: CONFIG.server?.publicBaseUrl || "",
@@ -250,6 +448,7 @@ async function buildDiagnosticsState({ forceRefresh = false } = {}) {
       apiHost: API_HOST,
       userAgent: USER_AGENT,
       tokenConfigured: Boolean(TOKEN),
+      apiKeyCheck,
       openShockTimeoutMs: CONFIG.server?.openShockTimeoutMs || 2500
     },
     safety: safety(),
@@ -477,7 +676,9 @@ function buildPreflightChecks(state, players, shockerResult, configValidation, d
   const add = (id, label, ok, severity = "error", details = null) => checks.push({ id, label, ok: Boolean(ok), severity, details });
   add("config", "Runtime config loads", !configValidation.checks.some(c => !c.ok), "error", configValidation.checks);
   add("sqlite", "SQLite/session database healthy", db.ok, "error", db.error || db.counts);
+  const apiKeyCheck = buildApiKeyCheckSummary(shockerResult);
   add("token", "OpenShock token configured", Boolean(TOKEN), "error");
+  add("api-read", "OpenShock token can read own shockers", apiKeyCheck.readOwnShockers.ok, "error", apiKeyCheck.readOwnShockers);
   add("shockers", "At least one shocker loaded", (shockerResult.shockers || []).length > 0, "error", shockerResult.warning || null);
   add("players", "At least one logical player available", (players || []).length > 0, "error");
   add("grouping", "Grouping config valid", !(shockerGroupingConfig().enabled && !shockerGroupingConfig().separator), "warning", shockerGroupingConfig());
@@ -630,4 +831,13 @@ function handleDiagnosticsClearDebug(_req, res) {
   debugState.openShockDurations.length = 0;
   for (const key of Object.keys(debugState.counters)) debugState.counters[key] = 0;
   return sendJson(res, 200, { cleared: true });
+}
+
+
+async function handleDiagnosticsApiKeyCheck(req, res) {
+  let body = {};
+  try { body = await readBody(req); } catch { body = {}; }
+  const testControl = Boolean(body.control || body.testControl || body.stopPermission);
+  const result = await runApiKeyPermissionCheck({ testControl });
+  return sendJson(res, result.readOwnShockers?.ok || result.controlPermission?.ok ? 200 : 500, result);
 }

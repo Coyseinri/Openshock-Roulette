@@ -139,6 +139,9 @@ function metricCard(label, value, detail='') { return `<div class="card"><div cl
 function detailsBlock(id, title, body, open=false) { return `<details data-diag-id="${esc(id)}" ${open ? 'open' : ''}><summary>${esc(title)}</summary>${body}</details>`; }
 function table(headers, rows) { if (!rows || !rows.length) return '<p class="muted">Nothing to show.</p>'; return `<table><thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${String(cell ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`; }
 function bar(percent) { percent = Math.max(0, Math.min(100, Number(percent || 0))); return `<div class="bar"><span style="width:${percent}%"></span></div><div class="small muted">${percent}%</div>`; }
+function browserDiagnostics() { return { userAgent: navigator.userAgent, language: navigator.language, online: navigator.onLine, viewport: `${window.innerWidth}x${window.innerHeight}`, screen: `${screen.width}x${screen.height}`, devicePixelRatio: window.devicePixelRatio || 1, location: location.origin + location.pathname, protocol: location.protocol, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || '' }; }
+function browserDiagnosticsHtml() { const b = browserDiagnostics(); return table(['Item','Value'], Object.entries(b).map(([k,v]) => [esc(k), esc(v)])); }
+async function redactedExportJson() { const res = await fetch(apiUrl('/api/diagnostics/export'), { cache: 'no-store' }); const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`); return data; }
 
 function captureDetailsState() { document.querySelectorAll('details[data-diag-id]').forEach(d => { lastDetailsState[d.dataset.diagId] = d.open; }); localStorage.setItem('osrDiagDetails', JSON.stringify(lastDetailsState)); }
 function restoreDetailsState() { document.querySelectorAll('details[data-diag-id]').forEach(d => { if (Object.prototype.hasOwnProperty.call(lastDetailsState, d.dataset.diagId)) d.open = Boolean(lastDetailsState[d.dataset.diagId]); d.ontoggle = () => { lastDetailsState[d.dataset.diagId] = d.open; localStorage.setItem('osrDiagDetails', JSON.stringify(lastDetailsState)); }; }); }
@@ -160,13 +163,32 @@ function renderOverview(d) {
     <div class="wideGrid" style="margin-top:12px;">
       <div class="card"><h2>Health</h2>
         <p>${statusPill(d.database.ok, 'SQLite')} ${statusPill(d.server.tokenConfigured, 'OpenShock token')} ${statusPill(openShockOk, 'OpenShock/device load')} ${statusPill(d.tools.preflight.ready, 'Pre-flight')}</p>
-        <p>${d.shockers.cached ? warnPill('Using cached shockers') : statusPill(true, 'Fresh/current shocker state')} ${d.server.adminLocalhostOnly ? statusPill(true, 'Admin localhost only') : warnPill('Admin remote access enabled')}</p>
+        <p>${d.shockers.cached ? warnPill('Using cached shockers') : statusPill(true, 'Fresh/current shocker state')} ${d.server.adminLocalhostOnly ? statusPill(true, 'Admin localhost only') : warnPill('Admin remote access enabled')} ${d.server.access?.diagnosticsLocalhostOnly ? statusPill(true, 'Diagnostics localhost only') : statusPill(false, 'Diagnostics remote access')}</p>
         ${d.shockers.warning ? `<p class="status bad">${esc(d.shockers.warning)}</p>` : ''}
       </div>
+      <div class="card"><h2>OpenShock API Key</h2>
+        <p>${statusPill(d.server.apiKeyCheck?.tokenConfigured, 'Token configured')} ${statusPill(d.server.apiKeyCheck?.readOwnShockers?.ok, 'Read shockers')} ${d.server.apiKeyCheck?.controlPermission?.tested ? statusPill(d.server.apiKeyCheck.controlPermission.ok, 'Control permission') : warnPill('Control permission not tested')}</p>
+        <div class="toolbar"><button id="apiKeyReadCheckBtn">Check read permission</button><button id="apiKeyControlCheckBtn" class="warn">Check control with STOP</button></div>
+        <pre id="apiKeyCheckResult">${esc(JSON.stringify(d.server.apiKeyCheck || {}, null, 2))}</pre>
+      </div>
+      <div class="card"><h2>Browser Diagnostics</h2>${browserDiagnosticsHtml()}</div>
       <div class="card"><h2>Warnings</h2>
         ${warnings.length ? `<ul class="warningList">${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '<p class="muted">No config warnings found. Suspiciously calm.</p>'}
       </div>
     </div>`;
+  document.getElementById('apiKeyReadCheckBtn')?.addEventListener('click', () => runApiKeyCheck(false));
+  document.getElementById('apiKeyControlCheckBtn')?.addEventListener('click', () => runApiKeyCheck(true));
+}
+
+async function runApiKeyCheck(control=false) {
+  if (control && !confirm('This sends a STOP command only to one loaded shocker to verify control permission. Continue?')) return;
+  try {
+    const result = await post('/api/diagnostics/api-key-check', { control });
+    const out = document.getElementById('apiKeyCheckResult');
+    if (out) out.textContent = JSON.stringify(result, null, 2);
+    toast(control ? 'API key control check completed' : 'API key read check completed', result.controlPermission?.ok === false || result.readOwnShockers?.ok === false ? 'bad' : 'ok');
+    await load(true);
+  } catch (err) { toast(err.message, 'bad'); }
 }
 
 function renderPreflight(d) {
@@ -327,7 +349,8 @@ function renderConfig(d) {
   const files = d.configValidation.files || [];
   const checks = d.configValidation.checks || [];
   const diff = d.tools.configDiff || {};
-  document.getElementById('config').innerHTML = `<div class="wideGrid"><div class="card"><h2>Config Files</h2>${table(['Status','Label','Path','Size/Error'], files.map(f => [f.ok ? statusPill(true, 'OK') : statusPill(false, f.exists ? 'Invalid' : 'Missing'), esc(f.label), `<code>${esc(f.path)}</code>`, f.error ? esc(f.error) : fmtBytes(f.sizeBytes)]))}</div><div class="card"><h2>Runtime Config Checks</h2>${table(['Status','Label','Details'], checks.map(c => [c.ok ? statusPill(true, 'OK') : statusPill(false, 'Fail'), esc(c.label), `<pre>${esc(JSON.stringify(c.details || '', null, 2))}</pre>`]))}</div><div class="card"><h2>Config Compare</h2><p>${diff.ok ? statusPill(diff.missingFromLive.length === 0, `${diff.missingFromLive.length} missing keys`) : statusPill(false, 'Compare failed')} ${diff.ok ? warnPill(`${diff.extraInLive.length} extra live keys`) : ''}</p>${detailsBlock('config:missing', 'Missing from live config', `<pre>${esc(JSON.stringify(diff.missingFromLive || [], null, 2))}</pre>`)}${detailsBlock('config:extra', 'Extra in live config', `<pre>${esc(JSON.stringify(diff.extraInLive || [], null, 2))}</pre>`)}</div></div>`;
+  const warnings = d.configValidation.warnings || [];
+  document.getElementById('config').innerHTML = `<div class="wideGrid"><div class="card"><h2>Config Files</h2>${table(['Status','Label','Path','Size/Error'], files.map(f => [f.ok ? statusPill(true, 'OK') : statusPill(false, f.exists ? 'Invalid' : 'Missing'), esc(f.label), `<code>${esc(f.path)}</code>`, f.error ? esc(f.error) : fmtBytes(f.sizeBytes)]))}</div><div class="card"><h2>Runtime / Catalog Checks</h2>${table(['Status','Label','Details'], checks.map(c => [c.ok ? statusPill(true, 'OK') : (c.severity === 'error' ? statusPill(false, 'Fail') : warnPill('Warn')), esc(c.label), `<pre>${esc(JSON.stringify(c.details || '', null, 2))}</pre>`]))}</div><div class="card"><h2>Warnings</h2>${warnings.length ? `<ul class="warningList">${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '<p class="muted">No warnings found.</p>'}</div><div class="card"><h2>Config Compare</h2><p>${diff.ok ? statusPill(diff.missingFromLive.length === 0, `${diff.missingFromLive.length} missing keys`) : statusPill(false, 'Compare failed')} ${diff.ok ? warnPill(`${diff.extraInLive.length} extra live keys`) : ''}</p>${detailsBlock('config:missing', 'Missing from live config', `<pre>${esc(JSON.stringify(diff.missingFromLive || [], null, 2))}</pre>`)}${detailsBlock('config:extra', 'Extra in live config', `<pre>${esc(JSON.stringify(diff.extraInLive || [], null, 2))}</pre>`)}</div></div>`;
 }
 
 function renderStorage(d) {
@@ -388,7 +411,7 @@ function renderFuture(d) {
   document.getElementById('future').innerHTML = `<div class="card"><h2>Future Diagnostics Tools</h2><p class="muted">This list is now also a map of what is already partially built into diagnostics. Planned means not active; active-ish means useful now but not perfect.</p></div><div class="wideGrid">${planned.map(([name, desc, status], idx) => `<div class="card">${detailsBlock(`future:${idx}`, name, `<p class="muted">${esc(desc)}</p><p>Status: ${esc(status)}</p>`, true)}</div>`).join('')}</div>`;
 }
 
-function renderRaw(d) { document.getElementById('raw').innerHTML = `<div class="card"><h2>Raw Diagnostics JSON</h2><p class="muted">Auto-refresh will not overwrite this panel while the Raw JSON tab is open. Use the button below when you want a fresh snapshot.</p><div class="toolbar" style="margin-bottom:10px;"><button id="refreshRawBtn">Refresh Raw JSON</button><button id="copyRawBtn">Copy Raw JSON</button></div><pre id="rawJson">${esc(JSON.stringify(d, null, 2))}</pre></div>`; document.getElementById('refreshRawBtn').onclick = () => load(true); document.getElementById('copyRawBtn').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2)); toast('Raw JSON copied', 'ok'); } catch { toast('Clipboard copy failed', 'bad'); } }; }
+function renderRaw(d) { document.getElementById('raw').innerHTML = `<div class="card"><h2>Raw Diagnostics JSON</h2><p class="muted">Auto-refresh will not overwrite this panel while the Raw JSON tab is open. Use the button below when you want a fresh snapshot.</p><div class="toolbar" style="margin-bottom:10px;"><button id="refreshRawBtn">Refresh Raw JSON</button><button id="copyRawBtn">Copy Redacted Export JSON</button></div><pre id="rawJson">${esc(JSON.stringify(d, null, 2))}</pre></div>`; document.getElementById('refreshRawBtn').onclick = () => load(true); document.getElementById('copyRawBtn').onclick = async () => { try { const data = await redactedExportJson(); await navigator.clipboard.writeText(JSON.stringify(data, null, 2)); toast('Redacted export JSON copied', 'ok'); } catch { toast('Clipboard copy failed', 'bad'); } }; }
 
 function activeTabName() { return document.querySelector('.tab.active')?.dataset?.tab || 'overview'; }
 function render(d, { force = false } = {}) { captureDetailsState(); const tab = activeTabName(); const holdInteractive = !force && interactiveTabs.has(tab) && document.getElementById(tab)?.innerHTML.trim(); snapshot = d; document.getElementById('lastUpdated').textContent = `Updated ${new Date(d.generatedAt).toLocaleString()} · auto-refresh ${autoRefreshEnabled ? 'every 5 seconds' : 'paused'}${holdInteractive ? ' · active tool held still' : ''}`; const maybe = (name, fn) => { if (holdInteractive && tab === name) return; fn(d); }; maybe('overview', renderOverview); maybe('preflight', renderPreflight); maybe('devices', renderDevices); maybe('tests', renderTests); maybe('api', renderApi); maybe('inspectors', renderInspectors); maybe('simulator', renderSimulator); maybe('config', renderConfig); maybe('storage', renderStorage); maybe('links', renderLinks); maybe('session', renderSession); maybe('logs', renderLogs); maybe('developer', renderDeveloper); maybe('future', renderFuture); if (force || tab !== 'raw' || !document.getElementById('rawJson')) renderRaw(d); restoreDetailsState(); }
@@ -402,7 +425,7 @@ document.getElementById('refreshBtn').onclick = () => load(true);
 document.getElementById('reloadShockersBtn').onclick = async () => { try { await post('/api/diagnostics/reload-shockers'); toast('Shockers reloaded', 'ok'); await load(true); } catch (err) { toast(err.message, 'bad'); } };
 document.getElementById('preflightBtn').onclick = runPreflight;
 document.getElementById('exportBtn').onclick = () => { location.href = apiUrl('/api/diagnostics/export'); };
-document.getElementById('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2)); toast('Diagnostics JSON copied', 'ok'); } catch { toast('Clipboard copy failed', 'bad'); } };
+document.getElementById('copyBtn').onclick = async () => { try { const data = await redactedExportJson(); await navigator.clipboard.writeText(JSON.stringify(data, null, 2)); toast('Redacted diagnostics JSON copied', 'ok'); } catch (err) { toast(err.message || 'Clipboard copy failed', 'bad'); } };
 document.getElementById('autoRefreshToggle').checked = autoRefreshEnabled;
 document.getElementById('autoRefreshToggle').onchange = (event) => { autoRefreshEnabled = Boolean(event.target.checked); localStorage.setItem('osrDiagAutoRefresh', String(autoRefreshEnabled)); if (snapshot) render(snapshot, { force: false }); };
 document.getElementById('stopAllTopBtn').onclick = stopAll;

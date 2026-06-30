@@ -52,14 +52,14 @@ var server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === "/api/diagnostics/state" && req.method === "GET") {
-      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost or host access" });
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
       const forceRefresh = ["1", "true", "yes"].includes(String(url.searchParams.get("refresh") || "").toLowerCase());
       return sendJson(res, 200, await buildDiagnosticsState({ forceRefresh }));
     }
 
     if (url.pathname === "/api/diagnostics/export" && req.method === "GET") {
-      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost or host access" });
-      const data = await buildDiagnosticsState({ forceRefresh: false });
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      const data = redactDiagnosticsExport(await buildDiagnosticsState({ forceRefresh: false }));
       res.writeHead(200, {
         "Content-Type": "application/json",
         "Cache-Control": "no-store",
@@ -69,43 +69,48 @@ var server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === "/api/diagnostics/reload-shockers" && req.method === "POST") {
-      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost or host access" });
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
       return await handleDiagnosticsReloadShockers(req, res);
     }
 
     if (url.pathname === "/api/diagnostics/test" && req.method === "POST") {
-      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost or host access" });
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
       return await handleDiagnosticsTest(req, res);
     }
 
     if (url.pathname === "/api/diagnostics/stop-all" && req.method === "POST") {
-      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost or host access" });
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
       return await handleDiagnosticsStopAll(req, res);
     }
 
     if (url.pathname === "/api/diagnostics/simulate" && req.method === "POST") {
-      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost or host access" });
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
       return await handleDiagnosticsSimulate(req, res);
     }
 
     if (url.pathname === "/api/diagnostics/preflight" && req.method === "GET") {
-      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost or host access" });
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
       return await handleDiagnosticsPreflight(req, res);
     }
 
+    if (url.pathname === "/api/diagnostics/api-key-check" && req.method === "POST") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      return await handleDiagnosticsApiKeyCheck(req, res);
+    }
+
     if (url.pathname === "/api/diagnostics/clear-debug" && req.method === "POST") {
-      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost or host access" });
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
       return handleDiagnosticsClearDebug(req, res);
     }
 
     if (url.pathname === "/api/diagnostics/clear-shocker-cache" && req.method === "POST") {
-      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost or host access" });
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
       clearShockerCache();
       return sendJson(res, 200, { cleared: true });
     }
 
     if (url.pathname === "/api/diagnostics/archive-reset-session" && req.method === "POST") {
-      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost or host access" });
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
       const result = resetSessionState();
       return sendJson(res, 200, { reset: true, session: result.session, archivedTo: result.archivedTo });
     }
