@@ -2,8 +2,8 @@
 function validateEventCards(data) {
   if (!data || typeof data !== "object") throw new Error("Event cards config must be an object");
   data.enabled = Boolean(data.enabled ?? true);
-  data.chancePercent = clampInt(data.chancePercent ?? 18, 0, 100);
-  data.displayDurationMs = clampInt(data.displayDurationMs ?? 4000, 0, 15000);
+  data.chancePercent = clampInt(data.chancePercent ?? 45, 0, 100);
+  data.displayDurationMs = clampInt(data.displayDurationMs ?? 7000, 0, 15000);
   if (!Array.isArray(data.cards)) data.cards = [];
 
   data.cards = data.cards.map((card, i) => {
@@ -31,8 +31,8 @@ function validateConfig(config) {
   if (!config.fateWheel.length) throw new Error("config.fateWheel must not be empty");
   config.eventCards = config.eventCards || {};
   config.eventCards.enabled = Boolean(config.eventCards.enabled ?? true);
-  config.eventCards.chancePercent = clampInt(config.eventCards.chancePercent ?? 18, 0, 100);
-  config.eventCards.displayDurationMs = clampInt(config.eventCards.displayDurationMs ?? 4000, 0, 15000);
+  config.eventCards.chancePercent = clampInt(config.eventCards.chancePercent ?? 45, 0, 100);
+  config.eventCards.displayDurationMs = clampInt(config.eventCards.displayDurationMs ?? 7000, 0, 15000);
   config.playerPages = config.playerPages || {};
   {
     const page = pageEnabledFromConfig(config.playerPages, true);
@@ -86,7 +86,7 @@ function validateConfig(config) {
   config.economy.tokenCosts.immunity = clampInt(config.economy.tokenCosts.immunity ?? config.economy.immunityTokenCost ?? 10, 0, 999);
   config.economy.tokenCosts.doubleShock = clampInt(config.economy.tokenCosts.doubleShock ?? config.economy.doubleShockTokenCost ?? 10, 0, 999);
 
-  const maxShock = clampInt(config.safety?.serverMaxShockIntensity ?? 100, 1, 100);
+  const maxShock = clampInt(config.safety?.serverMaxShockIntensity ?? 99, 1, 100);
 
   config.fateWheel.forEach((f, i) => {
     if (!f.key || !f.name) throw new Error(`fateWheel[${i}] needs key and name`);
