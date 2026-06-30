@@ -8,14 +8,16 @@ Event cards are rolled before the target spinner. They can alter the target whee
 
 ## Global config
 
-Event card settings are controlled from the `eventCards` block in `config/config.json` and `config/config.example.json`.
+Event card settings are controlled from the `events.eventCards` block in `config/config.json` and `config/config.example.json`.
 
 ```json
 {
-  "eventCards": {
-    "enabled": true,
-    "chancePercent": 18,
-    "displayDurationMs": 10000
+  "events": {
+    "eventCards": {
+      "enabled": true,
+      "chancePercent": 45,
+      "displayDurationMs": 7000
+    }
   }
 }
 ```
@@ -25,6 +27,8 @@ Event card settings are controlled from the `eventCards` block in `config/config
 | `enabled` | Enables or disables random event-card rolls. |
 | `chancePercent` | Percent chance that a normal round triggers an event card. Clamped between `0` and `100`. |
 | `displayDurationMs` | Default time the event card overlay stays visible before Continue can move things along. |
+
+`config/event-cards.example.json` also has its own top-level fallback values for the card pack. The main live runtime default comes from `events.eventCards` in `config/config.json`. Per-card `displayDurationMs` values still override both, because of course the cards also wanted opinions.
 
 The host dashboard can also force a specific event card for the next round. Forced event cards bypass the normal random chance check.
 
@@ -40,7 +44,7 @@ The host dashboard can also force a specific event card for the next round. Forc
   "category": "chaos",
   "targetWheel": true,
   "fateWheel": true,
-  "displayDurationMs": 10000,
+  "displayDurationMs": 7000,
   "effects": [
     { "type": "multiplyFateWeight", "fateKey": "high", "multiplier": 2 }
   ]
@@ -258,8 +262,6 @@ Selectors can be used by `forceTargetBySelector` and `multiplyTargetWeight`.
 | --- | --- |
 | `lastSelected` | Previous selected target. |
 | `lastShocked` | Last shocked player. |
-| `leastShocked` | Player with the fewest shocks. |
-| `mostShocked` | Player with the most shocks. |
 | `leastSelected` | Player selected the fewest times. |
 | `mostSelected` | Player selected the most times. |
 | `leastVibed` | Player with the fewest vibe results. |
@@ -329,6 +331,7 @@ These effects happen after the target is known.
 | --- | --- |
 | `sharePain` | The target chooses another player to join them. |
 | `chooseTargetByTarget` | Same behavior as `sharePain`; the target chooses another player. |
+| `mutualDestruction` | The target chooses another player to share the same final result, including double-hit behavior. |
 | `bodyguard` | Host chooses a volunteer to replace the original target. If nobody volunteers, the original target stays. |
 | `duel` | Target chooses an opponent. A random loser receives the fate. |
 | `targetChoosesOpponent` | Same behavior as `duel`. |
@@ -601,6 +604,23 @@ Example:
 }
 ```
 
+### Mutual destruction
+
+```json
+{
+  "id": "mutual-destruction",
+  "enabled": true,
+  "weight": 3,
+  "title": "Mutual Destruction",
+  "description": "The target chooses another player to share their fate. Both players receive the same result, including double-hits.",
+  "targetWheel": true,
+  "fateWheel": true,
+  "effects": [
+    { "type": "mutualDestruction" }
+  ]
+}
+```
+
 ## Currently supported effect list
 
 Target/pre-target effects:
@@ -635,6 +655,7 @@ Post-target interactive effects:
 
 - `sharePain`
 - `chooseTargetByTarget`
+- `mutualDestruction`
 - `bodyguard`
 - `duel`
 - `targetChoosesOpponent`
