@@ -1,4 +1,4 @@
-# OpenShock Roulette (OSR) v1.3.1
+# OpenShock Roulette (OSR) v1.3.2
 
 > ## AI Notice
 >
@@ -32,29 +32,30 @@ What could possibly go wrong? - Historically, quite a lot.
 
 ---
 
-## What's New in v1.3.1
+## What's New in v1.3.2
 
-Version 1.3.1 is a stability and cleanup release for the v1.3 game system.
+Version 1.3.2 is a diagnostics, polish and release-readiness update for the v1.3 game system.
 
-The big thing here is not a shiny new chaos machine. The big thing is that the existing chaos machine is now less likely to fold itself into a cursed pretzel.
+The game is still chaos. The toolbox is now less likely to slap itself in the face while you are trying to find out why the chaos happened.
 
 ### Updated Core Functions
 
-- Frontend code split into focused browser-side modules
-- Backend code split into focused server modules
-- Cleaner `app.js` and `server.js` entry points
-- Host dashboard layout and control improvements
-- Private player information moved into a safer collapsible panel
-- Manual event card controls added to the host dashboard
-- Main screen game-state and pending-item updates improved
-- Wait-only event card support added for cards that pause until Continue is pressed
-- Grouped shocker support added for multi-device players and teams
-- Default configuration and example config cleanup
-- Event card documentation updated to match the current parser
+- Expanded diagnostics and testing dashboard
+- Redacted diagnostics JSON export/copy tools
+- OpenShock API key read and control-permission checks
+- Pre-flight checks for config, devices, event cards, objectives, roles and runtime state
+- Safe diagnostics test controls for OpenShock devices
+- Config, event-card and objective validators
+- Diagnostics page scroll-state preservation during auto-refresh
+- Audience link simplified back to a general `/audience` entry point
+- Audience names/sessions reset on server restart so old browser logins do not keep sneaking back in
+- Default configuration and hardcoded fallback cleanup
+- Host dashboard refresh handling improved so collapsible panels stop jumping around
+- Documentation updated to match the current release state
 
 This is still v1.3 gameplay.
 
-It just has fewer wires sticking out of the walls.
+It just has a better flashlight for finding the goblin in the wiring.
 
 ---
 
@@ -168,10 +169,14 @@ Audience members can participate without wearing a collar.
 
 Features include:
 
+- General audience link at `/audience`
+- Name-based audience login
 - Audience voting
 - Rewards and modifiers
 - Influence future rounds
 - Watch friendships collapse in real time
+
+Audience sessions are intentionally cleared when the server restarts. This prevents a browser from silently reusing an old audience name forever, which is very convenient right up until everyone is suddenly named Roy.
 
 The audience always believes they would make better decisions.
 
@@ -284,6 +289,7 @@ Examples include:
 - Audience effects
 - Fate manipulation
 - Wait-only pauses that require Continue before the round moves on
+- Virtual targets that absolutely should not be found in bathtubs
 
 Every round has the potential to become significantly worse.
 
@@ -305,12 +311,15 @@ The following survive server restarts:
 - Tokens
 - Roles
 - Objectives
-- Audience state
 - Player statistics
 - Round history
 - Active game progress
 
+Audience sessions and audience names are intentionally cleared on server restart. Audience votes already accepted into the active game state may still exist, but browser identity is treated as temporary.
+
 Restarting the server does not erase your terrible score.
+
+It does, however, make the audience introduce themselves again like civilized little gremlins.
 
 ---
 
@@ -318,23 +327,39 @@ Restarting the server does not erase your terrible score.
 
 A diagnostics dashboard is included for troubleshooting.
 
-Available at:
+Available locally at:
 
 ```text
 http://localhost:8787/diagnostics
 ```
 
+The diagnostics page is intended for localhost/admin use. Do not expose it as a public party trick unless your party trick is leaking operational details.
+
 Useful for checking:
 
 - API activity
 - OpenShock requests
+- OpenShock API key read/control permission checks
 - Cache status
 - Runtime statistics
 - Request logging
+- SQLite/session status
+- Config validation
+- Event-card validation
+- Objective and hidden-role validation
+- Browser diagnostics
+- QR/link generation
+- Safe test controls
+- Pre-flight readiness checks
+
+Diagnostics exports are redacted by default so obvious secrets are not dumped into bug reports. Still review exports before sharing them, because computers are clever and humans are tired.
 
 Useful when investigating reports such as:
 "It shocked me for no reason."
+
 The Host already knew why you got shocked.
+
+Now the diagnostics page might know too.
 
 ---
 
@@ -427,7 +452,7 @@ Team Red - Alice
 Team Red - Bob
 ```
 
-If automatic discovery fails, devices can be configured manually in config/shockers.json
+If automatic discovery fails, devices can be configured manually in `config/shockers.json`.
 
 ```json
 [
@@ -483,6 +508,7 @@ The application includes:
 - Randomized delays
 - Server-side safety limits
 - API token protection
+- Diagnostics/pre-flight checks
 
 Recommended real-world rules:
 
@@ -541,6 +567,17 @@ The STOP ALL button is traditionally discovered approximately one round later th
 - Grouped shocker support
 - Public objectives
 - Documentation and configuration cleanup
+
+### v1.3.2
+
+- Expanded diagnostics and testing dashboard
+- Redacted diagnostics export/copy tools
+- OpenShock API key permission checks
+- Config, event-card and objective validators
+- Audience login/session reset on server restart
+- Generic audience link cleanup
+- Diagnostics and host-dashboard refresh/scroll polish
+- Config fallback alignment
 
 Things escalated quickly.
 
