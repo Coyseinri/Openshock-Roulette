@@ -1,8 +1,14 @@
-const key = new URLSearchParams(window.location.search).get("key") || "";
 let timer = null;
 let loading = false;
 let audienceSessionId = localStorage.getItem("osrAudienceSessionId") || "";
 let audienceDisplayName = localStorage.getItem("osrAudienceDisplayName") || "";
+
+function clearAudienceLogin() {
+  audienceSessionId = "";
+  audienceDisplayName = "";
+  localStorage.removeItem("osrAudienceSessionId");
+  localStorage.removeItem("osrAudienceDisplayName");
+}
 
 function setStatus(text) { document.getElementById("statusLine").textContent = text; }
 function setActionStatus(text) { document.getElementById("actionStatus").textContent = text; }
@@ -37,7 +43,7 @@ async function ensureAudienceSession(forceName = false) {
   const body = { displayName };
   if (audienceSessionId) body.audienceSessionId = audienceSessionId;
 
-  const res = await fetch(`/api/audience/session?key=${encodeURIComponent(key)}`, {
+  const res = await fetch(`/api/audience/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
@@ -104,7 +110,7 @@ async function send(type) {
     if (!audienceSessionId || !audienceDisplayName) await ensureAudienceSession(false);
     const targetPlayerId = document.getElementById("targetPlayerSelect").value;
     const tokenType = document.getElementById("tokenTypeSelect").value;
-    const res = await fetch(`/api/audience/action?key=${encodeURIComponent(key)}`, {
+    const res = await fetch(`/api/audience/action`, {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ type, targetPlayerId, tokenType, audienceSessionId, displayName: audienceDisplayName })
@@ -126,8 +132,14 @@ async function load() {
   loading = true;
   try {
     if (!audienceSessionId || !audienceDisplayName) { showLogin(); return; }
-    const res = await fetch(`/api/audience/state?key=${encodeURIComponent(key)}&audienceSessionId=${encodeURIComponent(audienceSessionId)}&displayName=${encodeURIComponent(audienceDisplayName)}`, { cache:"no-store" });
+    const res = await fetch(`/api/audience/state?audienceSessionId=${encodeURIComponent(audienceSessionId)}&displayName=${encodeURIComponent(audienceDisplayName)}`, { cache:"no-store" });
     const data = await res.json();
+    if (res.status === 401 || res.status === 404) {
+      clearAudienceLogin();
+      showLogin();
+      setLoginStatus(data.error || "Audience session expired. Enter your name again.");
+      return;
+    }
     if (!res.ok) throw new Error(data.error || "Could not load audience page");
     document.getElementById("roundLine").textContent = `Round ${data.roundNumber ?? 0}`;
     renderPlayers(data.players || []);
@@ -160,6 +172,7 @@ document.getElementById("joinBtn").onclick = async () => {
 };
 document.getElementById("changeNameBtn").onclick = () => {
   if (timer) { clearInterval(timer); timer = null; }
+  clearAudienceLogin();
   showLogin();
 };
 document.getElementById("audienceNameInput").addEventListener("keydown", e => {

@@ -13,14 +13,39 @@ function fillPlayerSelect(select, players) {
   players.forEach(p => {
     const opt = document.createElement("option");
     opt.value = p.id;
-    opt.textContent = p.name;
+    const devices = Array.isArray(p.devices) && p.devices.length > 1 ? ` (${p.devices.length} devices)` : "";
+    opt.textContent = `${p.name}${devices}`;
     select.appendChild(opt);
   });
   if ([...select.options].some(o => o.value === current)) select.value = current;
 }
 
+function fillManualControlSelect(select, players) {
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = "";
+
+  (players || []).forEach(p => {
+    const groupOpt = document.createElement("option");
+    groupOpt.value = p.id;
+    groupOpt.textContent = p.name;
+    select.appendChild(groupOpt);
+
+    if (Array.isArray(p.devices) && p.devices.length > 1) {
+      p.devices.forEach(device => {
+        const opt = document.createElement("option");
+        opt.value = device.id;
+        opt.textContent = ` - ${device.name || device.memberName || device.id}`;
+        select.appendChild(opt);
+      });
+    }
+  });
+
+  if ([...select.options].some(o => o.value === current)) select.value = current;
+}
+
 function renderPlayers(players) {
-  fillPlayerSelect(document.getElementById("manualPlayer"), players);
+  fillManualControlSelect(document.getElementById("manualPlayer"), players);
   fillPlayerSelect(document.getElementById("rewardPlayer"), players);
   fillPlayerSelect(document.getElementById("forcePlayer"), players);
 }
@@ -109,6 +134,40 @@ function renderObjectiveEvents(events) {
   document.querySelectorAll(".ackObjective").forEach(btn => btn.onclick = () => acknowledgeObjectives([btn.dataset.id]));
 }
 
+function renderPublicObjectives(objectives) {
+  const host = document.getElementById("publicObjectives");
+  if (!host) return;
+  const list = Array.isArray(objectives) ? objectives : [];
+  if (!list.length) {
+    host.innerHTML = `<div class="mutedLine">No active public objectives configured.</div>`;
+    return;
+  }
+
+  host.innerHTML = list.map(o => {
+    const progress = Number(o.progress || 0);
+    const target = Math.max(1, Number(o.target || 1));
+    const percent = Math.max(0, Math.min(100, Math.round((progress / target) * 100)));
+    const rewardParts = [];
+    if (o.rewardPoints) rewardParts.push(`${o.rewardPoints} point${Number(o.rewardPoints) === 1 ? "" : "s"} each`);
+    if (Array.isArray(o.rewardTokens)) {
+      o.rewardTokens.forEach(t => rewardParts.push(`${t.amount} ${t.tokenType} token${Number(t.amount) === 1 ? "" : "s"} each`));
+    }
+    const reward = rewardParts.length ? ` · Reward: ${esc(rewardParts.join(", "))}` : "";
+    return `<div class="pendingItem publicObjectiveItem">
+      <strong>${esc(o.title || o.id)}</strong>${o.completed ? " ✅" : ""}<br>
+      <span>${esc(o.description || "")}</span><br>
+      <span>Progress: ${esc(progress)}/${esc(target)} (${esc(percent)}%)${reward}</span>
+      <div class="hostActionButtons publicObjectiveButtons">
+        <button class="hostButton approve completePublicObjective" data-id="${esc(o.id)}" type="button">Complete</button>
+        <button class="hostButton reject rerollPublicObjective" data-id="${esc(o.id)}" type="button">Reroll</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  document.querySelectorAll(".completePublicObjective").forEach(btn => btn.onclick = () => sendPublicObjectiveAction(btn.dataset.id, "completePublicObjective"));
+  document.querySelectorAll(".rerollPublicObjective").forEach(btn => btn.onclick = () => sendPublicObjectiveAction(btn.dataset.id, "rerollPublicObjective"));
+}
+
 function renderAudienceVotes(votes, threshold = null) {
   const host = document.getElementById("audienceVotes");
   if (!host) return;
@@ -134,7 +193,26 @@ function renderSessionStats(stats) {
   const host = document.getElementById("sessionStats");
   if (!host) return;
   if (!stats.length) { host.innerHTML = `<div class="mutedLine">No session stats yet.</div>`; return; }
-  host.innerHTML = stats.map(p => `<div class="pendingItem"><strong>${esc(p.name)}</strong> · Shocked ${esc(p.stats?.shocked || 0)} · Selected ${esc(p.stats?.selected || 0)} · Points ${esc(p.points || 0)}</div>`).join("");
+  host.innerHTML = stats.map(p => {
+    const devices = Array.isArray(p.devices) && p.devices.length > 1 ? `<br><span>${esc(p.devices.map(d => d.memberName || d.name).join(" · "))}</span>` : "";
+    return `<div class="pendingItem"><strong>${esc(p.name)}</strong>${p.isGrouped ? " · grouped" : ""} · Shocked ${esc(p.stats?.shocked || 0)} · Selected ${esc(p.stats?.selected || 0)} · Points ${esc(p.points || 0)}${devices}</div>`;
+  }).join("");
+}
+
+async function sendPublicObjectiveAction(objectiveId, actionType) {
+  try {
+    const res = await fetch(`/api/host/action?key=${encodeURIComponent(key)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actionType, objectiveId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Could not update public objective");
+    setStatus(actionType === "completePublicObjective" ? "Public objective completed." : "Public objective rerolled.");
+    await load();
+  } catch (err) {
+    setStatus(err.message);
+  }
 }
 
 async function resolveVote(voteId, approved) {
@@ -273,6 +351,7 @@ async function load() {
     renderModifiers(data.pendingRoundModifiers || []);
     renderAudienceVotes(data.audienceVotes || [], data.audienceVoteThresholdEffective || data.economy?.audienceVoteThreshold || null);
     renderObjectiveEvents(data.completedObjectiveEvents || []);
+    renderPublicObjectives(data.publicObjectives || []);
     renderActions(data.pendingPlayerActions || []);
     renderSessionStats(data.sessionStats || []);
     setStatus(`Updated ${new Date().toLocaleTimeString()}`);

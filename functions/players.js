@@ -1,4 +1,3 @@
-// OSR player state, stats and rendering helpers
 
 function activeShockers() {
   return shockers.filter(s => !eliminated.has(s.id));
@@ -34,16 +33,16 @@ function describeAppliedValues(targets, rolledValue, appliedById) {
 
 function defaultPlayerStats() {
   return {
-    selected: 0,              // final selected target count after event-card changes
-    shocked: 0,               // actual non-zero OpenShock activations
-    vibes: 0,                 // zero-value / vibration rounds
-    safe: 0,                  // target spinner SAFE rounds while player was active
-    allTargeted: 0,           // times included by SHOCK ALL / forceAllTargets
-    totalIntensity: 0,        // sum of non-zero selected values received
-    bodyguards: 0,            // approved bodyguard offers
-    cursesUsed: 0,            // approved curse actions
-    chaosUsed: 0,             // chaos tokens used
-    tokensBought: 0,          // tokens bought with points
+    selected: 0,
+    shocked: 0,
+    vibes: 0,
+    safe: 0,
+    allTargeted: 0,
+    totalIntensity: 0,
+    bodyguards: 0,
+    cursesUsed: 0,
+    chaosUsed: 0,
+    tokensBought: 0,
     lastSelectedRound: 0,
     lastShockedRound: 0,
     lastVibeRound: 0

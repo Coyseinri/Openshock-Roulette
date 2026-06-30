@@ -1,4 +1,4 @@
-# OpenShock Roulette (OSR) v1.3.1
+# OpenShock Roulette (OSR) v1.3.2
 
 > ## AI Notice
 >
@@ -32,28 +32,30 @@ What could possibly go wrong? - Historically, quite a lot.
 
 ---
 
-## What's New in v1.3.1
+## What's New in v1.3.2
 
-Version 1.3.1 is a stability and cleanup release for the v1.3 game system.
+Version 1.3.2 is a diagnostics, polish and release-readiness update for the v1.3 game system.
 
-The big thing here is not a shiny new chaos machine. The big thing is that the existing chaos machine is now less likely to fold itself into a cursed pretzel.
+The game is still chaos. The toolbox is now less likely to slap itself in the face while you are trying to find out why the chaos happened.
 
 ### Updated Core Functions
 
-- Frontend code split into focused browser-side modules
-- Backend code split into focused server modules
-- Cleaner `app.js` and `server.js` entry points
-- Host dashboard layout and control improvements
-- Private player information moved into a safer collapsible panel
-- Manual event card controls added to the host dashboard
-- Main screen game-state and pending-item updates improved
-- Wait-only event card support added for cards that pause until Continue is pressed
-- Default configuration and example config cleanup
-- Event card documentation updated to match the current parser
+- Expanded diagnostics and testing dashboard
+- Redacted diagnostics JSON export/copy tools
+- OpenShock API key read and control-permission checks
+- Pre-flight checks for config, devices, event cards, objectives, roles and runtime state
+- Safe diagnostics test controls for OpenShock devices
+- Config, event-card and objective validators
+- Diagnostics page scroll-state preservation during auto-refresh
+- Audience link simplified back to a general `/audience` entry point
+- Audience names/sessions reset on server restart so old browser logins do not keep sneaking back in
+- Default configuration and hardcoded fallback cleanup
+- Host dashboard refresh handling improved so collapsible panels stop jumping around
+- Documentation updated to match the current release state
 
 This is still v1.3 gameplay.
 
-It just has fewer wires sticking out of the walls.
+It just has a better flashlight for finding the goblin in the wiring.
 
 ---
 
@@ -78,8 +80,51 @@ It just has fewer wires sticking out of the walls.
 - OpenShock API proxy through Node.js
 - Automatic device discovery
 - Multiple shocker support
+- Prefix-based grouped shockers for multi-device players or teams
+- Per-device multipliers, even when devices are grouped
 - Local API token protection
 - Fallback shocker configuration
+
+### Grouped Shockers
+
+OSR can group multiple OpenShock devices into one logical player or team by using a name prefix.
+
+Example OpenShock device names:
+
+```text
+Alice - Arm
+Alice - Leg
+Team Red - Player 1
+Team Red - Player 2
+```
+
+With grouped shockers enabled, the target wheel shows the shared prefix as the player or team name. The individual devices stay attached underneath that group.
+
+When a grouped player is selected, OSR expands the hit to every device in that group. Each physical shocker still keeps its own multiplier, so one device can run at 50% while another runs at 75%, because apparently fairness now requires spreadsheet energy.
+
+The host manual shock control can target either the grouped player or one individual device under that group.
+
+Grouping is configured in `config/config.json` / `config/config.example.json`:
+
+```json
+"shockers": {
+  "grouping": {
+    "enabled": true,
+    "separator": " - ",
+    "trimParts": true,
+    "fallbackUngrouped": true
+  }
+}
+```
+
+Reloading shockers also rebuilds the groups, so renaming devices in OpenShock and reloading them is enough to update the logical player list.
+
+Use this for:
+
+- One player wearing multiple devices
+- Team-based games
+- Group dashboards with shared points, roles, objectives and stats
+- Still blaming one person even when two devices fired
 
 ### Host Dashboard
 
@@ -112,6 +157,8 @@ Features include:
 - Round history
 - Pending actions
 
+Grouped players share the same dashboard, points, tokens, hidden role, objectives and stats. Individual devices remain visible where it matters, especially for multiplier and manual control decisions.
+
 Players will quickly discover seventeen reasons why they should not be the target this round.
 
 Private player information can be tucked away so the host can open player links and objectives without immediately putting everyone's secret nonsense on the big screen.
@@ -122,10 +169,14 @@ Audience members can participate without wearing a collar.
 
 Features include:
 
+- General audience link at `/audience`
+- Name-based audience login
 - Audience voting
 - Rewards and modifiers
 - Influence future rounds
 - Watch friendships collapse in real time
+
+Audience sessions are intentionally cleared when the server restarts. This prevents a browser from silently reusing an old audience name forever, which is very convenient right up until everyone is suddenly named Roy.
 
 The audience always believes they would make better decisions.
 
@@ -172,6 +223,16 @@ Objectives are private and only visible to the player who owns them.
 
 ---
 
+## Public Objectives
+
+Public objectives give the whole group shared goals to work toward.
+
+Only a configured number of public objectives are active at once. When one is completed, OSR rewards the active players and rolls in a new public objective from the pool.
+
+The host can also manually complete or reroll public objectives when the table has clearly achieved greatness, or at least argued convincingly enough.
+
+---
+
 ## Per-Player Multipliers
 
 Each player can have their own intensity multiplier.
@@ -183,6 +244,8 @@ Examples:
 - 50% multiplier -> Roll 80 -> Sends 40
 - 75% multiplier -> Roll 80 -> Sends 60
 - 100% multiplier -> Roll 80 -> Sends 80
+
+For grouped shockers, the rolled value is expanded to every device in the group and then each device's own multiplier is applied.
 
 This allows individual balancing for players with different tolerance levels while keeping the game fair for everyone.
 
@@ -226,6 +289,7 @@ Examples include:
 - Audience effects
 - Fate manipulation
 - Wait-only pauses that require Continue before the round moves on
+- Virtual targets that absolutely should not be found in bathtubs
 
 Every round has the potential to become significantly worse.
 
@@ -247,12 +311,15 @@ The following survive server restarts:
 - Tokens
 - Roles
 - Objectives
-- Audience state
 - Player statistics
 - Round history
 - Active game progress
 
+Audience sessions and audience names are intentionally cleared on server restart. Audience votes already accepted into the active game state may still exist, but browser identity is treated as temporary.
+
 Restarting the server does not erase your terrible score.
+
+It does, however, make the audience introduce themselves again like civilized little gremlins.
 
 ---
 
@@ -260,23 +327,39 @@ Restarting the server does not erase your terrible score.
 
 A diagnostics dashboard is included for troubleshooting.
 
-Available at:
+Available locally at:
 
 ```text
 http://localhost:8787/diagnostics
 ```
 
+The diagnostics page is intended for localhost/admin use. Do not expose it as a public party trick unless your party trick is leaking operational details.
+
 Useful for checking:
 
 - API activity
 - OpenShock requests
+- OpenShock API key read/control permission checks
 - Cache status
 - Runtime statistics
 - Request logging
+- SQLite/session status
+- Config validation
+- Event-card validation
+- Objective and hidden-role validation
+- Browser diagnostics
+- QR/link generation
+- Safe test controls
+- Pre-flight readiness checks
+
+Diagnostics exports are redacted by default so obvious secrets are not dumped into bug reports. Still review exports before sharing them, because computers are clever and humans are tired.
 
 Useful when investigating reports such as:
 "It shocked me for no reason."
+
 The Host already knew why you got shocked.
+
+Now the diagnostics page might know too.
 
 ---
 
@@ -354,7 +437,22 @@ The server automatically attempts to load devices from OpenShock.
 If the hub, controller, your smart fridge, your toaster, or some other appliance appears as a player, use exclusions in the configuration.
 If your toaster gets selected multiple times in a row, we recommend keeping it away from any nearby bathtubs.
 
-If automatic discovery fails, devices can be configured manually in config/shockers.json
+Grouped shockers are enabled by default. Use OpenShock device name prefixes to create logical players or teams:
+
+```text
+Player Name - Device Name
+```
+
+Examples:
+
+```text
+Alice - Arm
+Alice - Leg
+Team Red - Alice
+Team Red - Bob
+```
+
+If automatic discovery fails, devices can be configured manually in `config/shockers.json`.
 
 ```json
 [
@@ -410,6 +508,7 @@ The application includes:
 - Randomized delays
 - Server-side safety limits
 - API token protection
+- Diagnostics/pre-flight checks
 
 Recommended real-world rules:
 
@@ -465,7 +564,20 @@ The STOP ALL button is traditionally discovered approximately one round later th
 - Private player information panel improvements
 - Better main-screen state updates
 - Wait-only event card support
+- Grouped shocker support
+- Public objectives
 - Documentation and configuration cleanup
+
+### v1.3.2
+
+- Expanded diagnostics and testing dashboard
+- Redacted diagnostics export/copy tools
+- OpenShock API key permission checks
+- Config, event-card and objective validators
+- Audience login/session reset on server restart
+- Generic audience link cleanup
+- Diagnostics and host-dashboard refresh/scroll polish
+- Config fallback alignment
 
 Things escalated quickly.
 

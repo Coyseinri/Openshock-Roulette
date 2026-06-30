@@ -5,7 +5,6 @@ async function cachedQrDataUrl(value, options = { margin: 1, width: 220 }) {
   if (qrDataUrlCache.has(key)) return qrDataUrlCache.get(key);
   const dataUrl = await QRCode.toDataURL(value, options);
   qrDataUrlCache.set(key, dataUrl);
-  // Keep cache bounded across game/key changes.
   if (qrDataUrlCache.size > 200) {
     const firstKey = qrDataUrlCache.keys().next().value;
     qrDataUrlCache.delete(firstKey);
@@ -16,14 +15,17 @@ async function cachedQrDataUrl(value, options = { margin: 1, width: 220 }) {
 async function buildPlayerLinks(req) {
   const pages = playerPagesConfig();
   const { shockers } = await getShockers();
+  const players = buildLogicalPlayersFromShockers(shockers);
   const base = getPublicBaseUrl(req);
   const links = [];
-  for (const s of shockers) {
+  for (const s of players) {
     const playerKey = getPlayerAccessKey(s.id);
     const url = `${base}/player/${encodeURIComponent(s.id)}?key=${encodeURIComponent(playerKey)}`;
     links.push({
       playerId: s.id,
       name: s.name,
+      devices: s.devices || [],
+      isGrouped: Boolean(s.isGrouped),
       url,
       qrDataUrl: pages.qrCodesEnabled ? await cachedQrDataUrl(url) : null
     });
@@ -92,11 +94,12 @@ function getPlayerState(playerId) {
 async function assignObjectivesToPlayers({ resetExisting = false } = {}) {
   const defs = readObjectives().objectives;
   const { shockers } = await getShockers();
+  const players = buildLogicalPlayersFromShockers(shockers);
   const state = readSessionState();
-  assignHiddenRolesToPlayers(state, shockers, { resetExisting });
+  assignHiddenRolesToPlayers(state, players, { resetExisting });
   state.objectiveAssignments = state.objectiveAssignments || {};
   const count = readObjectives().assignmentsPerPlayer || 1;
-  for (const s of shockers) {
+  for (const s of players) {
     if (!resetExisting && Array.isArray(state.objectiveAssignments[s.id]) && state.objectiveAssignments[s.id].length) continue;
     const shuffled = defs.slice().sort(() => Math.random() - 0.5).slice(0, count);
     const stats = state.playerStats?.[s.id] || {};
@@ -241,9 +244,6 @@ function ensureOrCreateAudienceSession(state, sessionId, displayName = null) {
 }
 
 function validateAudienceAccess(req, url) {
-  // Audience identity is intentionally based on the generated audience session id,
-  // not on a shared access key. This keeps the public audience QR easy to use
-  // while still letting us rate-limit every audience member separately.
   return audiencePageConfig().enabled;
 }
 
@@ -280,7 +280,7 @@ async function buildRoleLinks(req) {
   const host = hostPageConfig();
   const audience = audiencePageConfig();
   const hostUrl = `${base}/host?key=${encodeURIComponent(getRoleAccessKey("host"))}`;
-  const audienceUrl = `${base}/audience?key=${encodeURIComponent(getRoleAccessKey("audience"))}`;
+  const audienceUrl = `${base}/audience`;
   return {
     publicBaseUrl: base,
     host: {

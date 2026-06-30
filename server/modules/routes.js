@@ -1,4 +1,3 @@
-// Extracted from server/app.js. Loaded by server/app.js in order.
 
 var server = http.createServer(async (req, res) => {
   const requestStartedAt = Date.now();
@@ -49,6 +48,70 @@ var server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/debug/stats" && req.method === "GET") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       return sendJson(res, 200, getDebugSnapshot());
+    }
+
+    if (url.pathname === "/api/diagnostics/state" && req.method === "GET") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      const forceRefresh = ["1", "true", "yes"].includes(String(url.searchParams.get("refresh") || "").toLowerCase());
+      return sendJson(res, 200, await buildDiagnosticsState({ forceRefresh }));
+    }
+
+    if (url.pathname === "/api/diagnostics/export" && req.method === "GET") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      const data = redactDiagnosticsExport(await buildDiagnosticsState({ forceRefresh: false }));
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        "Content-Disposition": `attachment; filename="osr-diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.json"`
+      });
+      return res.end(JSON.stringify(data, null, 2));
+    }
+
+    if (url.pathname === "/api/diagnostics/reload-shockers" && req.method === "POST") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      return await handleDiagnosticsReloadShockers(req, res);
+    }
+
+    if (url.pathname === "/api/diagnostics/test" && req.method === "POST") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      return await handleDiagnosticsTest(req, res);
+    }
+
+    if (url.pathname === "/api/diagnostics/stop-all" && req.method === "POST") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      return await handleDiagnosticsStopAll(req, res);
+    }
+
+    if (url.pathname === "/api/diagnostics/simulate" && req.method === "POST") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      return await handleDiagnosticsSimulate(req, res);
+    }
+
+    if (url.pathname === "/api/diagnostics/preflight" && req.method === "GET") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      return await handleDiagnosticsPreflight(req, res);
+    }
+
+    if (url.pathname === "/api/diagnostics/api-key-check" && req.method === "POST") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      return await handleDiagnosticsApiKeyCheck(req, res);
+    }
+
+    if (url.pathname === "/api/diagnostics/clear-debug" && req.method === "POST") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      return handleDiagnosticsClearDebug(req, res);
+    }
+
+    if (url.pathname === "/api/diagnostics/clear-shocker-cache" && req.method === "POST") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      clearShockerCache();
+      return sendJson(res, 200, { cleared: true });
+    }
+
+    if (url.pathname === "/api/diagnostics/archive-reset-session" && req.method === "POST") {
+      if (!diagnosticsAccessAllowed(req, url)) return sendJson(res, 403, { error: "Diagnostics require localhost access" });
+      const result = resetSessionState();
+      return sendJson(res, 200, { reset: true, session: result.session, archivedTo: result.archivedTo });
     }
 
     if (url.pathname === "/api/debug/cache" && req.method === "GET") {
@@ -207,7 +270,10 @@ var server = http.createServer(async (req, res) => {
       const state = readSessionState();
       const audienceSessionId = getAudienceSessionId(req, url);
       const displayName = sanitizeAudienceName(url.searchParams.get("displayName") || "");
-      const session = audiencePageConfig().requireUniqueSession ? ensureOrCreateAudienceSession(state, audienceSessionId, displayName) : { id: audienceSessionId || "shared", displayName: displayName || "Audience" };
+      const session = audiencePageConfig().requireUniqueSession ? ensureAudienceSession(state, audienceSessionId) : { id: audienceSessionId || "shared", displayName: displayName || "Audience" };
+      if (audiencePageConfig().requireUniqueSession && !session) return sendJson(res, 401, { error: "Audience session expired. Enter your name again." });
+      updateAudienceSessionName(state, session, displayName);
+      session.lastSeenAt = new Date().toISOString();
       writeSessionState(state);
       const players = await publicPlayers();
       return sendJson(res, 200, { roundNumber: state.roundNumber, players, economy: economyConfig(), audiencePage: audiencePageConfig(), audienceSession: session, audienceVoteThresholdEffective: effectiveAudienceVoteThreshold(state), audienceSessions: state.audienceSessions || {}, audienceVotes: (state.audienceVotes || []).map(v => voteView(v, players, state)), audienceEventLog: state.audienceEventLog || [] });
@@ -236,7 +302,8 @@ var server = http.createServer(async (req, res) => {
       const playerId = decodeURIComponent(playerStateMatch[1]);
       if (!validatePlayerAccess(req, playerId, url)) return sendJson(res, 403, { error: "Invalid player key" });
       const { shockers } = await getShockers();
-      const player = shockers.find(s => s.id === playerId) || { id: playerId, name: "Unknown player" };
+      const players = buildLogicalPlayersFromShockers(shockers);
+      const player = findLogicalPlayerById(players, playerId) || shockers.find(s => String(s.id) === String(playerId)) || { id: playerId, name: "Unknown player", devices: [] };
       const sessionState = readSessionState();
       const pendingActions = (sessionState.pendingPlayerActions || [])
         .filter(a => a.status === "pending")
@@ -246,7 +313,6 @@ var server = http.createServer(async (req, res) => {
         .filter(m => m.status !== "consumed" && m.type === "bodyguardNextRound")
         .filter(m => String(m.bodyguardPlayerId) === String(playerId) || String(m.targetPlayerId) === String(playerId))
         .map(m => modifierView(m, shockers));
-      const players = shockers.map(s => ({ id: s.id, name: s.name }));
       return sendJson(res, 200, { player, players, ...getPlayerState(playerId), playerPages: playerPagesConfig(), economy: economyConfig(), pendingActions, activeBodyguards });
     }
 

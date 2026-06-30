@@ -1,4 +1,3 @@
-// OSR frontend UI helpers
 
 function log(msg) {
   const el = document.getElementById("log");
@@ -31,7 +30,6 @@ function updateEventCardPanel(card, stateText = null) {
 }
 
 function syncPageQrControls() {
-  // Page and QR settings are consolidated. QR follows the page setting.
 }
 
 function applyConfigToForm() {
@@ -206,9 +204,16 @@ async function loadPlayerObjectivePanel() {
       const tokenText = Object.entries(tokens[link.playerId] || {}).filter(([,v]) => Number(v) > 0).map(([k,v]) => `${escapeHtml(k)} x${escapeHtml(v)}`).join(" · ") || "No tokens";
       const role = session.hiddenRoles?.[link.playerId]?.roleId || "not assigned";
       const multiplier = Number(session.playerMultipliers?.[link.playerId] ?? playerMultipliers?.[link.playerId] ?? 100);
+      const deviceMultipliers = Array.isArray(link.devices) && link.devices.length > 1
+        ? link.devices.map(d => {
+            const dm = Number(session.playerMultipliers?.[d.id] ?? playerMultipliers?.[d.id] ?? 100);
+            const safeDm = Math.max(0, Math.min(100, Math.round(Number.isFinite(dm) ? dm : 100)));
+            return `<div class="objectiveMini"><strong>${escapeHtml(d.memberName || d.name)}:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(d.id)}" value="${escapeHtml(safeDm)}">%</div>`;
+          }).join("")
+        : `<div class="objectiveMini"><strong>Multiplier:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(link.playerId)}" value="${escapeHtml(Math.max(0, Math.min(100, Math.round(Number.isFinite(multiplier) ? multiplier : 100))))}">%</div>`;
       html += `<div class="playerLinkCard">
         <div class="playerLinkHeader"><strong>${escapeHtml(link.name)}</strong><span>${Number(points[link.playerId] || 0)} pts</span></div>
-        <div class="objectiveMini"><strong>Multiplier:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(link.playerId)}" value="${escapeHtml(Math.max(0, Math.min(100, Math.round(Number.isFinite(multiplier) ? multiplier : 100))))}">%</div>
+        ${deviceMultipliers}
         <div class="objectiveMini"><strong>Role:</strong> ${escapeHtml(role)}</div>
         <div class="objectiveMini"><strong>Tokens:</strong> ${tokenText}</div>
         <div class="objectiveMini">${objectiveText}</div>
@@ -508,9 +513,6 @@ function waitForEventContinue(ms) {
   return new Promise(resolve => {
     const delayMs = Math.max(0, Number(ms || 0));
 
-    // A value of 0 used to show the continue button but never start a timer,
-    // which could leave the round stuck on "Checking for event card...".
-    // Treat 0/blank/invalid as "do not pause for the overlay".
     if (!delayMs || !eventContinueBtn) {
       if (eventContinueBtn) {
         eventContinueBtn.hidden = true;

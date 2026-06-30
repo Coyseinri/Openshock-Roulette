@@ -1,4 +1,3 @@
-// Extracted from server/app.js. Loaded by server/app.js in order.
 function getLanAddresses() {
   const nets = os.networkInterfaces();
   const addresses = [];
@@ -29,9 +28,6 @@ function isLocalRequest(req) {
 }
 
 function pageEnabledFromConfig(cfg, defaultEnabled = true) {
-  // Consolidated page/QR behavior:
-  // one setting controls the page, and QR codes follow that setting.
-  // Legacy qrCodesEnabled is ignored except for old configs where enabled is missing.
   const enabled = Boolean(cfg.enabled ?? cfg.qrCodesEnabled ?? defaultEnabled);
   return { enabled, qrCodesEnabled: enabled };
 }

@@ -59,6 +59,276 @@ function hiddenRoleById(id) {
   return getHiddenRoleDefs().find(r => r.id === id) || null;
 }
 
+function getPublicObjectiveDefs() {
+  return (readObjectivesFileNormalized().publicObjectives || [])
+    .filter(o => o && o.enabled !== false && o.id && o.type && clampInt(o.target ?? 0, 0, 1000000) > 0)
+    .map(o => ({
+      ...o,
+      id: String(o.id),
+      type: String(o.type),
+      target: clampInt(o.target ?? 0, 1, 1000000)
+    }));
+}
+
+function publicObjectivesActiveCount() {
+  const catalog = readObjectivesFileNormalized();
+  return clampInt(catalog.publicObjectivesActiveCount ?? catalog.activePublicObjectives ?? 2, 1, 20);
+}
+
+function publicObjectiveById(id) {
+  return getPublicObjectiveDefs().find(def => String(def.id) === String(id)) || null;
+}
+
+function publicObjectiveCurrentValue(state, objective, players = []) {
+  const type = String(objective?.type || "");
+  const statsByPlayer = state?.playerStats && typeof state.playerStats === "object" ? state.playerStats : {};
+  const stats = Object.values(statsByPlayer).filter(s => s && typeof s === "object");
+
+  if (type === "rounds" || type === "roundNumber") return clampInt(state?.roundNumber ?? 0, 0, 1000000);
+  if (type === "activePlayers") return Array.isArray(players) ? players.length : 0;
+  if (type === "audienceVotesApproved") return (state?.audienceVotes || []).filter(v => v && v.status === "approved").length;
+  if (type === "audienceVotesOpen") return (state?.audienceVotes || []).filter(v => v && v.status === "open").length;
+  if (type === "audienceSessions") return Object.keys(state?.audienceSessions || {}).length;
+  if (type === "objectiveCompletions") return (state?.completedObjectiveEvents || []).filter(e => e && !String(e.objectiveId || "").startsWith("public:")).length;
+
+  return stats.reduce((sum, item) => sum + statValueForObjective(item, objective, state), 0);
+}
+
+function publicObjectiveBaselineValue(state, objective, players = []) {
+  const type = String(objective?.type || "");
+  const cumulativePublicTypes = new Set([
+    ...CUMULATIVE_OBJECTIVE_TYPES,
+    "rounds",
+    "roundNumber",
+    "audienceVotesApproved",
+    "audienceVotesOpen",
+    "audienceSessions",
+    "objectiveCompletions"
+  ]);
+  return cumulativePublicTypes.has(type) ? publicObjectiveCurrentValue(state, objective, players) : 0;
+}
+
+function ensurePublicObjectiveBuckets(state) {
+  state.publicObjectiveProgress = state.publicObjectiveProgress && typeof state.publicObjectiveProgress === "object" ? state.publicObjectiveProgress : {};
+  state.publicObjectiveActiveIds = Array.isArray(state.publicObjectiveActiveIds) ? state.publicObjectiveActiveIds.map(String).filter(Boolean) : [];
+  state.publicObjectiveCompletedIds = Array.isArray(state.publicObjectiveCompletedIds) ? state.publicObjectiveCompletedIds.map(String).filter(Boolean) : [];
+}
+
+function makePublicObjectiveProgress(def, state, players = []) {
+  return {
+    objectiveId: def.id,
+    assignedAt: new Date().toISOString(),
+    baseline: publicObjectiveBaselineValue(state, def, players),
+    progress: 0,
+    target: def.target,
+    completed: false,
+    rewardClaimed: false
+  };
+}
+
+function pickPublicObjectiveReplacement(state, players = [], excludeIds = []) {
+  const defs = getPublicObjectiveDefs();
+  if (!defs.length) return null;
+  ensurePublicObjectiveBuckets(state);
+
+  const excluded = new Set([
+    ...state.publicObjectiveActiveIds,
+    ...excludeIds.map(String)
+  ]);
+  const completed = new Set(state.publicObjectiveCompletedIds || []);
+
+  let pool = defs.filter(def => !excluded.has(def.id) && !completed.has(def.id));
+  if (!pool.length) pool = defs.filter(def => !excluded.has(def.id));
+  if (!pool.length) return null;
+
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function assignPublicObjectiveSlot(state, def, players = []) {
+  if (!def) return null;
+  ensurePublicObjectiveBuckets(state);
+  if (!state.publicObjectiveActiveIds.includes(def.id)) state.publicObjectiveActiveIds.push(def.id);
+  state.publicObjectiveProgress[def.id] = makePublicObjectiveProgress(def, state, players);
+  return state.publicObjectiveProgress[def.id];
+}
+
+function replacePublicObjectiveSlot(state, objectiveId, players = []) {
+  ensurePublicObjectiveBuckets(state);
+  const oldId = String(objectiveId || "");
+  state.publicObjectiveActiveIds = state.publicObjectiveActiveIds.filter(id => id !== oldId);
+  const replacement = pickPublicObjectiveReplacement(state, players, [oldId]);
+  if (!replacement) return null;
+  assignPublicObjectiveSlot(state, replacement, players);
+  return replacement;
+}
+
+function ensurePublicObjectiveProgress(state, players = []) {
+  ensurePublicObjectiveBuckets(state);
+  const defs = getPublicObjectiveDefs();
+  const validIds = new Set(defs.map(def => def.id));
+  const activeCount = Math.min(publicObjectivesActiveCount(), defs.length || publicObjectivesActiveCount());
+
+  state.publicObjectiveActiveIds = state.publicObjectiveActiveIds.filter(id => validIds.has(String(id)));
+  state.publicObjectiveCompletedIds = state.publicObjectiveCompletedIds.filter(id => validIds.has(String(id)));
+
+  for (const key of Object.keys(state.publicObjectiveProgress)) {
+    if (!validIds.has(String(key))) delete state.publicObjectiveProgress[key];
+  }
+
+  while (state.publicObjectiveActiveIds.length < activeCount) {
+    const replacement = pickPublicObjectiveReplacement(state, players);
+    if (!replacement) break;
+    assignPublicObjectiveSlot(state, replacement, players);
+  }
+
+  if (state.publicObjectiveActiveIds.length > activeCount) {
+    state.publicObjectiveActiveIds = state.publicObjectiveActiveIds.slice(0, activeCount);
+  }
+
+  for (const objectiveId of state.publicObjectiveActiveIds) {
+    const def = publicObjectiveById(objectiveId);
+    if (!def) continue;
+    const current = state.publicObjectiveProgress[def.id] && typeof state.publicObjectiveProgress[def.id] === "object" ? state.publicObjectiveProgress[def.id] : {};
+    state.publicObjectiveProgress[def.id] = {
+      objectiveId: def.id,
+      assignedAt: current.assignedAt || new Date().toISOString(),
+      baseline: current.baseline ?? publicObjectiveBaselineValue(state, def, players),
+      progress: clampInt(current.progress ?? 0, 0, def.target),
+      target: def.target,
+      completed: Boolean(current.completed),
+      rewardClaimed: Boolean(current.rewardClaimed)
+    };
+  }
+
+  return state.publicObjectiveProgress;
+}
+
+function publicObjectiveRewardPoints(def) {
+  if (def?.reward && typeof def.reward === "object") return clampInt(def.reward.points ?? def.rewardPoints ?? 0, 0, 999);
+  return clampInt(def?.rewardPoints ?? 0, 0, 999);
+}
+
+function publicObjectiveRewardTokens(def) {
+  const reward = def?.reward && typeof def.reward === "object" ? def.reward : {};
+  const tokens = reward.tokens && typeof reward.tokens === "object" ? reward.tokens : {};
+  return Object.entries(tokens)
+    .map(([tokenType, amount]) => ({ tokenType: normalizeTokenType(tokenType), amount: clampInt(amount ?? 0, 0, 999) }))
+    .filter(item => item.tokenType && item.amount > 0);
+}
+
+function publicObjectiveRewardDescription(def) {
+  const rewardPoints = publicObjectiveRewardPoints(def);
+  const rewardTokens = publicObjectiveRewardTokens(def);
+  const parts = [];
+  if (rewardPoints) parts.push(`${rewardPoints} point${rewardPoints === 1 ? "" : "s"} to each active player`);
+  for (const item of rewardTokens) parts.push(`${item.amount} ${item.tokenType} token${item.amount === 1 ? "" : "s"} to each active player`);
+  return def.rewardDescription || (parts.length ? `Public reward: ${parts.join(", ")}.` : "Public objective completed.");
+}
+
+function awardPublicObjectiveReward(state, def, players = []) {
+  const rewardPoints = publicObjectiveRewardPoints(def);
+  const rewardTokens = publicObjectiveRewardTokens(def);
+
+  for (const player of players || []) {
+    if (!player?.id) continue;
+    if (rewardPoints > 0) addPlayerPoints(state, player.id, rewardPoints, "public_objective_reward", { objectiveId: def.id });
+    for (const item of rewardTokens) {
+      addPlayerToken(state, player.id, item.tokenType, item.amount, "public_objective_reward", { objectiveId: def.id });
+    }
+  }
+
+  pushObjectiveEvent(state, {
+    playerId: "public",
+    objectiveId: `public:${def.id}`,
+    title: `Public objective: ${def.title || def.id}`,
+    rewardPoints,
+    rewardDescription: publicObjectiveRewardDescription(def)
+  });
+}
+
+function completePublicObjective(state, objectiveId, players = [], options = {}) {
+  ensurePublicObjectiveProgress(state, players);
+  const def = publicObjectiveById(objectiveId);
+  if (!def) return { ok: false, error: "Public objective not found" };
+  if (!state.publicObjectiveActiveIds.includes(def.id)) return { ok: false, error: "Public objective is not active" };
+
+  const progress = state.publicObjectiveProgress[def.id] || makePublicObjectiveProgress(def, state, players);
+  const alreadyClaimed = Boolean(progress.rewardClaimed);
+  progress.objectiveId = def.id;
+  progress.progress = def.target;
+  progress.target = def.target;
+  progress.completed = true;
+  progress.rewardClaimed = true;
+  progress.completedAt = new Date().toISOString();
+  progress.completedBy = options.source || "auto";
+  state.publicObjectiveProgress[def.id] = progress;
+
+  if (!alreadyClaimed) awardPublicObjectiveReward(state, def, players);
+  if (!state.publicObjectiveCompletedIds.includes(def.id)) state.publicObjectiveCompletedIds.push(def.id);
+  const replacement = replacePublicObjectiveSlot(state, def.id, players);
+
+  return { ok: true, completed: def, replacement };
+}
+
+function rerollPublicObjective(state, objectiveId, players = []) {
+  ensurePublicObjectiveProgress(state, players);
+  const def = publicObjectiveById(objectiveId);
+  if (!def) return { ok: false, error: "Public objective not found" };
+  if (!state.publicObjectiveActiveIds.includes(def.id)) return { ok: false, error: "Public objective is not active" };
+  const replacement = replacePublicObjectiveSlot(state, def.id, players);
+  return { ok: true, rerolled: def, replacement };
+}
+
+function evaluatePublicObjectives(state, players = []) {
+  if (!state || typeof state !== "object") return state;
+  const progressState = ensurePublicObjectiveProgress(state, players);
+  const activeIds = state.publicObjectiveActiveIds.slice();
+
+  for (const objectiveId of activeIds) {
+    const def = publicObjectiveById(objectiveId);
+    if (!def) continue;
+    const current = progressState[def.id];
+    if (!current) continue;
+    const baseline = clampInt(current.baseline ?? publicObjectiveBaselineValue(state, def, players), 0, 100000000);
+    const raw = publicObjectiveCurrentValue(state, def, players);
+    const progress = Math.min(def.target, Math.max(0, raw - baseline));
+
+    current.objectiveId = def.id;
+    current.baseline = baseline;
+    current.progress = progress;
+    current.target = def.target;
+
+    if (progress >= def.target && current.rewardClaimed !== true) {
+      completePublicObjective(state, def.id, players, { source: "auto" });
+    }
+  }
+
+  return state;
+}
+
+function publicObjectiveViews(state, players = []) {
+  evaluatePublicObjectives(state, players);
+  return state.publicObjectiveActiveIds
+    .map(objectiveId => publicObjectiveById(objectiveId))
+    .filter(Boolean)
+    .map(def => {
+      const progress = state.publicObjectiveProgress?.[def.id] || {};
+      return {
+        id: def.id,
+        title: def.title || def.id,
+        description: def.description || "",
+        type: def.type,
+        progress: clampInt(progress.progress ?? 0, 0, def.target),
+        target: def.target,
+        completed: Boolean(progress.completed),
+        rewardClaimed: Boolean(progress.rewardClaimed),
+        rewardPoints: publicObjectiveRewardPoints(def),
+        rewardTokens: publicObjectiveRewardTokens(def),
+        rewardDescription: publicObjectiveRewardDescription(def)
+      };
+    });
+}
+
 function playerRoleId(state, playerId) {
   const assignment = state?.hiddenRoles?.[playerId];
   return assignment?.roleId ? String(assignment.roleId) : null;
@@ -257,7 +527,6 @@ function evaluateObjectives(state) {
         addPlayerPoints(state, playerId, rewardPoints, "objective_reward", { objectiveId: def.id });
         pushObjectiveEvent(state, { playerId, objectiveId: def.id, title: def.title, rewardPoints });
 
-        // Completed objectives are immediately replaced so players always have something to work toward.
         const replacementPool = defs.filter(candidate => candidate.id !== def.id && !usedIds.has(candidate.id));
         const replacement = replacementPool.length ? replacementPool[Math.floor(Math.random() * replacementPool.length)] : null;
         if (replacement) {

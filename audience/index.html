@@ -12,8 +12,8 @@
     <section class="playerCard" id="loginCard">
       <div class="eyebrow">OpenShock Roulette</div>
       <h1>Audience login</h1>
-      <div class="mutedLine">Enter a unique audience name. This is used for vote limits and session logs.</div>
-      <label class="selectLine">Name <input id="audienceNameInput" type="text" maxlength="40" placeholder="e.g. Roy, Table 1, Alex"></label>
+      <div class="mutedLine">Enter an audience name. You will need to log in again after the server restarts.</div>
+      <label class="selectLine">Name <input id="audienceNameInput" type="text" maxlength="40" placeholder="e.g. Table 1, Alex"></label>
       <div class="actionGrid">
         <button id="joinBtn" type="button">Join audience</button>
       </div>
@@ -25,7 +25,7 @@
       <h1>Audience</h1>
       <div id="roundLine" class="roundLine">Loading...</div>
       <div id="statusLine" class="mutedLine">Waiting for updates...</div>
-      <div id="audienceSessionLine" class="mutedLine">Joining as unique audience member...</div>
+      <div id="audienceSessionLine" class="mutedLine">Waiting for audience login...</div>
       <button id="changeNameBtn" type="button">Change name</button>
     </section>
     <section class="playerCard" id="voteCard" hidden>

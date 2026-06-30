@@ -123,11 +123,14 @@ async function publicPlayers(existingShockers = null, existingState = null) {
   } catch (err) {
     console.warn(`WARNING: Could not update structured player/device tables: ${err.message}`);
   }
-  return shockers.map(s => ({ id: s.id, name: s.name }));
+  return buildLogicalPlayersFromShockers(shockers);
 }
 
 function playerNameById(shockers = [], id, fallback = null) {
   if (!id) return fallback;
+  const players = buildLogicalPlayersFromShockers(shockers);
+  const player = players.find(p => String(p.id) === String(id));
+  if (player) return player.name;
   const found = shockers.find(s => String(s.id) === String(id));
   return found?.name || fallback || "Unknown player";
 }
@@ -182,6 +185,8 @@ function buildSessionStats(state, players = []) {
   return players.map(p => ({
     id: p.id,
     name: p.name,
+    isGrouped: Boolean(p.isGrouped),
+    devices: p.devices || [],
     points: clampInt(state.playerPoints?.[p.id] ?? 0, 0, 1000000),
     tokens: state.playerTokens?.[p.id] || {},
     stats: state.playerStats?.[p.id] || {}
@@ -211,6 +216,8 @@ async function getHostState() {
   const state = readSessionState();
   const { shockers } = await getShockers();
   const players = await publicPlayers(shockers, state);
+  const publicObjectives = publicObjectiveViews(state, players);
+  writeSessionState(state);
   return {
     roundNumber: state.roundNumber,
     updatedAt: state.updatedAt,
@@ -218,6 +225,7 @@ async function getHostState() {
     economy: economyConfig(),
     hostPage: hostPageConfig(),
     eventCards: hostEventCardsView(),
+    publicObjectives,
     audiencePage: audiencePageConfig(),
     audienceVoteThresholdEffective: effectiveAudienceVoteThreshold(state),
     audienceSessions: Object.values(state.audienceSessions || {}),

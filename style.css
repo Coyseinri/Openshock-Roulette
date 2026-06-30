@@ -640,8 +640,6 @@ canvas.wheelCanvas {
 }
 
 
-/* Persistent event card display.
-   Fixed min-height prevents the wheels from jumping when cards appear/disappear. */
 .eventCardPanel {
   max-width:1500px;
   min-height:118px;

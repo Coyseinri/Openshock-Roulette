@@ -1,4 +1,3 @@
-// OSR host command helpers
 
 const baseWaitForEventContinue = waitForEventContinue;
 const baseShowEventResult = showEventResult;
@@ -209,3 +208,57 @@ function startHostCommandPolling() {
   if (hostCommandPollTimer) return;
   hostCommandPollTimer = setInterval(pollHostSpinnerCommands, 1000);
 }
+
+const OSR_DEFAULTS = {
+  targetWheel: { playerWeight: 100, safeWeight: 40, shockAllWeight: 20 },
+  game: { hiddenDoubleHitChancePercent: 15 },
+  eventCards: { enabled: true, chancePercent: 45, displayDurationMs: 7000 }
+};
+
+const baseApplyConfigToFormForDefaults = applyConfigToForm;
+applyConfigToForm = function applyConfigToFormWithAlignedFallbacks() {
+  baseApplyConfigToFormForDefaults();
+  document.getElementById("playerWeight").value = config.targetWheel?.playerWeight ?? OSR_DEFAULTS.targetWheel.playerWeight;
+  document.getElementById("safeWeight").value = config.targetWheel?.safeWeight ?? OSR_DEFAULTS.targetWheel.safeWeight;
+  document.getElementById("shockAllWeight").value = config.targetWheel?.shockAllWeight ?? OSR_DEFAULTS.targetWheel.shockAllWeight;
+  document.getElementById("doubleHitChance").value = config.game?.hiddenDoubleHitChancePercent ?? OSR_DEFAULTS.game.hiddenDoubleHitChancePercent;
+  const eventDefaults = OSR_DEFAULTS.eventCards;
+  const effectiveEventCards = {
+    enabled: config.eventCards?.enabled ?? eventCardsConfig?.enabled ?? eventDefaults.enabled,
+    chancePercent: config.eventCards?.chancePercent ?? eventCardsConfig?.chancePercent ?? eventDefaults.chancePercent,
+    displayDurationMs: config.eventCards?.displayDurationMs ?? eventCardsConfig?.displayDurationMs ?? eventDefaults.displayDurationMs
+  };
+  document.getElementById("eventCardsEnabled").value = effectiveEventCards.enabled ? "on" : "off";
+  document.getElementById("eventCardChance").value = effectiveEventCards.chancePercent;
+  document.getElementById("eventCardDisplayMs").value = effectiveEventCards.displayDurationMs;
+};
+
+const baseCollectFormToConfigForDefaults = collectFormToConfig;
+collectFormToConfig = function collectFormToConfigWithAlignedFallbacks() {
+  baseCollectFormToConfigForDefaults();
+  config.targetWheel.playerWeight = num("playerWeight", OSR_DEFAULTS.targetWheel.playerWeight);
+  config.targetWheel.safeWeight = num("safeWeight", OSR_DEFAULTS.targetWheel.safeWeight);
+  config.targetWheel.shockAllWeight = num("shockAllWeight", OSR_DEFAULTS.targetWheel.shockAllWeight);
+  config.game.hiddenDoubleHitChancePercent = num("doubleHitChance", OSR_DEFAULTS.game.hiddenDoubleHitChancePercent);
+  config.eventCards.chancePercent = Math.max(0, Math.min(100, num("eventCardChance", OSR_DEFAULTS.eventCards.chancePercent)));
+  config.eventCards.displayDurationMs = Math.max(0, numberWithDefault(document.getElementById("eventCardDisplayMs")?.value, config.eventCards.displayDurationMs ?? OSR_DEFAULTS.eventCards.displayDurationMs));
+  updateConfigPreview(false);
+  return config;
+};
+
+getEventRuntimeConfig = function getEventRuntimeConfigWithAlignedFallbacks() {
+  const displayDurationMs = Math.max(0, numberWithDefault(config?.eventCards?.displayDurationMs ?? eventCardsConfig?.displayDurationMs, OSR_DEFAULTS.eventCards.displayDurationMs));
+  return {
+    enabled: Boolean(config?.eventCards?.enabled ?? eventCardsConfig?.enabled ?? OSR_DEFAULTS.eventCards.enabled) && eventCardsConfig?.enabled !== false,
+    chancePercent: Math.max(0, Math.min(100, numberWithDefault(config?.eventCards?.chancePercent ?? eventCardsConfig?.chancePercent, OSR_DEFAULTS.eventCards.chancePercent))),
+    displayDurationMs,
+    cards: (eventCardsConfig?.cards || []).filter(c => c && c.enabled !== false)
+  };
+};
+
+getTriggeredEventDisplayDuration = function getTriggeredEventDisplayDurationWithAlignedFallbacks(card) {
+  const ec = getEventRuntimeConfig();
+  const raw = card?.displayDurationMs ?? card?.durationMs ?? card?.displayMs ?? ec.displayDurationMs;
+  const parsed = Math.max(0, numberWithDefault(raw, ec.displayDurationMs || OSR_DEFAULTS.eventCards.displayDurationMs));
+  return Math.max(1200, parsed || OSR_DEFAULTS.eventCards.displayDurationMs);
+};

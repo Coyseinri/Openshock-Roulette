@@ -1,4 +1,3 @@
-// OSR frontend API and persistence helpers
 
 async function postEventLog(payload) {
   try {
@@ -160,9 +159,10 @@ async function loadShockers({ preserveSession = true, forceRefresh = false } = {
     eliminated.clear();
     if (config?.game?.autoResetEscalationOnReload !== false) resetGame(false, { save: false });
   } else {
-    eliminated = new Set(Array.from(eliminated).filter(id => shockers.some(s => s.id === id)));
-    lastSelectedTargets = lastSelectedTargets.filter(s => shockers.some(current => current.id === s.id));
-    lastShockedTargets = lastShockedTargets.filter(s => shockers.some(current => current.id === s.id));
+    const validIds = typeof getValidLogicalPlayerIds === "function" ? getValidLogicalPlayerIds() : new Set(shockers.map(s => String(s.id)));
+    eliminated = new Set(Array.from(eliminated).filter(id => validIds.has(String(id))));
+    lastSelectedTargets = lastSelectedTargets.filter(s => validIds.has(String(s.id)));
+    lastShockedTargets = lastShockedTargets.filter(s => validIds.has(String(s.id)));
   }
 
   const cacheNote = data.cached ? "cached" : "live";

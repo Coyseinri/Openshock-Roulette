@@ -1,8 +1,47 @@
+function getHostDashboardDetailsKey(details) {
+  if (!details) return "";
+  if (details.id) return `id:${details.id}`;
+
+  const summary = details.querySelector(":scope > summary");
+  const summaryText = (summary?.textContent || "").replace(/\s+/g, " ").trim();
+  const classText = Array.from(details.classList || []).sort().join(".");
+  return `details:${classText}:${summaryText}`;
+}
+
+function captureHostDashboardUiState() {
+  const openDetails = new Set();
+  document.querySelectorAll("details").forEach(details => {
+    if (details.open) {
+      const key = getHostDashboardDetailsKey(details);
+      if (key) openDetails.add(key);
+    }
+  });
+
+  return {
+    openDetails,
+    scrollX: window.scrollX,
+    scrollY: window.scrollY
+  };
+}
+
+function restoreHostDashboardUiState(state) {
+  if (!state) return;
+
+  document.querySelectorAll("details").forEach(details => {
+    const key = getHostDashboardDetailsKey(details);
+    if (key) details.open = state.openDetails.has(key);
+  });
+
+  requestAnimationFrame(() => {
+    window.scrollTo(state.scrollX || 0, state.scrollY || 0);
+  });
+}
+
 async function loadPlayerObjectivePanel() {
   const panel = document.getElementById("objectivePanelBody");
   if (!panel) return;
 
-  const privateWasOpen = Boolean(panel.querySelector(".privatePlayerInfoDetails")?.open);
+  const uiState = captureHostDashboardUiState();
 
   try {
     const [linksRes, roleLinksRes, objectivesRes] = await Promise.all([
@@ -44,9 +83,16 @@ async function loadPlayerObjectivePanel() {
     html += `<h4>Player links / QR codes</h4><div class="playerLinkGrid">`;
     for (const link of links) {
       const multiplier = Number(session.playerMultipliers?.[link.playerId] ?? playerMultipliers?.[link.playerId] ?? 100);
+      const deviceMultipliers = Array.isArray(link.devices) && link.devices.length > 1
+        ? link.devices.map(d => {
+            const dm = Number(session.playerMultipliers?.[d.id] ?? playerMultipliers?.[d.id] ?? 100);
+            const safeDm = Math.max(0, Math.min(100, Math.round(Number.isFinite(dm) ? dm : 100)));
+            return `<div class="objectiveMini"><strong>${escapeHtml(d.memberName || d.name)}:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(d.id)}" value="${escapeHtml(safeDm)}">%</div>`;
+          }).join("")
+        : `<div class="objectiveMini"><strong>Multiplier:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(link.playerId)}" value="${escapeHtml(Math.max(0, Math.min(100, Math.round(Number.isFinite(multiplier) ? multiplier : 100))))}">%</div>`;
       html += `<div class="playerLinkCard">
-        <div class="playerLinkHeader"><strong>${escapeHtml(link.name)}</strong><span>QR / link</span></div>
-        <div class="objectiveMini"><strong>Multiplier:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(link.playerId)}" value="${escapeHtml(Math.max(0, Math.min(100, Math.round(Number.isFinite(multiplier) ? multiplier : 100))))}">%</div>
+        <div class="playerLinkHeader"><strong>${escapeHtml(link.name)}</strong><span>${link.isGrouped ? "group link" : "QR / link"}</span></div>
+        ${deviceMultipliers}
         <div class="playerUrl"><input readonly value="${escapeHtml(link.url)}"></div>
         ${link.qrDataUrl ? `<img class="qrCode" alt="QR for ${escapeHtml(link.name)}" src="${link.qrDataUrl}">` : `<div class="qrDisabled">QR disabled</div>`}
       </div>`;
@@ -82,7 +128,7 @@ async function loadPlayerObjectivePanel() {
     }
     privateHtml += `</div>`;
 
-    html += `<details class="dangerZone privatePlayerInfoDetails"${privateWasOpen ? " open" : ""}>
+    html += `<details class="dangerZone privatePlayerInfoDetails">
       <summary>Private player info</summary>
       <p class="muted">Spoilers: roles, objectives, tokens, points and progress live here.</p>
       ${privateHtml}
@@ -91,11 +137,13 @@ async function loadPlayerObjectivePanel() {
     panel.innerHTML = html;
 
     renderGameStatePanelFromSession(session, links, playerName);
+    restoreHostDashboardUiState(uiState);
     bindObjectivePanelButtons();
   } catch (err) {
     panel.innerHTML = `<div class="warningText">Could not load player/objective panel: ${escapeHtml(err.message)}</div>`;
     const gameStatePanel = document.getElementById("gameStatePanelBody");
     if (gameStatePanel) gameStatePanel.innerHTML = `<div class="warningText">Could not load game state: ${escapeHtml(err.message)}</div>`;
+    restoreHostDashboardUiState(uiState);
   }
 }
 

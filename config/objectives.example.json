@@ -173,6 +173,125 @@
       "enabled": true
     }
   ],
+  "publicObjectivesActiveCount": 2,
+  "publicObjectives": [
+    {
+      "id": "public-survive-3-rounds",
+      "title": "Still Standing",
+      "description": "The group survives 3 rounds together.",
+      "type": "rounds",
+      "target": 3,
+      "reward": {
+        "points": 1
+      },
+      "enabled": true
+    },
+    {
+      "id": "public-survive-6-rounds",
+      "title": "Questionable Endurance",
+      "description": "The group survives 6 rounds together. Somehow this is still considered a game.",
+      "type": "rounds",
+      "target": 6,
+      "reward": {
+        "points": 2
+      },
+      "enabled": true
+    },
+    {
+      "id": "public-use-3-bodyguards",
+      "title": "Safety First",
+      "description": "Use or approve 3 bodyguard actions as a group.",
+      "type": "bodyguards",
+      "target": 3,
+      "reward": {
+        "points": 2
+      },
+      "enabled": true
+    },
+    {
+      "id": "public-buy-5-tokens",
+      "title": "Tiny Economy, Big Problems",
+      "description": "Buy 5 tokens as a group.",
+      "type": "tokensBought",
+      "target": 5,
+      "reward": {
+        "points": 1,
+        "tokens": {
+          "blessing": 1
+        }
+      },
+      "enabled": true
+    },
+    {
+      "id": "public-audience-5-votes",
+      "title": "Mob Rule",
+      "description": "Get 5 audience votes approved.",
+      "type": "audienceVotesApproved",
+      "target": 5,
+      "reward": {
+        "points": 2
+      },
+      "enabled": true
+    },
+    {
+      "id": "public-private-objectives-3",
+      "title": "Productive Little Gremlins",
+      "description": "Complete 3 private objectives as a group.",
+      "type": "objectiveCompletions",
+      "target": 3,
+      "reward": {
+        "points": 2
+      },
+      "enabled": true
+    },
+    {
+      "id": "public-shock-all-once",
+      "title": "Everybody Gets One",
+      "description": "Trigger Shock All once.",
+      "type": "allTargeted",
+      "target": 1,
+      "reward": {
+        "points": 2
+      },
+      "enabled": true
+    },
+    {
+      "id": "public-collective-voltage-300",
+      "title": "Shared Bad Decisions",
+      "description": "Accumulate 300 total applied shock intensity as a group.",
+      "type": "totalIntensity",
+      "target": 300,
+      "reward": {
+        "points": 3
+      },
+      "enabled": true
+    },
+    {
+      "id": "public-chaos-3",
+      "title": "Chaos Department",
+      "description": "Use 3 chaos tokens as a group.",
+      "type": "chaosUsed",
+      "target": 3,
+      "reward": {
+        "points": 2,
+        "tokens": {
+          "chaos": 1
+        }
+      },
+      "enabled": true
+    },
+    {
+      "id": "public-vibes-8",
+      "title": "Buzzword Compliance",
+      "description": "Receive 8 Vibe results as a group.",
+      "type": "vibes",
+      "target": 8,
+      "reward": {
+        "points": 1
+      },
+      "enabled": true
+    }
+  ],
   "hiddenRoles": [
     {
       "id": "merchant",

@@ -43,6 +43,11 @@
     </section>
 
     <section class="playerCard">
+      <h2>Public objectives</h2>
+      <div id="publicObjectives">Loading...</div>
+    </section>
+
+    <section class="playerCard">
       <h2>Force specific event card</h2>
       <div class="manualControl">
         <label>Event card <select id="forceEventCard"></select></label>
@@ -91,7 +96,6 @@
   </main>
   <script src="/host/host.js"></script>
   <script>
-// Host dashboard action extensions loaded inline so the host QR page can use them remotely.
 const baseHostLoad = load;
 
 function hostActionLabel(type) {
@@ -148,9 +152,13 @@ sendManual = async function sendManualWithMultiplier() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Manual control failed");
     const sent = data.sent || {};
-    document.getElementById("manualStatus").textContent = sent.type === "Shock"
-      ? `Shock sent: selected ${sent.selectedValue}, applied ${sent.intensity}${sent.multiplierPercent !== null && sent.multiplierPercent !== undefined ? ` (${sent.multiplierPercent}% multiplier)` : ""}.`
-      : `${type} sent.`;
+    if (Array.isArray(sent.devices)) {
+      document.getElementById("manualStatus").textContent = `${type} sent to ${sent.devices.length} device(s): ${sent.devices.map(d => `${d.deviceName || d.id}${d.type === "Shock" ? ` ${d.intensity}` : ""}`).join(", ")}.`;
+    } else {
+      document.getElementById("manualStatus").textContent = sent.type === "Shock"
+        ? `Shock sent: selected ${sent.selectedValue}, applied ${sent.intensity}${sent.multiplierPercent !== null && sent.multiplierPercent !== undefined ? ` (${sent.multiplierPercent}% multiplier)` : ""}.`
+        : `${type} sent.`;
+    }
   } catch (err) {
     document.getElementById("manualStatus").textContent = err.message;
   }

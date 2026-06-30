@@ -1,5 +1,3 @@
-// Host dashboard action extensions.
-// Loaded after OpenShock helpers and before routes.
 
 const Readable = require("stream").Readable;
 const baseGetHostState = getHostState;
@@ -18,6 +16,30 @@ function getPlayerMultiplierPercentFromState(state, playerId) {
 function applyManualPlayerMultiplier(value, multiplierPercent) {
   if (value <= 0) return 0;
   return Math.max(1, Math.round(value * (multiplierPercent / 100)));
+}
+
+
+async function resolvePublicObjectiveHostAction(req, res, body) {
+  const objectiveId = String(body.objectiveId || body.id || "");
+  const publicAction = String(body.actionType || body.type || "");
+  if (!objectiveId) return sendJson(res, 400, { error: "Missing public objective id" });
+
+  const state = readSessionState();
+  const { shockers } = await getShockers();
+  const players = await publicPlayers(shockers, state);
+  let result = null;
+
+  if (publicAction === "completePublicObjective") {
+    result = completePublicObjective(state, objectiveId, players, { source: "host" });
+  } else if (publicAction === "rerollPublicObjective") {
+    result = rerollPublicObjective(state, objectiveId, players);
+  } else {
+    return sendJson(res, 400, { error: "Unsupported public objective action" });
+  }
+
+  if (!result?.ok) return sendJson(res, 400, { error: result?.error || "Could not update public objective" });
+  writeSessionState(state);
+  return sendJson(res, 200, { ok: true, result, state: await getHostState() });
 }
 
 async function cancelRoundModifierFromHost(req, res, body) {
@@ -44,8 +66,12 @@ async function cancelRoundModifierFromHost(req, res, body) {
 resolveHostAction = async function resolveHostActionWithModifierCancel(req, res, url) {
   if (!validateRoleAccess("host", req, url) && !isLocalRequest(req)) return sendJson(res, 403, { error: "Invalid host key" });
   const body = await readBody(req);
-  if (String(body.actionType || body.type || "") === "cancelRoundModifier") {
+  const actionType = String(body.actionType || body.type || "");
+  if (actionType === "cancelRoundModifier") {
     return await cancelRoundModifierFromHost(req, res, body);
+  }
+  if (actionType === "completePublicObjective" || actionType === "rerollPublicObjective") {
+    return await resolvePublicObjectiveHostAction(req, res, body);
   }
 
   const replay = new Readable();
@@ -72,34 +98,38 @@ handleControl = async function handleControlWithManualMultiplier(req, res) {
   const exclusive = Boolean(body.exclusive ?? true);
   const maxShock = clampInt(s.serverMaxShockIntensity ?? 99, 1, 100);
 
-  // Game convention:
-  // selectedValue 0 = Vibrate
-  // selectedValue 1-serverMaxShockIntensity = Shock intensity
   const selectedValue = clampInt(body.selectedValue, 0, maxShock);
 
-  if (!id) return sendJson(res, 400, { error: "Missing shocker id" });
+  if (!id) return sendJson(res, 400, { error: "Missing player or shocker id" });
 
   const type = selectedValue === 0 ? "Vibrate" : "Shock";
-  let multiplierPercent = null;
-  let intensity = selectedValue === 0
-    ? clampInt(s.serverMaxVibrateIntensity ?? 100, 1, 100)
-    : selectedValue;
+  const devices = await resolveLogicalControlDevices(id);
+  if (!devices.length) return sendJson(res, 404, { error: "Unknown player or shocker id" });
 
-  if (type === "Shock" && body.applyPlayerMultiplier === true) {
-    const state = readSessionState();
-    multiplierPercent = getPlayerMultiplierPercentFromState(state, id);
-    intensity = applyManualPlayerMultiplier(selectedValue, multiplierPercent);
-    intensity = clampInt(intensity, 1, maxShock);
-  }
+  const state = body.applyPlayerMultiplier === true ? readSessionState() : null;
+  const shocks = devices.map(device => {
+    let multiplierPercent = null;
+    let intensity = selectedValue === 0
+      ? clampInt(s.serverMaxVibrateIntensity ?? 100, 1, 100)
+      : selectedValue;
+
+    if (type === "Shock" && body.applyPlayerMultiplier === true) {
+      multiplierPercent = getPlayerMultiplierPercentFromState(state, device.id);
+      intensity = applyManualPlayerMultiplier(selectedValue, multiplierPercent);
+      intensity = clampInt(intensity, 1, maxShock);
+    }
+
+    return { id: device.id, type, intensity, duration, exclusive, selectedValue, maxShock, multiplierPercent, playerId: device.playerId, playerName: device.playerName, deviceName: device.name };
+  });
 
   const requestBody = {
-    shocks: [{ id, type, intensity, duration, exclusive }]
+    shocks: shocks.map(({ id, type, intensity, duration, exclusive }) => ({ id, type, intensity, duration, exclusive }))
   };
 
-  debugState.counters.shockCommands += 1;
+  debugState.counters.shockCommands += shocks.length;
   const result = await requestOpenShock("POST", "/2/shockers/control", requestBody, { action: type === "Vibrate" ? "vibrate" : "shock" });
   sendJson(res, result.statusCode, {
-    sent: { id, type, intensity, selectedValue, maxShock, multiplierPercent, duration, exclusive },
+    sent: shocks.length === 1 ? shocks[0] : { id, type, selectedValue, duration, exclusive, deviceCount: shocks.length, devices: shocks },
     openshock: result.body
   });
 };
