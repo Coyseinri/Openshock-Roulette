@@ -1,4 +1,3 @@
-// Extracted from server/app.js. Loaded by server/app.js in order.
 
 var server = http.createServer(async (req, res) => {
   const requestStartedAt = Date.now();
@@ -271,7 +270,10 @@ var server = http.createServer(async (req, res) => {
       const state = readSessionState();
       const audienceSessionId = getAudienceSessionId(req, url);
       const displayName = sanitizeAudienceName(url.searchParams.get("displayName") || "");
-      const session = audiencePageConfig().requireUniqueSession ? ensureOrCreateAudienceSession(state, audienceSessionId, displayName) : { id: audienceSessionId || "shared", displayName: displayName || "Audience" };
+      const session = audiencePageConfig().requireUniqueSession ? ensureAudienceSession(state, audienceSessionId) : { id: audienceSessionId || "shared", displayName: displayName || "Audience" };
+      if (audiencePageConfig().requireUniqueSession && !session) return sendJson(res, 401, { error: "Audience session expired. Enter your name again." });
+      updateAudienceSessionName(state, session, displayName);
+      session.lastSeenAt = new Date().toISOString();
       writeSessionState(state);
       const players = await publicPlayers();
       return sendJson(res, 200, { roundNumber: state.roundNumber, players, economy: economyConfig(), audiencePage: audiencePageConfig(), audienceSession: session, audienceVoteThresholdEffective: effectiveAudienceVoteThreshold(state), audienceSessions: state.audienceSessions || {}, audienceVotes: (state.audienceVotes || []).map(v => voteView(v, players, state)), audienceEventLog: state.audienceEventLog || [] });

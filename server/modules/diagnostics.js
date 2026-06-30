@@ -1,8 +1,4 @@
-// Full diagnostics and safe test helpers.
-// Loaded after host-dashboard-actions.js and before routes.js.
-
 function diagnosticsAccessAllowed(req, url) {
-  // Diagnostics can expose config, session and device metadata. Keep it local only.
   return isLocalRequest(req);
 }
 
@@ -638,9 +634,8 @@ function buildStorageExplorer(dbSummary) {
 async function buildQrLinkDiagnostics(players) {
   const base = CONFIG?.server?.publicBaseUrl || `http://localhost:${PORT}`;
   const hostKey = getRoleAccessKey("host");
-  const audienceKey = getRoleAccessKey("audience");
   const host = `${base}/host?key=${encodeURIComponent(hostKey)}`;
-  const audience = `${base}/audience?key=${encodeURIComponent(audienceKey)}`;
+  const audience = `${base}/audience`;
   const diagnostics = `${base}/diagnostics?key=${encodeURIComponent(hostKey)}`;
   const playerLinks = (players || []).map(p => ({ id: p.id, name: p.name, url: `${base}/player/${encodeURIComponent(p.id)}?key=${encodeURIComponent(getPlayerAccessKey(p.id))}` }));
   const makeQr = async value => {

@@ -1,5 +1,3 @@
-// Host dashboard action extensions.
-// Loaded after OpenShock helpers and before routes.
 
 const Readable = require("stream").Readable;
 const baseGetHostState = getHostState;
@@ -100,9 +98,6 @@ handleControl = async function handleControlWithManualMultiplier(req, res) {
   const exclusive = Boolean(body.exclusive ?? true);
   const maxShock = clampInt(s.serverMaxShockIntensity ?? 99, 1, 100);
 
-  // Game convention:
-  // selectedValue 0 = Vibrate
-  // selectedValue 1-serverMaxShockIntensity = Shock intensity
   const selectedValue = clampInt(body.selectedValue, 0, maxShock);
 
   if (!id) return sendJson(res, 400, { error: "Missing player or shocker id" });

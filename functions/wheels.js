@@ -1,4 +1,3 @@
-// OSR wheel drawing and wheel selection helpers
 
 function getFateConfig(escalated=true) {
   let cfg = (config.fateWheel || []).map(f => {
@@ -135,7 +134,6 @@ function drawSegmentLabel(ctx, text, cx, cy, r, start, end) {
   let x = r * 0.78;
   let y = 0;
 
-  // Keep labels upright relative to the viewer before the wheel animation is applied.
   const normalized = ((mid % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
   if (normalized > Math.PI / 2 && normalized < Math.PI * 1.5) {
     ctx.rotate(Math.PI);
@@ -301,7 +299,7 @@ function normalizeDeg(deg) {
 
 function spinWheelToSegment(canvas, segments, picked, rotationVarName) {
   const total = segments.reduce((sum, s) => sum + Math.max(0, Number(s.weight || 0)), 0) || segments.length;
-  const needleDeg = config?.ui?.selectedNeedleAngleDeg ?? -90; // top pointer
+  const needleDeg = config?.ui?.selectedNeedleAngleDeg ?? -90;
   let startDeg = -90;
   let pickedStart = -90;
   let pickedEnd = 270;
@@ -325,7 +323,7 @@ function spinWheelToSegment(canvas, segments, picked, rotationVarName) {
   const currentRotation = rotationVarName === "target" ? targetRotation : fateRotation;
   const currentMod = normalizeDeg(currentRotation);
   const deltaToTarget = normalizeDeg(desiredRotationMod - currentMod);
-  const fullSpins = 1440; // 4 complete spins
+  const fullSpins = 1440;
   const finalRotation = currentRotation + fullSpins + deltaToTarget;
 
   const spinMs = config?.ui?.wheelSpinMs ?? 4200;

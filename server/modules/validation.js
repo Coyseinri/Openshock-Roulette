@@ -1,4 +1,3 @@
-// Extracted from server/app.js. Loaded by server/app.js in order.
 function validateEventCards(data) {
   if (!data || typeof data !== "object") throw new Error("Event cards config must be an object");
   data.enabled = Boolean(data.enabled ?? true);

@@ -1,4 +1,3 @@
-// Extracted from server/app.js. Loaded by server/app.js in order.
 var DB = null;
 
 var { initializeDatabase, readObjectivesFileNormalized, appendLog } = require("./database-init");
@@ -98,11 +97,9 @@ function writeObjectiveEventDatabase(event = {}) {
 }
 
 function syncKnownDevicesToDatabase(_shockers = [], _state = null) {
-  // SQLite blob mode: devices live in shockers/config JSON and runtime state, not relational tables.
 }
 
 function updatePlayerMultiplierInDatabase(_playerId, _multiplierPercent, _displayName = null) {
-  // SQLite blob mode: multipliers are saved in the session blob by writeSessionState().
 }
 
 function writePointLedger(state, playerId, delta, reason, metadata = {}) {
@@ -118,15 +115,12 @@ function writePurchaseLog(state, playerId, itemType, itemKey, costPoints, metada
 }
 
 function upsertPointBalanceDatabase() {
-  // SQLite blob mode: runtime data is stored inside the session blob.
 }
 
 function upsertTokenBalanceDatabase() {
-  // SQLite blob mode: runtime data is stored inside the session blob.
 }
 
 function upsertPlayerStatsDatabase() {
-  // SQLite blob mode: runtime data is stored inside the session blob.
 }
 
 function makeAccessCode(prefix = "role") {
@@ -240,12 +234,26 @@ function hydrateSessionFromStructuredDatabase(state) {
   return state;
 }
 
+var audienceRuntimeStateCleared = false;
+
+function clearAudienceRuntimeState(state) {
+  if (audienceRuntimeStateCleared || !state || typeof state !== "object") return state;
+  audienceRuntimeStateCleared = true;
+  state.audienceSessions = {};
+  state.audienceVotes = [];
+  state.audienceEventLog = [];
+  return state;
+}
+
 function readSessionState() {
   const existing = getStateValue("session");
-  if (existing) return hydrateSessionFromStructuredDatabase(validateSessionState(existing));
+  if (existing) {
+    const state = clearAudienceRuntimeState(hydrateSessionFromStructuredDatabase(validateSessionState(existing)));
+    writeSessionState(state);
+    return state;
+  }
 
-  // Current schema stores the full live session as a SQLite JSON blob.
-  const fresh = defaultSessionState();
+  const fresh = clearAudienceRuntimeState(defaultSessionState());
   writeSessionState(fresh);
   return fresh;
 }
@@ -267,8 +275,6 @@ function mergePlayerStatsForSessionSave(incomingStats, currentStats) {
     const incoming = incomingStats?.[id] && typeof incomingStats[id] === "object" ? incomingStats[id] : {};
     merged[id] = {};
     for (const name of statNames) {
-      // Host browser saves can be stale for stats that are changed by player/audience/host APIs.
-      // Keeping the highest counter prevents hidden-role progress from being rolled back by a later round save.
       merged[id][name] = Math.max(
         clampInt(current[name] ?? 0, 0, name === "totalIntensity" ? 100000000 : 1000000),
         clampInt(incoming[name] ?? 0, 0, name === "totalIntensity" ? 100000000 : 1000000)
@@ -279,7 +285,6 @@ function mergePlayerStatsForSessionSave(incomingStats, currentStats) {
 }
 
 function syncSessionToStructuredDatabase(_state) {
-  // SQLite blob mode: no relational sync.
 }
 
 function slimSessionStateForBlob(state) {
@@ -313,7 +318,6 @@ function resetSessionState() {
   const previous = readSessionState();
   const archivedTo = archiveSessionState();
   const fresh = defaultSessionState();
-  // Keep role access links stable across game resets so Host/Audience QR codes do not break mid-event.
   fresh.roleAccessKeys = previous.roleAccessKeys || fresh.roleAccessKeys || {};
   const session = writeSessionState(fresh);
   return { session, archivedTo };

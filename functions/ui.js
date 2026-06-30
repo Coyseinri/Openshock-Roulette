@@ -1,4 +1,3 @@
-// OSR frontend UI helpers
 
 function log(msg) {
   const el = document.getElementById("log");
@@ -31,7 +30,6 @@ function updateEventCardPanel(card, stateText = null) {
 }
 
 function syncPageQrControls() {
-  // Page and QR settings are consolidated. QR follows the page setting.
 }
 
 function applyConfigToForm() {
@@ -515,9 +513,6 @@ function waitForEventContinue(ms) {
   return new Promise(resolve => {
     const delayMs = Math.max(0, Number(ms || 0));
 
-    // A value of 0 used to show the continue button but never start a timer,
-    // which could leave the round stuck on "Checking for event card...".
-    // Treat 0/blank/invalid as "do not pause for the overlay".
     if (!delayMs || !eventContinueBtn) {
       if (eventContinueBtn) {
         eventContinueBtn.hidden = true;

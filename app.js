@@ -158,17 +158,10 @@ async function spinRound() {
       lastSelectedTargets = [];
       lastTargetPicked = targetPicked;
       renderPlayers();
-      // Keep the spun target wheel exactly as it was for this round.
-      // Redrawing here can use the normal/default wheel config instead of the
-      // round-specific segments, which makes the pointer appear to land on the
-      // wrong player after modifiers changed wheel weights.
       updateStats();
       await consumeRoundModifiers(consumedRoundModifierIds(roundState));
       await postRoundResult({ roundNumber, eventId: roundState.card?.id || null, eventTitle: roundState.card?.title || null, resultType: "safe", targets: [] });
       saveSessionState("safe round");
-      // Keep the active event card banner visible after the round result.
-      // It is reset at the start of the next round when the next event roll begins,
-      // or replaced by "No event card this round" when the next roll misses.
       return;
     }
 
@@ -263,11 +256,6 @@ async function spinRound() {
       targets: (targets || []).map(s => ({ playerId: s.id, deviceId: s.id, name: s.name, rolledValue: value, multiplierPercent: getPlayerMultiplier(s.id), appliedValue: appliedById[s.id] ?? applyPlayerMultiplier(value, s.id) }))
     });
     renderPlayers();
-    // Do not redraw the wheels after the round result is shown.
-    // The target/fate wheels may have used round-specific weights from cards,
-    // curse/chaos/blessing, shield exclusions, etc. A default redraw keeps the
-    // old CSS rotation but changes the segments underneath it, causing visual
-    // mismatches like the pointer showing Shock 2 while the game selected Shock 3.
     updateStats();
     await consumeRoundModifiers(consumedRoundModifierIds(roundState));
     saveSessionState("round completed");
@@ -276,10 +264,6 @@ async function spinRound() {
     log(err.message);
     hideEventOverlay();
   } finally {
-    // Do not clear the event card banner at round end. The banner should keep
-    // showing the event that affected the visible round result. It is only reset
-    // when the next round starts checking for a new event, or when that check
-    // explicitly finds no event card.
     spinBtn.disabled = false;
   }
 }
@@ -309,7 +293,6 @@ async function resetGame(writeLog=true, { save = true, resetServer = false } = {
     freshServerState = await resetServerSessionState();
     sessionSaveEnabled = true;
 
-    // Do not clear the visible game if the server-side reset/archive failed.
     if (!freshServerState) return;
   }
 

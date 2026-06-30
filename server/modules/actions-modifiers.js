@@ -170,7 +170,10 @@ async function handleAudienceAction(req, res, url) {
   const sessionId = getAudienceSessionId(req, url, body);
   const uniqueAudience = audiencePageConfig().requireUniqueSession;
   const displayName = sanitizeAudienceName(body.displayName || body.audienceName || "");
-  const session = uniqueAudience ? ensureOrCreateAudienceSession(state, sessionId, displayName) : { id: sessionId || "shared", displayName: displayName || "Audience" };
+  const session = uniqueAudience ? ensureAudienceSession(state, sessionId) : { id: sessionId || "shared", displayName: displayName || "Audience" };
+  if (uniqueAudience && !session) return sendJson(res, 401, { error: "Audience session expired. Enter your name again." });
+  updateAudienceSessionName(state, session, displayName);
+  session.lastSeenAt = new Date().toISOString();
   const limit = checkAudienceRateLimit(state, session);
   if (!limit.ok) return sendJson(res, 429, { error: limit.error, remainingSeconds: limit.remainingSeconds });
 
@@ -187,9 +190,6 @@ async function handleAudienceAction(req, res, url) {
   } catch (err) {
     return sendJson(res, 400, { error: err.message });
   }
-  // Audience actions are suggestions/votes only. Even when the vote threshold is reached,
-  // the host must explicitly approve or reject the action. Player token actions remain
-  // immediate next-round modifiers because those spend the player's own token.
   recordAudienceAction(session);
   writeSessionState(state);
   return sendJson(res, 200, { voted: true, vote, session, autoApproved: false, modifier: null });
@@ -202,6 +202,7 @@ async function createOrReadAudienceSession(req, res, url) {
   const requested = getAudienceSessionId(req, url, body);
   const displayName = sanitizeAudienceName(body.displayName || body.audienceName || url.searchParams.get("displayName") || "");
   let session = ensureAudienceSession(state, requested);
+  if (!session && req.method === "GET") return sendJson(res, 404, { error: "Audience session expired. Enter your name again." });
   if (!session) session = createAudienceSession(state, displayName);
   updateAudienceSessionName(state, session, displayName);
   session.lastSeenAt = new Date().toISOString();

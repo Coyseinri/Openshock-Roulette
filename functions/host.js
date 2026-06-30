@@ -1,4 +1,3 @@
-// OSR host command helpers
 
 const baseWaitForEventContinue = waitForEventContinue;
 const baseShowEventResult = showEventResult;

@@ -1,4 +1,3 @@
-// Extracted from server/app.js. Loaded by server/app.js in order.
 
 function safety() {
   return readConfig().safety || {};
@@ -161,14 +160,11 @@ function normalizeShockers(data) {
     if (typeof id !== "string" || id.length < 20) return false;
     if (typeof name !== "string" || !name.trim()) return false;
 
-    // Avoid known parent/container objects.
     const typeText = String(x.type || x.deviceType || x.objectType || x.kind || "").toLowerCase();
     if (typeText.includes("hub") || typeText.includes("device")) return false;
 
-    // Positive hints seen in OpenShock-ish data structures.
     if ("shockerId" in x || "rfId" in x || "model" in x || "limits" in x || "isPaused" in x) return true;
 
-    // Fallback: if it came from a shocker-named collection, it is probably valid.
     return true;
   }
 
@@ -193,7 +189,6 @@ function normalizeShockers(data) {
     for (const [key, value] of Object.entries(x)) {
       const lower = key.toLowerCase();
 
-      // Only collect direct objects/arrays from shocker-like fields.
       if (lower.includes("shocker")) {
         if (Array.isArray(value)) value.forEach(addCandidate);
         else addCandidate(value);
@@ -205,7 +200,6 @@ function normalizeShockers(data) {
 
   walkShockerCollections(data);
 
-  // Last-resort support for endpoints that return an array of shockers directly.
   if (Array.isArray(data)) data.forEach(addCandidate);
 
   const unique = new Map();
@@ -331,9 +325,6 @@ async function handleControl(req, res) {
   );
   const exclusive = Boolean(body.exclusive ?? true);
 
-  // Game convention:
-  // selectedValue 0 = Vibrate
-  // selectedValue 1-80 = Shock intensity
   const selectedValue = clampInt(body.selectedValue, 0, s.serverMaxShockIntensity ?? 80);
 
   if (!id) return sendJson(res, 400, { error: "Missing shocker id" });

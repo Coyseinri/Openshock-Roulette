@@ -1,10 +1,3 @@
-// Extracted from server/app.js. Loaded by server/app.js in order.
-// OpenShock Roulette - local web server and OpenShock API proxy
-// Run in PowerShell:
-//   Copy .env.example to .env, fill OPENSHOCK_API_TOKEN, then run:
-//   npm install
-//   npm start
-
 var http = require("http");
 var https = require("https");
 var fs = require("fs");
@@ -195,10 +188,6 @@ function ensureLocalFilesFromExamples() {
   copyIfMissing(SHOCKERS_EXAMPLE_PATH, SHOCKERS_PATH);
 }
 
-// Example JSON files are kept under config/. Live config/catalog files are created
-// from config/*.example.json and runtime session state is stored as SQLite JSON blobs.
-// Root-level legacy config/catalog files are intentionally ignored so duplicate
-// root files cannot accidentally become the active source.
 ensureLocalFilesFromExamples();
 
 function loadEnvFile(filePath) {

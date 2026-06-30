@@ -1,4 +1,3 @@
-// Extracted from server/app.js. Loaded by server/app.js in order.
 function restoreOriginalFateWheel(fateWheel) {
   const original = [
     { key: "vibe", name: "Vibe", min: 0, max: 0, weight: 32, enabled: true, escalates: "down" },

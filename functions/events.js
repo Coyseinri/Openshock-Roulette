@@ -1,4 +1,3 @@
-// OSR event-card engine and effect handlers
 
 function normalizeEventCategory(card) {
   const raw = String(card?.category || card?.type || card?.tone || "").toLowerCase();

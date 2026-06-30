@@ -1,5 +1,3 @@
-// OpenShock Roulette server application loader
-// Server implementation is split into server/modules/*.js and loaded in order.
 
 var fs = require("fs");
 var path = require("path");

@@ -1,4 +1,3 @@
-// OSR frontend API and persistence helpers
 
 async function postEventLog(payload) {
   try {

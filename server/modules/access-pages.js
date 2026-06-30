@@ -5,7 +5,6 @@ async function cachedQrDataUrl(value, options = { margin: 1, width: 220 }) {
   if (qrDataUrlCache.has(key)) return qrDataUrlCache.get(key);
   const dataUrl = await QRCode.toDataURL(value, options);
   qrDataUrlCache.set(key, dataUrl);
-  // Keep cache bounded across game/key changes.
   if (qrDataUrlCache.size > 200) {
     const firstKey = qrDataUrlCache.keys().next().value;
     qrDataUrlCache.delete(firstKey);
@@ -245,9 +244,6 @@ function ensureOrCreateAudienceSession(state, sessionId, displayName = null) {
 }
 
 function validateAudienceAccess(req, url) {
-  // Audience identity is intentionally based on the generated audience session id,
-  // not on a shared access key. This keeps the public audience QR easy to use
-  // while still letting us rate-limit every audience member separately.
   return audiencePageConfig().enabled;
 }
 
@@ -284,7 +280,7 @@ async function buildRoleLinks(req) {
   const host = hostPageConfig();
   const audience = audiencePageConfig();
   const hostUrl = `${base}/host?key=${encodeURIComponent(getRoleAccessKey("host"))}`;
-  const audienceUrl = `${base}/audience?key=${encodeURIComponent(getRoleAccessKey("audience"))}`;
+  const audienceUrl = `${base}/audience`;
   return {
     publicBaseUrl: base,
     host: {

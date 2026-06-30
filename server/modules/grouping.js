@@ -1,5 +1,3 @@
-// Prefix-based logical player grouping helpers.
-// Physical OpenShock devices stay untouched; logical players are derived from names.
 
 function shockerGroupingConfig() {
   const cfg = readConfig()?.shockers?.grouping || {};

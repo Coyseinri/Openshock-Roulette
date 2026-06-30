@@ -527,7 +527,6 @@ function evaluateObjectives(state) {
         addPlayerPoints(state, playerId, rewardPoints, "objective_reward", { objectiveId: def.id });
         pushObjectiveEvent(state, { playerId, objectiveId: def.id, title: def.title, rewardPoints });
 
-        // Completed objectives are immediately replaced so players always have something to work toward.
         const replacementPool = defs.filter(candidate => candidate.id !== def.id && !usedIds.has(candidate.id));
         const replacement = replacementPool.length ? replacementPool[Math.floor(Math.random() * replacementPool.length)] : null;
         if (replacement) {
