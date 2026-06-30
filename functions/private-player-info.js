@@ -1,8 +1,47 @@
+function getHostDashboardDetailsKey(details) {
+  if (!details) return "";
+  if (details.id) return `id:${details.id}`;
+
+  const summary = details.querySelector(":scope > summary");
+  const summaryText = (summary?.textContent || "").replace(/\s+/g, " ").trim();
+  const classText = Array.from(details.classList || []).sort().join(".");
+  return `details:${classText}:${summaryText}`;
+}
+
+function captureHostDashboardUiState() {
+  const openDetails = new Set();
+  document.querySelectorAll("details").forEach(details => {
+    if (details.open) {
+      const key = getHostDashboardDetailsKey(details);
+      if (key) openDetails.add(key);
+    }
+  });
+
+  return {
+    openDetails,
+    scrollX: window.scrollX,
+    scrollY: window.scrollY
+  };
+}
+
+function restoreHostDashboardUiState(state) {
+  if (!state) return;
+
+  document.querySelectorAll("details").forEach(details => {
+    const key = getHostDashboardDetailsKey(details);
+    if (key) details.open = state.openDetails.has(key);
+  });
+
+  requestAnimationFrame(() => {
+    window.scrollTo(state.scrollX || 0, state.scrollY || 0);
+  });
+}
+
 async function loadPlayerObjectivePanel() {
   const panel = document.getElementById("objectivePanelBody");
   if (!panel) return;
 
-  const privateWasOpen = Boolean(panel.querySelector(".privatePlayerInfoDetails")?.open);
+  const uiState = captureHostDashboardUiState();
 
   try {
     const [linksRes, roleLinksRes, objectivesRes] = await Promise.all([
@@ -89,7 +128,7 @@ async function loadPlayerObjectivePanel() {
     }
     privateHtml += `</div>`;
 
-    html += `<details class="dangerZone privatePlayerInfoDetails"${privateWasOpen ? " open" : ""}>
+    html += `<details class="dangerZone privatePlayerInfoDetails">
       <summary>Private player info</summary>
       <p class="muted">Spoilers: roles, objectives, tokens, points and progress live here.</p>
       ${privateHtml}
@@ -98,11 +137,13 @@ async function loadPlayerObjectivePanel() {
     panel.innerHTML = html;
 
     renderGameStatePanelFromSession(session, links, playerName);
+    restoreHostDashboardUiState(uiState);
     bindObjectivePanelButtons();
   } catch (err) {
     panel.innerHTML = `<div class="warningText">Could not load player/objective panel: ${escapeHtml(err.message)}</div>`;
     const gameStatePanel = document.getElementById("gameStatePanelBody");
     if (gameStatePanel) gameStatePanel.innerHTML = `<div class="warningText">Could not load game state: ${escapeHtml(err.message)}</div>`;
+    restoreHostDashboardUiState(uiState);
   }
 }
 
