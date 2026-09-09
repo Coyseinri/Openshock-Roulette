@@ -203,14 +203,19 @@ async function loadPlayerObjectivePanel() {
         : "No objective assigned";
       const tokenText = Object.entries(tokens[link.playerId] || {}).filter(([,v]) => Number(v) > 0).map(([k,v]) => `${escapeHtml(k)} x${escapeHtml(v)}`).join(" · ") || "No tokens";
       const role = session.hiddenRoles?.[link.playerId]?.roleId || "not assigned";
-      const multiplier = Number(session.playerMultipliers?.[link.playerId] ?? playerMultipliers?.[link.playerId] ?? 100);
-      const deviceMultipliers = Array.isArray(link.devices) && link.devices.length > 1
-        ? link.devices.map(d => {
-            const dm = Number(session.playerMultipliers?.[d.id] ?? playerMultipliers?.[d.id] ?? 100);
+      const shockDevices = Array.isArray(link.devices) ? link.devices.filter(d => !d.provider || d.provider === "openshock") : [];
+      const toyDevices = Array.isArray(link.devices) ? link.devices.filter(d => d.provider === "intiface") : [];
+      const shockMultipliers = shockDevices.length
+        ? shockDevices.map(d => {
+            const dm = Number(d.intensityMultiplier ?? session.playerMultipliers?.[d.id] ?? playerMultipliers?.[d.id] ?? 100);
             const safeDm = Math.max(0, Math.min(100, Math.round(Number.isFinite(dm) ? dm : 100)));
-            return `<div class="objectiveMini"><strong>${escapeHtml(d.memberName || d.name)}:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(d.id)}" value="${escapeHtml(safeDm)}">%</div>`;
+            return `<div class="objectiveMini"><strong>Shock · ${escapeHtml(d.memberName || d.name)}:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(d.id)}" value="${escapeHtml(safeDm)}">%</div>`;
           }).join("")
-        : `<div class="objectiveMini"><strong>Multiplier:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(link.playerId)}" value="${escapeHtml(Math.max(0, Math.min(100, Math.round(Number.isFinite(multiplier) ? multiplier : 100))))}">%</div>`;
+        : `<div class="objectiveMini">No Shock device assigned.</div>`;
+      const toyProfiles = toyDevices.length
+        ? toyDevices.map(d => `<div class="objectiveMini"><strong>Toy · ${escapeHtml(d.memberName || d.name)}:</strong> ${escapeHtml(d.intensityMultiplier ?? 100)}% · ${escapeHtml(d.preferredTemplate || "soft-wave")}</div>`).join("")
+        : "";
+      const deviceMultipliers = `${shockMultipliers}${toyProfiles}<div class="objectiveMini"><a href="/setup">Manage device profiles in Player Setup</a></div>`;
       html += `<div class="playerLinkCard">
         <div class="playerLinkHeader"><strong>${escapeHtml(link.name)}</strong><span>${Number(points[link.playerId] || 0)} pts</span></div>
         ${deviceMultipliers}

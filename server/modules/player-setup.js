@@ -267,7 +267,8 @@ function buildInitialPlayerSetup(shockers = []) {
     legacyToNew.set(String(legacy.id), playerId);
     for (const device of legacy.devices || []) legacyToNew.set(String(device.id), playerId);
     migrateSessionPlayerId(session, String(legacy.id), playerId);
-    return normalizeConfiguredPlayer({
+    const legacyMultiplier = session.playerMultipliers?.[legacy.id];
+    const configured = normalizeConfiguredPlayer({
       id: playerId,
       name: legacy.name,
       enabled: true,
@@ -277,10 +278,19 @@ function buildInitialPlayerSetup(shockers = []) {
         name: device.name,
         memberName: device.memberName || device.name,
         enabled: true,
-        intensityMultiplier: session.playerMultipliers?.[device.id] ?? session.playerMultipliers?.[legacy.id] ?? 100,
+        intensityMultiplier: session.playerMultipliers?.[device.id] ?? legacyMultiplier ?? 100,
         source: "legacy-import"
       }))
     });
+    const physicalIds = new Set((legacy.devices || []).map(device => String(device.id)));
+    if (!physicalIds.has(String(legacy.id)) && session.playerMultipliers && Object.prototype.hasOwnProperty.call(session.playerMultipliers, legacy.id)) {
+      delete session.playerMultipliers[legacy.id];
+    }
+    for (const device of configured.devices.filter(device => device.provider === "openshock")) {
+      session.playerMultipliers = session.playerMultipliers && typeof session.playerMultipliers === "object" ? session.playerMultipliers : {};
+      session.playerMultipliers[device.id] = clampPercent(device.intensityMultiplier);
+    }
+    return configured;
   });
   writeSessionState(session);
   const { cache } = migrateIntifacePlayerIds(legacyToNew);
@@ -506,6 +516,58 @@ async function applyPlayerSetupAction(body = {}) {
   }
   setup = writePlayerSetup(setup);
   return await getPlayerSetupState({ forceRefresh: false });
+}
+
+
+function syncPlayerSetupFromIntifaceState(mappings = {}, cache = { profiles: {} }) {
+  const setup = readPlayerSetup();
+  if (!setup) return false;
+  let changed = false;
+  const profiles = cache?.profiles && typeof cache.profiles === "object" ? cache.profiles : {};
+  const desiredByCacheKey = new Map();
+  for (const [cacheKey, profile] of Object.entries(profiles)) {
+    desiredByCacheKey.set(cacheKey, { playerId: String(profile?.playerId || ""), profile });
+  }
+  for (const mapping of Object.values(mappings || {})) {
+    const cacheKey = String(mapping?.cacheKey || "");
+    if (!cacheKey) continue;
+    const existing = desiredByCacheKey.get(cacheKey) || { playerId: "", profile: profiles[cacheKey] || {} };
+    desiredByCacheKey.set(cacheKey, {
+      playerId: String(mapping?.playerId || existing.playerId || ""),
+      profile: { ...existing.profile, profile: { ...(existing.profile?.profile || {}), ...(mapping?.profile || {}) } }
+    });
+  }
+  for (const [cacheKey, desired] of desiredByCacheKey) {
+    const current = playerSetupFindDevice(setup, "intiface", cacheKey);
+    const target = setup.players.find(player => player.id === desired.playerId) || null;
+    if (current && (!target || current.player.id !== target.id)) {
+      current.player.devices.splice(current.index, 1);
+      changed = true;
+    }
+    if (target) {
+      let assigned = playerSetupFindDevice(setup, "intiface", cacheKey);
+      if (!assigned) {
+        target.devices.push(configuredToyFromCacheProfile(cacheKey, desired.profile));
+        assigned = playerSetupFindDevice(setup, "intiface", cacheKey);
+        changed = true;
+      }
+      const settings = desired.profile?.profile || {};
+      const normalized = normalizePlayerDevice({
+        ...assigned.device,
+        enabled: settings.enabled ?? assigned.device.enabled,
+        intensityMultiplier: settings.intensityMultiplier ?? assigned.device.intensityMultiplier,
+        preferredTemplate: settings.preferredTemplate ?? assigned.device.preferredTemplate,
+        durationMultiplierOverride: settings.durationMultiplierOverride ?? assigned.device.durationMultiplierOverride,
+        notes: settings.notes ?? assigned.device.notes
+      });
+      if (JSON.stringify(normalized) !== JSON.stringify(assigned.device)) {
+        assigned.player.devices[assigned.index] = normalized;
+        changed = true;
+      }
+    }
+  }
+  if (changed) writePlayerSetup(setup);
+  return changed;
 }
 
 function updateConfiguredOpenShockMultiplier(targetId, multiplierPercent) {

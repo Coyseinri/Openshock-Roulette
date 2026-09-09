@@ -200,6 +200,7 @@ var server = http.createServer(async (req, res) => {
         updatedAt: new Date().toISOString()
       };
       writeSessionState(state);
+      syncPlayerSetupFromIntifaceState(mappings, cache);
       return sendJson(res, 200, { ok: true, intiface: state.intiface, cache });
     }
 
@@ -216,6 +217,7 @@ var server = http.createServer(async (req, res) => {
       const mode = String(body.mode || "merge").toLowerCase();
       const cache = writeIntifaceCache(mode === "replace" ? incoming : mergeIntifaceCache(readIntifaceCache(), incoming));
       const state = readSessionState();
+      syncPlayerSetupFromIntifaceState(state.intiface?.mappings || {}, cache);
       state.intiface = { ...(state.intiface || {}), cache, cachePath: path.relative(APP_ROOT, getIntifaceCachePath()).replace(/\\/g, "/"), updatedAt: new Date().toISOString() };
       writeSessionState(state);
       return sendJson(res, 200, { ok: true, cache, intiface: state.intiface });
@@ -619,6 +621,7 @@ var server = http.createServer(async (req, res) => {
         if (!id) continue;
         const value = clampInt(raw ?? 100, 0, 100);
         state.playerMultipliers[id] = value;
+        updateConfiguredOpenShockMultiplier(id, value);
         updatePlayerMultiplierInDatabase(id, value);
       }
       writeSessionState(state);

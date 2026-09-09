@@ -42,5 +42,16 @@ const stableToyB={...stableToyA,DeviceIndex:42};
 assert.equal(context.stableIntifaceDeviceKey(stableToyA),context.stableIntifaceDeviceKey(stableToyB));
 assert.ok(!context.stableIntifaceDeviceKey(stableToyA).includes("42"));
 
+// A legacy group multiplier should seed each physical Shock device once, then the stale group key is removed.
+session={playerStats:{"player:team-a":{selected:1}},playerMultipliers:{"player:team-a":55},intiface:{mappings:{}},roleAccessKeys:{playerKeys:{}},eliminatedIds:[]};
+delete stateStore.playerSetup;
+context.buildLogicalPlayersFromShockers=()=>[{id:"player:team-a",name:"Team A",devices:[{id:"shock-1",name:"Team A - One",memberName:"One"},{id:"shock-2",name:"Team A - Two",memberName:"Two"}]}];
+const grouped=context.buildInitialPlayerSetup([{id:"shock-1",name:"Team A - One"},{id:"shock-2",name:"Team A - Two"}]);
+assert.equal(grouped.players[0].devices[0].intensityMultiplier,55);
+assert.equal(grouped.players[0].devices[1].intensityMultiplier,55);
+assert.equal(session.playerMultipliers["shock-1"],55);
+assert.equal(session.playerMultipliers["shock-2"],55);
+assert.equal(session.playerMultipliers["player:team-a"],undefined);
+
 console.log("Player Setup migration regression test passed.");
 fs.rmSync(dir,{recursive:true,force:true});

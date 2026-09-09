@@ -82,14 +82,14 @@ async function loadPlayerObjectivePanel() {
 
     html += `<h4>Player links / QR codes</h4><div class="playerLinkGrid">`;
     for (const link of links) {
-      const multiplier = Number(session.playerMultipliers?.[link.playerId] ?? playerMultipliers?.[link.playerId] ?? 100);
-      const deviceMultipliers = Array.isArray(link.devices) && link.devices.length > 1
-        ? link.devices.map(d => {
-            const dm = Number(session.playerMultipliers?.[d.id] ?? playerMultipliers?.[d.id] ?? 100);
+      const shockDevices = Array.isArray(link.devices) ? link.devices.filter(d => !d.provider || d.provider === "openshock") : [];
+      const deviceMultipliers = shockDevices.length
+        ? shockDevices.map(d => {
+            const dm = Number(d.intensityMultiplier ?? session.playerMultipliers?.[d.id] ?? playerMultipliers?.[d.id] ?? 100);
             const safeDm = Math.max(0, Math.min(100, Math.round(Number.isFinite(dm) ? dm : 100)));
             return `<div class="objectiveMini"><strong>${escapeHtml(d.memberName || d.name)}:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(d.id)}" value="${escapeHtml(safeDm)}">%</div>`;
           }).join("")
-        : `<div class="objectiveMini"><strong>Multiplier:</strong> <input class="playerMultiplierInput" type="number" min="0" max="100" step="1" data-player-id="${escapeHtml(link.playerId)}" value="${escapeHtml(Math.max(0, Math.min(100, Math.round(Number.isFinite(multiplier) ? multiplier : 100))))}">%</div>`;
+        : `<div class="objectiveMini">No Shock device assigned. Use <a href="/setup">Player Setup</a>.</div>`;
       html += `<div class="playerLinkCard">
         <div class="playerLinkHeader"><strong>${escapeHtml(link.name)}</strong><span>${link.isGrouped ? "group link" : "QR / link"}</span></div>
         ${deviceMultipliers}
