@@ -25,14 +25,16 @@ const DIAGNOSTIC_KNOWN_EVENT_EFFECTS = new Set([
   "forceFate", "equalFateWeights", "invertFateWeights", "forceRandomFate", "guaranteedDoubleHit",
   "setDoubleHitChance", "valueMultiplier", "valueOffset", "lastWords",
   "removeSafe", "removeSAFE", "disableSafeTarget", "disableTargetSafe", "noSafeTarget",
-  "forceVibe", "vibeOnly", "vibrateOnly"
+  "forceVibe", "vibeOnly", "vibrateOnly",
+  "forceVibe", "vibeOnly", "vibrateOnly", "mutualDestruction"
 ]);
 
 const DIAGNOSTIC_OBJECTIVE_TYPES = new Set([
   "selected", "shocked", "vibes", "safe", "allTargeted", "bodyguards", "cursesUsed",
   "chaosUsed", "tokensBought", "tokensOwned", "highPlusSurvived", "eventCardsExperienced",
   "sabotageEffects", "redirectedHits", "roundsSinceSelected", "roundsSinceShocked",
-  "totalIntensity", "publicProgress", "manual"
+  "totalIntensity", "publicProgress", "manual",
+  "rounds", "audienceVotesApproved", "objectiveCompletions"
 ]);
 
 function duplicateIds(items) {
