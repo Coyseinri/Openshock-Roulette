@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>OSR Player Setup</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/setup/setup.css">
+</head>
+<body>
+  <main class="setup-shell">
+    <header class="setup-header">
+      <div><h1>Player Setup</h1><p>Players are the game targets. Devices are what happen to them.</p></div>
+      <div class="setup-actions"><a class="button secondary" href="/">Back to game</a><a class="button secondary" href="/intiface/setup">Advanced Toy Setup</a><button id="refreshBtn">Refresh devices</button></div>
+    </header>
+    <section class="setup-status card"><div><strong>Shock</strong> <span id="shockStatus">● checking</span></div><div><strong>Toy</strong> <span id="toyStatus">● checking</span></div><div id="readiness"></div></section>
+    <section class="card"><div class="setup-create"><input id="newPlayerName" placeholder="Player name"><button id="createPlayerBtn">Add player</button></div><div id="players"></div></section>
+    <section class="setup-grid"><div class="card"><h2>Unassigned Shock devices</h2><div id="shockDevices"></div></div><div class="card"><h2>Unassigned Toys</h2><div id="toyDevices"></div></div></section>
+    <section class="card"><h2>Suggested matches</h2><div id="suggestions"></div></section>
+    <div id="message" class="setup-message"></div>
+  </main>
+  <script src="/setup/setup.js"></script>
+</body>
+</html>

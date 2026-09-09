@@ -257,8 +257,9 @@ async function getShockersLive() {
 
   const fallback = fs.existsSync(SHOCKERS_PATH) ? SHOCKERS_PATH : LEGACY_SHOCKERS_PATH;
   if (fs.existsSync(fallback)) {
-    const shockers = JSON.parse(fs.readFileSync(fallback, "utf8"));
-    return { source: path.relative(APP_ROOT, fallback).replace(/\\/g, "/"), shockers, fetchedAt: new Date().toISOString(), warning: errors.length ? `OpenShock unavailable, using fallback. ${errors[0]}` : undefined };
+    const raw = fs.readFileSync(fallback, "utf8").trim();
+    const shockers = raw ? JSON.parse(raw) : [];
+    return { source: path.relative(APP_ROOT, fallback).replace(/\\/g, "/"), shockers: Array.isArray(shockers) ? shockers : [], fetchedAt: new Date().toISOString(), warning: errors.length ? `OpenShock unavailable, using fallback. ${errors[0]}` : undefined };
   }
 
   return {

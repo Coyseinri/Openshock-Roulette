@@ -15,7 +15,7 @@ async function cachedQrDataUrl(value, options = { margin: 1, width: 220 }) {
 async function buildPlayerLinks(req) {
   const pages = playerPagesConfig();
   const { shockers } = await getShockers();
-  const players = buildLogicalPlayersFromShockers(shockers);
+  const players = await getConfiguredPlayers(shockers);
   const base = getPublicBaseUrl(req);
   const links = [];
   for (const s of players) {
@@ -94,7 +94,7 @@ function getPlayerState(playerId) {
 async function assignObjectivesToPlayers({ resetExisting = false } = {}) {
   const defs = readObjectives().objectives;
   const { shockers } = await getShockers();
-  const players = buildLogicalPlayersFromShockers(shockers);
+  const players = await getConfiguredPlayers(shockers);
   const state = readSessionState();
   assignHiddenRolesToPlayers(state, players, { resetExisting });
   state.objectiveAssignments = state.objectiveAssignments || {};

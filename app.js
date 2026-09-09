@@ -1,5 +1,6 @@
 let config = null;
 let shockers = [];
+let configuredPlayers = null;
 let eliminated = new Set();
 let targetRotation = 0;
 let fateRotation = 0;
@@ -351,6 +352,7 @@ document.getElementById("resetGameBtn").onclick = () => resetGame(true, { resetS
 document.getElementById("spinBtn").onclick = spinRound;
 document.getElementById("stopBtn").onclick = stopAll;
 document.getElementById("reloadBtn").onclick = () => loadShockers({ preserveSession: true, forceRefresh: true });
+document.getElementById("setupBtn").onclick = () => { window.location.href = "/setup"; };
 document.getElementById("elimOneBtn").onclick = eliminateOne;
 
 document.addEventListener("keydown", (event) => {

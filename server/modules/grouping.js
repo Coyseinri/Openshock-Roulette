@@ -67,11 +67,22 @@ function findLogicalPlayerById(players = [], id) {
 
 async function getLogicalPlayers(existingShockers = null) {
   const shockers = existingShockers || (await getShockers()).shockers;
+  if (typeof getConfiguredPlayers === "function") return await getConfiguredPlayers(shockers);
   return buildLogicalPlayersFromShockers(shockers);
 }
 
 async function resolveLogicalControlDevices(id) {
   const { shockers } = await getShockers();
+  if (typeof getConfiguredPlayers === "function") {
+    const players = await getConfiguredPlayers(shockers, { includeDisabled: true });
+    const player = players.find(item => String(item.id) === String(id))
+      || players.find(item => item.devices?.some(device => device.provider === "openshock" && String(device.id) === String(id)));
+    if (player) {
+      return (player.devices || [])
+        .filter(device => (!device.provider || device.provider === "openshock") && device.enabled !== false)
+        .map(device => ({ ...device, playerId: player.id, playerName: player.name }));
+    }
+  }
   const players = buildLogicalPlayersFromShockers(shockers);
   const player = findLogicalPlayerById(players, id);
   if (player) return player.devices.map(d => ({ ...d, playerId: player.id, playerName: player.name }));

@@ -153,6 +153,7 @@ async function loadShockers({ preserveSession = true, forceRefresh = false } = {
   const res = await fetch(`/api/shockers${forceRefresh ? "?refresh=1" : ""}`);
   const data = await res.json();
   shockers = data.shockers || [];
+  configuredPlayers = Array.isArray(data.players) ? data.players : [];
   ensureAllPlayerStats();
 
   if (!preserveSession) {

@@ -123,11 +123,13 @@ async function publicPlayers(existingShockers = null, existingState = null) {
   } catch (err) {
     console.warn(`WARNING: Could not update structured player/device tables: ${err.message}`);
   }
-  return buildLogicalPlayersFromShockers(shockers);
+  return await getConfiguredPlayers(shockers);
 }
 
 function playerNameById(shockers = [], id, fallback = null) {
   if (!id) return fallback;
+  const configured = findConfiguredPlayerByIdSync(id);
+  if (configured) return configured.name;
   const players = buildLogicalPlayersFromShockers(shockers);
   const player = players.find(p => String(p.id) === String(id));
   if (player) return player.name;

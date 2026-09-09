@@ -403,7 +403,7 @@ async function buildDiagnosticsState({ forceRefresh = false } = {}) {
   } catch (err) {
     shockerResult = { source: "error", shockers: [], warning: err.message, errors: [err.message] };
   }
-  const players = buildLogicalPlayersFromShockers(shockerResult.shockers || []);
+  const players = await getConfiguredPlayers(shockerResult.shockers || [], { includeDisabled: true });
   const debug = getDebugSnapshot();
   const db = getDatabaseSummary();
   const configValidation = getConfigValidationSummary();
@@ -673,9 +673,10 @@ function buildPreflightChecks(state, players, shockerResult, configValidation, d
   add("config", "Runtime config loads", !configValidation.checks.some(c => !c.ok), "error", configValidation.checks);
   add("sqlite", "SQLite/session database healthy", db.ok, "error", db.error || db.counts);
   const apiKeyCheck = buildApiKeyCheckSummary(shockerResult);
-  add("token", "OpenShock token configured", Boolean(TOKEN), "error");
-  add("api-read", "OpenShock token can read own shockers", apiKeyCheck.readOwnShockers.ok, "error", apiKeyCheck.readOwnShockers);
-  add("shockers", "At least one shocker loaded", (shockerResult.shockers || []).length > 0, "error", shockerResult.warning || null);
+  const shockConfigured = (players || []).some(player => (player.devices || []).some(device => !device.provider || device.provider === "openshock"));
+  add("token", "OpenShock token configured", Boolean(TOKEN), shockConfigured ? "error" : "warning");
+  add("api-read", "OpenShock token can read own shockers", apiKeyCheck.readOwnShockers.ok, shockConfigured ? "error" : "warning", apiKeyCheck.readOwnShockers);
+  add("shockers", "Configured Shock devices are reachable", !shockConfigured || (shockerResult.shockers || []).length > 0, shockConfigured ? "error" : "warning", shockerResult.warning || null);
   add("players", "At least one logical player available", (players || []).length > 0, "error");
   add("grouping", "Grouping config valid", !(shockerGroupingConfig().enabled && !shockerGroupingConfig().separator), "warning", shockerGroupingConfig());
   add("events", "Event cards loaded", !configValidation.warnings.some(w => /^Event card error/.test(w)), "warning");
@@ -703,7 +704,7 @@ async function resolveDiagnosticTestDevices(body) {
   const targetType = String(body.targetType || "device");
   const targetId = String(body.targetId || body.id || "");
   const { shockers } = await getShockers();
-  const players = buildLogicalPlayersFromShockers(shockers);
+  const players = await getConfiguredPlayers(shockers, { includeDisabled: true });
 
   if (targetType === "all") {
     return shockers.map(s => ({ id: s.id, name: s.name, memberName: s.name, playerId: s.id, playerName: s.name }));
@@ -711,7 +712,7 @@ async function resolveDiagnosticTestDevices(body) {
   if (targetType === "group") {
     const player = findLogicalPlayerById(players, targetId);
     if (!player) return [];
-    return player.devices.map(d => ({ ...d, playerId: player.id, playerName: player.name }));
+    return player.devices.filter(d => !d.provider || d.provider === "openshock").map(d => ({ ...d, playerId: player.id, playerName: player.name }));
   }
   const direct = shockers.find(s => String(s.id) === String(targetId));
   if (direct) return [{ id: direct.id, name: direct.name, memberName: direct.name, playerId: direct.id, playerName: direct.name }];
@@ -811,7 +812,7 @@ async function handleDiagnosticsSimulate(req, res) {
   } catch {
     shockers = [];
   }
-  const players = buildLogicalPlayersFromShockers(shockers || []);
+  const players = await getConfiguredPlayers(shockers || [], { includeDisabled: true });
   return sendJson(res, 200, simulateDiagnosticRounds(players, count));
 }
 

@@ -9,6 +9,7 @@ var SERVER_MODULES = [
   "validation.js",
   "config.js",
   "grouping.js",
+  "player-setup.js",
   "objectives-roles.js",
   "access-pages.js",
   "economy-host-state.js",

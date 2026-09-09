@@ -30,6 +30,12 @@ function splitGroupedShockerName(name) {
 }
 
 function buildLogicalPlayers() {
+  if (Array.isArray(configuredPlayers)) {
+    return configuredPlayers
+      .filter(player => player && player.enabled !== false)
+      .map(player => ({ ...player, devices: Array.isArray(player.devices) ? player.devices.map(device => ({ ...device })) : [] }))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  }
   const grouping = getShockerGroupingConfig();
   if (!grouping.enabled) {
     return (shockers || []).map(s => ({
@@ -64,8 +70,13 @@ function getValidLogicalPlayerIds() {
 
 function expandTargetDevices(target) {
   if (!target) return [];
-  if (Array.isArray(target.devices)) return target.devices.map(d => ({ ...d, parentPlayer: target }));
-  return [{ id: target.id, name: target.name, memberName: target.name, parentPlayer: target }];
+  if (Array.isArray(target.devices)) {
+    return target.devices
+      .filter(device => !device.provider || device.provider === "openshock")
+      .filter(device => device.enabled !== false)
+      .map(device => ({ ...device, parentPlayer: target }));
+  }
+  return [{ id: target.id, name: target.name, memberName: target.name, provider: "openshock", parentPlayer: target }];
 }
 
 function activeShockers() {

@@ -87,6 +87,23 @@ var server = http.createServer(async (req, res) => {
       return sendDiagnosticsHtml(res, APP_ROOT);
     }
 
+    if ((url.pathname === "/setup" || url.pathname === "/setup/") && req.method === "GET") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      return serveHtmlFile(res, path.join(APP_ROOT, "setup", "index.html"));
+    }
+
+    if (url.pathname === "/api/setup/state" && req.method === "GET") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      const forceRefresh = ["1", "true", "yes"].includes(String(url.searchParams.get("refresh") || "").toLowerCase());
+      return sendJson(res, 200, await getPlayerSetupState({ forceRefresh }));
+    }
+
+    if (url.pathname === "/api/setup/action" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      try { return sendJson(res, 200, await applyPlayerSetupAction(await readBody(req))); }
+      catch (err) { return sendJson(res, 400, { error: err.message }); }
+    }
+
     if ((url.pathname === "/intiface/setup" || url.pathname === "/intiface/setup/") && req.method === "GET") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       return serveHtmlFile(res, path.join(APP_ROOT, "intiface", "setup.html"));
@@ -158,7 +175,7 @@ var server = http.createServer(async (req, res) => {
       let players = [];
       try {
         const { shockers } = await getShockers();
-        players = buildLogicalPlayersFromShockers(shockers || []);
+        players = await getConfiguredPlayers(shockers || []);
       } catch (err) {
         players = [];
       }
@@ -483,7 +500,7 @@ var server = http.createServer(async (req, res) => {
       const playerId = decodeURIComponent(playerStateMatch[1]);
       if (!validatePlayerAccess(req, playerId, url)) return sendJson(res, 403, { error: "Invalid player key" });
       const { shockers } = await getShockers();
-      const players = buildLogicalPlayersFromShockers(shockers);
+      const players = await getConfiguredPlayers(shockers);
       const player = findLogicalPlayerById(players, playerId) || shockers.find(s => String(s.id) === String(playerId)) || { id: playerId, name: "Unknown player", devices: [] };
       const sessionState = readSessionState();
       const pendingActions = (sessionState.pendingPlayerActions || [])
@@ -617,7 +634,9 @@ var server = http.createServer(async (req, res) => {
 
     if (url.pathname === "/api/shockers" && req.method === "GET") {
       const forceRefresh = ["1", "true", "yes"].includes(String(url.searchParams.get("refresh") || "").toLowerCase());
-      return sendJson(res, 200, await getShockers({ forceRefresh }));
+      const result = await getShockers({ forceRefresh });
+      const players = await getConfiguredPlayers(result.shockers || []);
+      return sendJson(res, 200, { ...result, players });
     }
 
     if (url.pathname === "/api/control" && req.method === "POST") {
