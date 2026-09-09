@@ -322,6 +322,7 @@ function hydrateConfiguredPlayers(setup, shockers = [], { includeDisabled = fals
   if (!setup) return [];
   const shockerMap = new Map((shockers || []).map(shocker => [String(shocker.id), shocker]));
   const toyMap = liveIntifaceDeviceMap();
+  const intifaceCache = readPlayerSetupIntifaceCache();
   return (setup.players || [])
     .filter(player => includeDisabled || player.enabled !== false)
     .map(player => ({
@@ -336,6 +337,8 @@ function hydrateConfiguredPlayers(setup, shockers = [], { includeDisabled = fals
           name: live?.name || live?.DeviceDisplayName || live?.DeviceName || device.name,
           memberName: device.memberName || live?.name || live?.DeviceDisplayName || live?.DeviceName || device.name,
           online: Boolean(live),
+          mappingReady: device.provider !== "intiface" ? true : Object.values(intifaceCache.profiles?.[device.id]?.featureRoles || {}).some(role => String(role || "ignore").toLowerCase() !== "ignore"),
+          mappedFeatureCount: device.provider !== "intiface" ? null : Object.values(intifaceCache.profiles?.[device.id]?.featureRoles || {}).filter(role => String(role || "ignore").toLowerCase() !== "ignore").length,
           DeviceIndex: device.provider === "intiface" && live ? Number(live.DeviceIndex) : undefined
         };
       })
@@ -392,13 +395,15 @@ async function getPlayerSetupState({ forceRefresh = false } = {}) {
       provider: "intiface", id: cacheKey,
       name: profile.deviceLabel || profile.displayName || profile.deviceDisplayName || profile.deviceName || "Toy",
       online: liveToys.has(cacheKey), assigned: assignedToy.has(cacheKey),
+      mappingReady: Object.values(profile.featureRoles || {}).some(role => String(role || "ignore").toLowerCase() !== "ignore"),
+      mappedFeatureCount: Object.values(profile.featureRoles || {}).filter(role => String(role || "ignore").toLowerCase() !== "ignore").length,
       profile: profile.profile || {}
     });
   }
   for (const [cacheKey, live] of liveToys) {
     if (!toys.has(cacheKey)) toys.set(cacheKey, {
       provider: "intiface", id: cacheKey,
-      name: live.DeviceDisplayName || live.DeviceName || "Toy", online: true, assigned: assignedToy.has(cacheKey), profile: {}
+      name: live.DeviceDisplayName || live.DeviceName || "Toy", online: true, assigned: assignedToy.has(cacheKey), mappingReady: false, mappedFeatureCount: 0, profile: {}
     });
   }
   const availableShock = (shockerResult.shockers || []).map(shocker => ({
@@ -431,7 +436,7 @@ async function getPlayerSetupState({ forceRefresh = false } = {}) {
     })(),
     providers: {
       shock: { reachable: !shockerError, lastError: shockerError },
-      toy: { enabled: CONFIG.intiface?.enabled === true, connected: Boolean(typeof intifaceService !== "undefined" && intifaceService.snapshot()?.ready), state: typeof intifaceService !== "undefined" ? intifaceService.snapshot()?.state : "disabled" }
+      toy: { enabled: CONFIG.intiface?.enabled === true, connected: Boolean(typeof intifaceService !== "undefined" && intifaceService.snapshot()?.ready), state: typeof intifaceService !== "undefined" ? intifaceService.snapshot()?.state : "disabled", deviceCount: liveToys.size }
     }
   };
 }

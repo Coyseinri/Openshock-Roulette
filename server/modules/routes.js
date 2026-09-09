@@ -104,6 +104,36 @@ var server = http.createServer(async (req, res) => {
       catch (err) { return sendJson(res, 400, { error: err.message }); }
     }
 
+    if (url.pathname === "/api/setup/scan-intiface" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      try {
+        await intifaceService.scan();
+        return sendJson(res, 200, await getPlayerSetupState({ forceRefresh: false }));
+      } catch (err) {
+        return sendJson(res, 503, { error: err.message, state: await getPlayerSetupState({ forceRefresh: false }) });
+      }
+    }
+
+    if (url.pathname === "/api/setup/test-device" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      try {
+        const result = await testSetupDevice(await readBody(req));
+        return sendJson(res, result.ok || result.skipped ? 200 : 503, { result, state: await getPlayerSetupState({ forceRefresh: false }) });
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message });
+      }
+    }
+
+    if (url.pathname === "/api/setup/stop-device" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      try {
+        const result = await stopSetupDevice(await readBody(req));
+        return sendJson(res, result.ok || result.skipped ? 200 : 503, { result });
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message });
+      }
+    }
+
     if ((url.pathname === "/intiface/setup" || url.pathname === "/intiface/setup/") && req.method === "GET") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       return serveHtmlFile(res, path.join(APP_ROOT, "intiface", "setup.html"));

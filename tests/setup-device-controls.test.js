@@ -1,0 +1,18 @@
+"use strict";
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const path=require("node:path");
+const root=path.join(__dirname,"..");
+const setup=fs.readFileSync(path.join(root,"setup","setup.js"),"utf8");
+const routes=fs.readFileSync(path.join(root,"server","modules","routes.js"),"utf8");
+const activation=fs.readFileSync(path.join(root,"server","modules","game-activation.js"),"utf8");
+assert.ok(setup.includes("/api/setup/scan-intiface"));
+assert.ok(setup.includes("testPower: 25"),"Toy/Vibe setup tests need a conservative explicit base power");
+assert.ok(setup.includes("testValue"),"Shock test must use an explicit test value");
+assert.ok(setup.includes("window.confirm"),"Real Shock test must require deliberate confirmation");
+assert.ok(routes.includes('/api/setup/test-device'));
+assert.ok(routes.includes('/api/setup/stop-device'));
+assert.ok(activation.includes("requireGameIntegration = true"),"Setup tests must be able to reuse Toy templates while gameplay integration is disabled");
+assert.ok(activation.includes("durationMsOverride"),"Setup Toy tests need a bounded direct duration");
+assert.ok(activation.includes("Device multiplier is 0%"),"0% profiles must stay silent during tests");
+console.log("Player Setup device control regression test passed.");

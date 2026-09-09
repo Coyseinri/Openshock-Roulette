@@ -173,18 +173,25 @@ async function executeGameToyRun(run) {
   }
 }
 
-function startGameToyRun(device, { rolledValue, mode, shockDurationMs }) {
+function startGameToyRun(device, { rolledValue, mode, shockDurationMs, requireGameIntegration = true, durationMsOverride = null, maxPowerPercentOverride = null, templateOverride = null }) {
   const cfg = gameIntifaceConfig();
-  if (!cfg.enabled || !cfg.gameIntegrationEnabled) return { ok: false, skipped: true, reason: "Intiface game integration disabled" };
+  if (!cfg.enabled) return { ok: false, skipped: true, reason: "Intiface is disabled" };
+  if (requireGameIntegration && !cfg.gameIntegrationEnabled) return { ok: false, skipped: true, reason: "Intiface game integration disabled" };
   if (typeof intifaceService === "undefined" || !intifaceService.snapshot()?.ready) return { ok: false, reason: "Intiface disconnected" };
   const rawDevice = rawIntifaceDeviceForConfigured(device);
   if (!rawDevice) return { ok: false, reason: "Toy disconnected" };
-  const template = gameTemplateById(device.preferredTemplate || "soft-wave");
+  const template = gameTemplateById(templateOverride || device.preferredTemplate || "soft-wave");
   if (!template) return { ok: false, reason: "No Intiface template available" };
   const features = compatibleGameFeatures(rawDevice, device.id, template);
   if (!features.length) return { ok: false, reason: `No active features compatible with ${template.name || template.id}` };
-  const maxPower = gameToyMaxPower(rolledValue, mode, device);
-  const durationMs = gameToyDurationMs(shockDurationMs, mode, device);
+  const hasPowerOverride = maxPowerPercentOverride !== null && maxPowerPercentOverride !== undefined && maxPowerPercentOverride !== "" && Number.isFinite(Number(maxPowerPercentOverride));
+  const hasDurationOverride = durationMsOverride !== null && durationMsOverride !== undefined && durationMsOverride !== "" && Number.isFinite(Number(durationMsOverride));
+  const maxPower = hasPowerOverride
+    ? clampUnit((Math.max(0, Math.min(100, Number(maxPowerPercentOverride))) / 100) * (clampPercent(device.intensityMultiplier) / 100))
+    : gameToyMaxPower(rolledValue, mode, device);
+  const durationMs = hasDurationOverride
+    ? clampInt(durationMsOverride, 100, 120000)
+    : gameToyDurationMs(shockDurationMs, mode, device);
   if (maxPower <= 0) return { ok: true, skipped: true, reason: "Device multiplier is 0%", maxPowerPercent: 0, durationMs };
   cancelGameToyRun(device.id);
   const run = {
@@ -279,6 +286,88 @@ async function stopGamePlayerOutputs(player) {
     }
   }
   return result;
+}
+
+async function findConfiguredOutputDevice(provider, deviceId) {
+  const players = await getConfiguredPlayers(null, { includeDisabled: true });
+  for (const player of players) {
+    const device = (player.devices || []).find(item => item.provider === provider && String(item.id) === String(deviceId));
+    if (device) return { player, device };
+  }
+  return null;
+}
+
+async function testSetupDevice({ provider, deviceId, testType = "test", testValue = 10, testPower = 25, durationMs = 1500 } = {}) {
+  const normalizedProvider = provider === "intiface" ? "intiface" : "openshock";
+  const found = await findConfiguredOutputDevice(normalizedProvider, deviceId);
+  if (!found) throw new Error("Configured device not found");
+  const { player, device } = found;
+  if (device.enabled === false) return { ok: false, skipped: true, reason: "Device is disabled", provider: normalizedProvider, playerId: player.id };
+
+  if (normalizedProvider === "intiface") {
+    const result = startGameToyRun(device, {
+      rolledValue: Math.max(0, Math.min(100, Number(testPower) || 25)),
+      mode: "normal",
+      shockDurationMs: durationMs,
+      requireGameIntegration: false,
+      durationMsOverride: clampInt(durationMs, 500, 3000),
+      maxPowerPercentOverride: Math.max(0, Math.min(100, Number(testPower) || 25))
+    });
+    return { ...result, provider: "intiface", playerId: player.id, playerName: player.name, test: true };
+  }
+
+  const s = safety();
+  const isShock = String(testType).toLowerCase() === "shock";
+  const base = isShock
+    ? clampInt(testValue, 1, s.serverMaxShockIntensity ?? 99)
+    : clampInt(testPower, 1, Math.min(100, s.serverMaxVibrateIntensity ?? 100));
+  const intensity = Math.round(base * (clampPercent(device.intensityMultiplier) / 100));
+  if (intensity <= 0) return { ok: true, skipped: true, provider: "openshock", reason: "Device multiplier is 0%", intensity: 0 };
+  const safeIntensity = isShock
+    ? clampInt(intensity, 1, s.serverMaxShockIntensity ?? 99)
+    : clampInt(intensity, 1, Math.min(100, s.serverMaxVibrateIntensity ?? 100));
+  const safeDuration = clampInt(durationMs, s.minDurationMs ?? 300, s.maxDurationMs ?? 1000);
+  try {
+    const response = await requestOpenShock("POST", "/2/shockers/control", {
+      shocks: [{ id: device.id, type: isShock ? "Shock" : "Vibrate", intensity: safeIntensity, duration: safeDuration, exclusive: true }]
+    }, { action: isShock ? "setupShockTest" : "setupVibeTest" });
+    return {
+      ok: response.statusCode >= 200 && response.statusCode < 300,
+      provider: "openshock",
+      playerId: player.id,
+      playerName: player.name,
+      test: true,
+      type: isShock ? "Shock" : "Vibrate",
+      intensity: safeIntensity,
+      durationMs: safeDuration,
+      statusCode: response.statusCode
+    };
+  } catch (err) {
+    return { ok: false, provider: "openshock", playerId: player.id, test: true, error: err.message };
+  }
+}
+
+async function stopSetupDevice({ provider, deviceId } = {}) {
+  const normalizedProvider = provider === "intiface" ? "intiface" : "openshock";
+  const found = await findConfiguredOutputDevice(normalizedProvider, deviceId);
+  if (!found) throw new Error("Configured device not found");
+  const { device } = found;
+  if (normalizedProvider === "intiface") {
+    cancelGameToyRun(device.id);
+    const raw = rawIntifaceDeviceForConfigured(device);
+    if (!raw) return { ok: false, skipped: true, reason: "Toy disconnected" };
+    await stopGameToyDevice(raw);
+    return { ok: true, provider: "intiface", stopped: true };
+  }
+  const s = safety();
+  try {
+    const response = await requestOpenShock("POST", "/2/shockers/control", {
+      shocks: [{ id: device.id, type: "Stop", intensity: 0, duration: s.minDurationMs ?? 300, exclusive: true }]
+    }, { action: "setupStop" });
+    return { ok: response.statusCode >= 200 && response.statusCode < 300, provider: "openshock", stopped: true, statusCode: response.statusCode };
+  } catch (err) {
+    return { ok: false, provider: "openshock", error: err.message };
+  }
 }
 
 async function activateGamePlayer({ playerId, rolledValue = 0, mode = null, shockDurationMs = null, exclusive = true } = {}) {

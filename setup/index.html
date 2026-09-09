@@ -11,13 +11,27 @@
   <main class="setup-shell">
     <header class="setup-header">
       <div><h1>Player Setup</h1><p>Players are the game targets. Devices are what happen to them.</p></div>
-      <div class="setup-actions"><button id="startGameBtn">Start / Continue Game</button><a class="button secondary" href="/intiface/setup">Advanced Toy Setup</a><button id="refreshBtn">Refresh devices</button></div>
+      <div class="setup-actions"><button id="startGameBtn">Start / Continue Game</button><a class="button secondary" href="/intiface/setup">Advanced Toy Setup</a></div>
     </header>
-    <section class="setup-status card"><div><strong>Shock</strong> <span id="shockStatus">● checking</span></div><div><strong>Toy</strong> <span id="toyStatus">● checking</span></div><div id="readiness"></div></section>
+
+    <section class="setup-status card provider-grid">
+      <div class="provider-card">
+        <div><strong>Shock</strong> <span id="shockStatus">● checking</span></div>
+        <div id="shockCount" class="device-meta">Checking devices…</div>
+        <button id="refreshShockBtn" class="secondary">Refresh Shock</button>
+      </div>
+      <div class="provider-card">
+        <div><strong>Toy</strong> <span id="toyStatus">● checking</span></div>
+        <div id="toyCount" class="device-meta">Checking devices…</div>
+        <div class="setup-actions"><button id="scanToyBtn" class="secondary">Scan / Refresh Toys</button><a class="button secondary" href="/intiface/setup">Advanced Setup</a></div>
+      </div>
+      <div class="provider-card readiness-card"><strong>Readiness</strong><div id="readiness"></div></div>
+    </section>
+
     <section class="card"><div class="setup-create"><input id="newPlayerName" placeholder="Player name"><button id="createPlayerBtn">Add player</button></div><div id="players"></div></section>
     <section class="setup-grid"><div class="card"><h2>Unassigned Shock devices</h2><div id="shockDevices"></div></div><div class="card"><h2>Unassigned Toys</h2><div id="toyDevices"></div></div></section>
     <section class="card"><h2>Suggested matches</h2><div id="suggestions"></div></section>
-    <div id="message" class="setup-message"></div>
+    <div id="message" class="setup-message" role="status"></div>
   </main>
   <script src="/setup/setup.js"></script>
 </body>
