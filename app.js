@@ -231,7 +231,7 @@ async function spinRound() {
       const maxShock = Math.max(1, Math.min(100, Number(config?.safety?.serverMaxShockIntensity ?? 99)));
       value = Math.max(1, Math.min(maxShock, value));
     }
-    const previewAppliedById = Object.fromEntries((targets || []).filter(Boolean).map(s => [s.id, applyPlayerMultiplier(value, s.id)]));
+    const previewAppliedById = Object.fromEntries((targets || []).filter(Boolean).map(s => [s.id, value]));
     const appliedText = describeAppliedValues(targets, value, previewAppliedById);
     fateResult.textContent = `${fatePicked.name}: ${appliedText}`;
     const mainText = `${formatTargetResultText(targetPicked, targets)} - ${appliedText}`;
@@ -254,7 +254,7 @@ async function spinRound() {
       eventId: roundState.card?.id || null,
       eventTitle: roundState.card?.title || null,
       resultType: value > 0 ? "shock" : "vibe",
-      targets: (targets || []).map(s => ({ playerId: s.id, deviceId: s.id, name: s.name, rolledValue: value, multiplierPercent: getPlayerMultiplier(s.id), appliedValue: appliedById[s.id] ?? applyPlayerMultiplier(value, s.id) }))
+      targets: (targets || []).map(s => ({ playerId: s.id, name: s.name, rolledValue: value, appliedValue: appliedById[s.id] ?? value, devices: (s.devices || []).map(d => ({ provider: d.provider || "openshock", deviceId: d.id, multiplierPercent: d.intensityMultiplier ?? 100 })) }))
     });
     renderPlayers();
     updateStats();
@@ -310,7 +310,7 @@ async function resetGame(writeLog=true, { save = true, resetServer = false } = {
   if (freshServerState) {
     applySessionSnapshot(freshServerState);
   } else {
-    targetResult.textContent = shockers.length ? `${shockers.length} collars loaded` : "No collars found";
+    targetResult.textContent = configuredPlayers?.length ? `${configuredPlayers.length} players loaded` : "No players configured";
     fateResult.textContent = "Waiting...";
     setMainResult("Ready");
     renderPlayers();
@@ -326,6 +326,7 @@ async function resetGame(writeLog=true, { save = true, resetServer = false } = {
   "playerWeight","safeWeight","shockAllWeight","doubleHitChance",
   "pauseMinMs","pauseMaxMs","hitDelayMinMs","hitDelayMaxMs",
   "doubleDelayMinMs","doubleDelayMaxMs","duration","noRepeatMode",
+  "intifaceGameEnabled","toyDurationMultiplier","toyVibeDurationMultiplier",
   "escalationEnabled","escalationPerRound",
   "eventCardsEnabled","eventCardChance","eventCardDisplayMs",
   "playerPagesEnabled","playerAutoRefreshMs",

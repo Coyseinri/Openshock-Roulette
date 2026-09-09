@@ -19,6 +19,7 @@ var SERVER_MODULES = [
   "diagnostics.js",
   "diagnostics-validator-types.js",
   "intiface-service.js",
+  "game-activation.js",
   "routes.js"
 ];
 

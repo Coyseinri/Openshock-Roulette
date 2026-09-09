@@ -81,6 +81,11 @@ function validateConfig(config) {
   config.intiface.healthCheckTimeoutMs = clampInt(config.intiface.healthCheckTimeoutMs ?? 5000, 1000, 30000);
   config.intiface.autoReconnectOnCommandTimeout = Boolean(config.intiface.autoReconnectOnCommandTimeout ?? true);
   config.intiface.gameIntegrationEnabled = Boolean(config.intiface.gameIntegrationEnabled ?? false);
+  config.intiface.game = config.intiface.game && typeof config.intiface.game === "object" ? config.intiface.game : {};
+  config.intiface.game.activationDurationMultiplier = Math.max(0.1, Math.min(20, Number(config.intiface.game.activationDurationMultiplier ?? 4) || 4));
+  config.intiface.game.vibeDurationMultiplier = Math.max(0.1, Math.min(20, Number(config.intiface.game.vibeDurationMultiplier ?? 6) || 6));
+  config.intiface.game.minDurationMs = clampInt(config.intiface.game.minDurationMs ?? 1000, 100, 60000);
+  config.intiface.game.maxDurationMs = clampInt(config.intiface.game.maxDurationMs ?? 15000, config.intiface.game.minDurationMs, 120000);
   config.intiface.reconnect = config.intiface.reconnect && typeof config.intiface.reconnect === "object" ? config.intiface.reconnect : {};
   config.intiface.reconnect.enabled = Boolean(config.intiface.reconnect.enabled ?? true);
   config.intiface.reconnect.maxAttempts = clampInt(config.intiface.reconnect.maxAttempts ?? 5, 0, 50);

@@ -1,0 +1,31 @@
+"use strict";
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const source = fs.readFileSync(path.join(__dirname,"..","functions","grouping.js"),"utf8");
+const start=source.indexOf("async function activateTargets(targets, value, roundState = null) {");
+const end=source.indexOf("\nconst baseLoadShockersForGrouping",start);
+assert.notEqual(start,-1); assert.notEqual(end,-1);
+const fnSource=source.slice(start,end);
+const calls=[];
+const sendControl=async(player,value)=>{calls.push({id:player.id,value});return {appliedValue:value===0?75:60};};
+const document={getElementById:()=>({value:1000})};
+const activateTargets=new Function("sendControl","getPercent","rollPercent","document","randInt","log","sleep","markRoundModifierConsumed",`${fnSource}\nreturn activateTargets;`)(sendControl,()=>0,()=>false,document,()=>1000,()=>{},async()=>{},()=>{});
+(async()=>{
+ const player={id:"p1",name:"Player"};
+ let applied=await activateTargets([player],0,{});
+ assert.deepEqual(calls,[{id:"p1",value:0}],"Vibe should send the raw Vibe outcome once per logical player");
+ assert.equal(applied.p1,0,"Vibe must remain a Vibe in stats even when physical output has non-zero power");
+ calls.length=0;
+ applied=await activateTargets([player],80,{});
+ assert.deepEqual(calls,[{id:"p1",value:80}],"Normal outcome must be routed once per logical player without frontend scaling");
+ assert.equal(applied.p1,60);
+ console.log("Frontend unified activation regression test passed.");
+})().catch(err=>{console.error(err);process.exitCode=1;});
+
+const uiSource = fs.readFileSync(path.join(__dirname,"..","functions","ui.js"),"utf8");
+assert.ok(uiSource.includes('filter(d => d.provider === "intiface")'), "Main admin panel must distinguish Toy devices from Shock devices");
+assert.ok(!uiSource.includes('data-player-id="${escapeHtml(link.playerId)}" value='), "Logical player ids must not be used as editable output multiplier ids");
+const diagnosticsSource = fs.readFileSync(path.join(__dirname,"..","server","modules","diagnostics.js"),"utf8");
+assert.ok(diagnosticsSource.includes('await getConfiguredPlayers(shockerResult.shockers || [], { includeDisabled: true })'), "Diagnostics must use configured logical players");
+assert.ok(diagnosticsSource.includes('const shockConfigured ='), "Diagnostics preflight must not require OpenShock for Toy-only games");

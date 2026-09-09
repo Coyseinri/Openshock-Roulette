@@ -96,6 +96,10 @@ function getShockerName(id, fallback = "Unknown player") {
 }
 
 function getPlayerMultiplier(playerId) {
+  for (const player of buildLogicalPlayers()) {
+    const device = (player.devices || []).find(item => String(item.id) === String(playerId));
+    if (device && device.intensityMultiplier !== undefined) return Math.max(0, Math.min(100, Math.round(Number(device.intensityMultiplier) || 0)));
+  }
   const raw = playerMultipliers?.[playerId];
   const value = Number(raw === undefined || raw === null || raw === "" ? 100 : raw);
   if (!Number.isFinite(value)) return 100;
@@ -110,18 +114,7 @@ function applyPlayerMultiplier(rolledValue, playerId) {
 
 function describeAppliedValues(targets, rolledValue, appliedById) {
   if (Number(rolledValue || 0) <= 0) return describeValue(0);
-  const parts = [];
-  (targets || []).filter(Boolean).forEach(player => {
-    const devices = expandTargetDevices(player);
-    if (devices.length <= 1) {
-      const id = devices[0]?.id || player.id;
-      const applied = appliedById?.[id] ?? appliedById?.[player.id] ?? applyPlayerMultiplier(rolledValue, id);
-      parts.push(`${player.name}: ${applied} (${getPlayerMultiplier(id)}%)`);
-    } else {
-      const deviceText = devices.map(d => `${d.memberName || d.name}: ${appliedById?.[d.id] ?? applyPlayerMultiplier(rolledValue, d.id)} (${getPlayerMultiplier(d.id)}%)`).join(" / ");
-      parts.push(`${player.name} [${deviceText}]`);
-    }
-  });
+  const parts = (targets || []).filter(Boolean).map(player => `${player.name}: ${appliedById?.[player.id] ?? rolledValue}`);
   return `Rolled ${rolledValue} · Applied ${parts.join(", ")}`;
 }
 
@@ -179,7 +172,7 @@ function renderPlayers() {
     if (s.devices?.length > 1 || s.isGrouped) {
       const deviceLine = document.createElement("div");
       deviceLine.className = "playerStats groupedDeviceLine";
-      deviceLine.innerHTML = s.devices.map(d => `${escapeHtml(d.memberName || d.name)} <strong>${getPlayerMultiplier(d.id)}%</strong>`).join(" · ");
+      deviceLine.innerHTML = s.devices.map(d => `${d.provider === "intiface" ? "Toy" : "Shock"}: ${escapeHtml(d.memberName || d.name)} <strong>${Number(d.intensityMultiplier ?? getPlayerMultiplier(d.id))}%</strong>`).join(" · ");
       info.appendChild(deviceLine);
     }
 
@@ -218,18 +211,9 @@ function formatTargetResultText(targetPicked, targets) {
 
 async function activateTargets(targets, value, roundState = null) {
   const appliedById = {};
-  const deviceQueue = [];
-  (targets || []).filter(Boolean).forEach(player => {
-    expandTargetDevices(player).forEach(device => {
-      deviceQueue.push({ player, device });
-    });
-  });
-
-  for (const item of deviceQueue) {
-    const appliedValue = applyPlayerMultiplier(value, item.device.id);
-    appliedById[item.device.id] = appliedValue;
-    appliedById[item.player.id] = Math.max(Number(appliedById[item.player.id] || 0), appliedValue);
-    await sendControl({ id: item.device.id, name: item.device.name }, appliedValue);
+  for (const player of (targets || []).filter(Boolean)) {
+    const sent = await sendControl(player, value);
+    appliedById[player.id] = Number(value) === 0 ? 0 : Number(sent?.appliedValue ?? value);
   }
 
   const doubleChance = roundState?.doubleHitChanceOverride !== null && roundState?.doubleHitChanceOverride !== undefined
@@ -239,17 +223,17 @@ async function activateTargets(targets, value, roundState = null) {
     const secondDelay = randInt(document.getElementById("doubleDelayMinMs").value, document.getElementById("doubleDelayMaxMs").value);
     log(`Hidden double-hit triggered. Second hit in ${secondDelay} ms.`);
     await sleep(secondDelay);
-    for (const item of deviceQueue) await sendControl({ id: item.device.id, name: item.device.name }, appliedById[item.device.id] ?? applyPlayerMultiplier(value, item.device.id));
+    for (const player of (targets || []).filter(Boolean)) await sendControl(player, value);
   }
 
   const forcedDoubleIds = roundState?.forcedDoubleShockTargetIds || new Set();
-  const forcedTargets = (targets || []).filter(s => forcedDoubleIds.has(String(s.id)));
+  const forcedTargets = (targets || []).filter(player => forcedDoubleIds.has(String(player.id)));
   if (value > 0 && forcedTargets.length) {
     const secondDelay = randInt(document.getElementById("doubleDelayMinMs").value, document.getElementById("doubleDelayMaxMs").value);
-    log(`Forced double-shock token triggered for ${forcedTargets.map(s => s.name).join(", ")}. Second hit in ${secondDelay} ms.`);
+    log(`Forced double-shock token triggered for ${forcedTargets.map(player => player.name).join(", ")}. Second hit in ${secondDelay} ms.`);
     await sleep(secondDelay);
     for (const player of forcedTargets) {
-      for (const device of expandTargetDevices(player)) await sendControl({ id: device.id, name: device.name }, appliedById[device.id] ?? applyPlayerMultiplier(value, device.id));
+      await sendControl(player, value);
       const mod = (roundState.pendingRoundModifiers || []).find(m => m.type === "forcedDoubleShockNextRound" && String(m.targetPlayerId) === String(player.id));
       if (mod) markRoundModifierConsumed(roundState, mod, "forced double shock applied");
     }

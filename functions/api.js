@@ -167,10 +167,10 @@ async function loadShockers({ preserveSession = true, forceRefresh = false } = {
   }
 
   const cacheNote = data.cached ? "cached" : "live";
-  document.getElementById("sourcePill").textContent = `${data.shockers.length} shockers · ${cacheNote}`;
+  document.getElementById("sourcePill").textContent = `${configuredPlayers.length} players · ${data.shockers.length} Shock · ${cacheNote}`;
   renderPlayers();
   redrawAllWheels();
-  targetResult.textContent = shockers.length ? `${shockers.length} collars loaded` : "No collars found";
+  targetResult.textContent = configuredPlayers.length ? `${configuredPlayers.length} players loaded` : "No players configured";
   fateResult.textContent = "Waiting...";
   if (roundNumber === 0) setMainResult("Ready");
   if (data.warning) log(data.warning);

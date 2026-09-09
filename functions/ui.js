@@ -45,6 +45,10 @@ function applyConfigToForm() {
   document.getElementById("doubleDelayMinMs").value = config.game?.doubleHitDelayMinMs ?? 700;
   document.getElementById("doubleDelayMaxMs").value = config.game?.doubleHitDelayMaxMs ?? 2500;
   document.getElementById("duration").value = config.safety?.defaultDurationMs ?? 700;
+  const intifaceGame = config.intiface?.game || {};
+  document.getElementById("intifaceGameEnabled").value = config.intiface?.gameIntegrationEnabled ? "on" : "off";
+  document.getElementById("toyDurationMultiplier").value = intifaceGame.activationDurationMultiplier ?? 4;
+  document.getElementById("toyVibeDurationMultiplier").value = intifaceGame.vibeDurationMultiplier ?? 6;
 
   document.getElementById("noRepeatMode").value = config.game?.noRepeatFate ? "on" : "off";
   document.getElementById("escalationEnabled").value = config.game?.escalationEnabled ? "on" : "off";
@@ -304,6 +308,11 @@ function collectFormToConfig() {
   config.game.doubleHitDelayMinMs = num("doubleDelayMinMs", 700);
   config.game.doubleHitDelayMaxMs = num("doubleDelayMaxMs", 2500);
   config.safety.defaultDurationMs = num("duration", 700);
+  config.intiface = config.intiface || {};
+  config.intiface.game = config.intiface.game || {};
+  config.intiface.gameIntegrationEnabled = document.getElementById("intifaceGameEnabled").value === "on";
+  config.intiface.game.activationDurationMultiplier = Math.max(0.1, Math.min(20, Number(document.getElementById("toyDurationMultiplier").value || 4)));
+  config.intiface.game.vibeDurationMultiplier = Math.max(0.1, Math.min(20, Number(document.getElementById("toyVibeDurationMultiplier").value || 6)));
 
   config.game.noRepeatFate = document.getElementById("noRepeatMode").value === "on";
   config.game.escalationEnabled = document.getElementById("escalationEnabled").value === "on";

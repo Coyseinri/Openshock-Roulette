@@ -264,6 +264,12 @@
       "commandTimeoutMs": 3000,
       "strategy": "idle-stop-command"
     },
-    "autoConnect": true
+    "autoConnect": true,
+    "game": {
+      "activationDurationMultiplier": 4,
+      "vibeDurationMultiplier": 6,
+      "minDurationMs": 1000,
+      "maxDurationMs": 15000
+    }
   }
 }
