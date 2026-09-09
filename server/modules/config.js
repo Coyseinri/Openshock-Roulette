@@ -70,6 +70,21 @@ function normalizeConfigForRuntime(input) {
   runtime.audiencePage = { ...(src.audiencePage || pages.audience || {}) };
   runtime.shockers = { ...(src.shockers || devices.shockers || {}) };
 
+  // Intiface used to be split between devices.intiface and root intiface.
+  // Merge both for backward compatibility, with the canonical root block winning.
+  runtime.intiface = { ...(devices.intiface || {}), ...(src.intiface || {}) };
+  if (runtime.intiface.enabled === undefined && runtime.intiface.serverConnectionEnabled !== undefined) {
+    runtime.intiface.enabled = runtime.intiface.serverConnectionEnabled !== false;
+  }
+  if (!runtime.intiface.websocketUrl && runtime.intiface.defaultWsUrl) runtime.intiface.websocketUrl = runtime.intiface.defaultWsUrl;
+  if (["ws://localhost:12345/buttplug", "ws://127.0.0.1:12345/buttplug"].includes(String(runtime.intiface.websocketUrl || ""))) runtime.intiface.websocketUrl = "ws://127.0.0.1:12345";
+  if (runtime.intiface.healthCheckIntervalMs === undefined && runtime.intiface.heartbeatIntervalMs !== undefined) runtime.intiface.healthCheckIntervalMs = runtime.intiface.heartbeatIntervalMs;
+  if (runtime.intiface.healthCheckTimeoutMs === undefined && runtime.intiface.heartbeatTimeoutMs !== undefined) runtime.intiface.healthCheckTimeoutMs = runtime.intiface.heartbeatTimeoutMs;
+  delete runtime.intiface.serverConnectionEnabled;
+  delete runtime.intiface.defaultWsUrl;
+  delete runtime.intiface.heartbeatIntervalMs;
+  delete runtime.intiface.heartbeatTimeoutMs;
+
   if (src.api?.openshock) {
     runtime.server.apiHost = runtime.server.apiHost || src.api.openshock.host;
     runtime.server.userAgent = runtime.server.userAgent || src.api.openshock.userAgent;
@@ -94,7 +109,8 @@ function configForDisk(config) {
     pages: { player: runtime.playerPages || {}, host: runtime.hostPage || {}, audience: runtime.audiencePage || {} },
     economy: runtime.economy || {},
     ui: runtime.ui || {},
-    devices: { shockers: runtime.shockers || {} }
+    devices: { shockers: runtime.shockers || {} },
+    intiface: runtime.intiface || {}
   };
 }
 
@@ -115,7 +131,7 @@ function readConfig() {
 
 function writeConfig(config) {
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  const validated = validateConfig(config);
+  const validated = validateConfig(normalizeConfigForRuntime(config));
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(configForDisk(validated), null, 2), "utf8");
   invalidateConfigCache();
 }

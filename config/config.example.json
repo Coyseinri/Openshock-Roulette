@@ -1,5 +1,4 @@
 {
-  "version": "1.3.1",
   "server": {
     "host": "0.0.0.0",
     "port": 8787,
@@ -208,5 +207,63 @@
   "app": {
     "displayTitle": "OpenShock Roulette",
     "subtitle": "Canvas wheels with labels. Weights affect odds, not visual clutter."
+  },
+  "intiface": {
+    "enabled": false,
+    "websocketUrl": "ws://127.0.0.1:12345",
+    "defaultPreviewDurationMs": 5000,
+    "maxPreviewDurationMs": 15000,
+    "autoStopOnDisconnect": true,
+    "autoAssignByLabel": true,
+    "labelSeparators": [
+      " - ",
+      " – ",
+      " — ",
+      "-",
+      "–",
+      "—"
+    ],
+    "featureRoles": [
+      "ignore",
+      "main",
+      "secondary",
+      "tertiary",
+      "vibration",
+      "suction",
+      "air",
+      "rotation",
+      "oscillation",
+      "other"
+    ],
+    "cacheEnabled": true,
+    "cacheFile": "data/intiface-device-cache.json",
+    "templateLibraryPath": "config/intiface-templates.json",
+    "capabilityDatabasePath": "data/intiface-capabilities.json",
+    "capabilityDatabaseEnabled": true,
+    "liveMonitorEnabled": true,
+    "previewSpeedMinPercent": 25,
+    "previewSpeedMaxPercent": 300,
+    "previewMaxRepeats": 20,
+    "previewLoopAllowed": true,
+    "commandTimeoutMs": 5000,
+    "commandGapMs": 120,
+    "healthCheckIntervalMs": 15000,
+    "healthCheckTimeoutMs": 5000,
+    "autoReconnectOnCommandTimeout": true,
+    "reconnect": {
+      "enabled": true,
+      "maxAttempts": 5,
+      "initialDelayMs": 1000,
+      "maxDelayMs": 30000,
+      "backoffMultiplier": 2
+    },
+    "gameIntegrationEnabled": false,
+    "deviceKeepAwake": {
+      "enabled": true,
+      "intervalMs": 60000,
+      "commandTimeoutMs": 3000,
+      "strategy": "idle-stop-command"
+    },
+    "autoConnect": true
   }
 }

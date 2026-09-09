@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "templates": [
+    {
+      "id": "soft-wave",
+      "name": "Soft wave",
+      "description": "Gentle rolling power across active role-mapped outputs.",
+      "compatible": "1+ active outputs",
+      "intervalMs": 180,
+      "mode": "wave",
+      "roles": [
+        "main",
+        "vibration",
+        "secondary",
+        "tertiary",
+        "suction",
+        "air",
+        "rotation",
+        "oscillation",
+        "other"
+      ]
+    },
+    {
+      "id": "pulse",
+      "name": "Pulse",
+      "description": "Repeated on/off pulses.",
+      "compatible": "1+ active outputs",
+      "intervalMs": 140,
+      "mode": "pulse",
+      "roles": [
+        "main",
+        "vibration",
+        "secondary",
+        "tertiary"
+      ]
+    },
+    {
+      "id": "heartbeat",
+      "name": "Heartbeat",
+      "description": "Two quick beats followed by a pause.",
+      "compatible": "1+ active outputs",
+      "intervalMs": 90,
+      "mode": "heartbeat",
+      "roles": [
+        "main",
+        "vibration",
+        "secondary",
+        "tertiary"
+      ]
+    },
+    {
+      "id": "ramp-up",
+      "name": "Ramp up",
+      "description": "Climbs smoothly from low power to the configured maximum.",
+      "compatible": "1+ active outputs",
+      "intervalMs": 180,
+      "mode": "ramp",
+      "roles": [
+        "main",
+        "vibration",
+        "secondary",
+        "tertiary",
+        "suction",
+        "air"
+      ]
+    },
+    {
+      "id": "rollercoaster",
+      "name": "Rollercoaster",
+      "description": "Uneven rises and drops across compatible outputs.",
+      "compatible": "1+ active outputs",
+      "intervalMs": 170,
+      "mode": "rollercoaster",
+      "roles": [
+        "main",
+        "vibration",
+        "secondary",
+        "tertiary"
+      ]
+    },
+    {
+      "id": "tease",
+      "name": "Tease",
+      "description": "Low steady power with occasional stronger taps.",
+      "compatible": "1+ active outputs",
+      "intervalMs": 200,
+      "mode": "tease",
+      "roles": [
+        "main",
+        "vibration",
+        "secondary",
+        "tertiary"
+      ]
+    },
+    {
+      "id": "alternating",
+      "name": "Alternating outputs",
+      "description": "Chases power across two or more active outputs.",
+      "compatible": "2+ active outputs",
+      "intervalMs": 180,
+      "mode": "alternating",
+      "roles": [
+        "main",
+        "vibration",
+        "secondary",
+        "tertiary",
+        "suction",
+        "air",
+        "rotation",
+        "oscillation",
+        "other"
+      ]
+    },
+    {
+      "id": "random-chaos",
+      "name": "Random chaos",
+      "description": "Randomized conservative values across compatible outputs.",
+      "compatible": "1+ active outputs",
+      "intervalMs": 220,
+      "mode": "random",
+      "roles": [
+        "main",
+        "vibration",
+        "secondary",
+        "tertiary",
+        "suction",
+        "air",
+        "rotation",
+        "oscillation",
+        "other"
+      ]
+    },
+    {
+      "id": "all-steady",
+      "name": "All outputs steady",
+      "description": "Keeps all compatible outputs at steady configured power.",
+      "compatible": "1+ active outputs",
+      "intervalMs": 300,
+      "mode": "steady",
+      "roles": [
+        "main",
+        "vibration",
+        "secondary",
+        "tertiary",
+        "suction",
+        "air",
+        "rotation",
+        "oscillation",
+        "other"
+      ]
+    }
+  ]
+}

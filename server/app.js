@@ -17,6 +17,7 @@ var SERVER_MODULES = [
   "host-dashboard-actions.js",
   "diagnostics.js",
   "diagnostics-validator-types.js",
+  "intiface-service.js",
   "routes.js"
 ];
 

@@ -58,6 +58,49 @@ function validateConfig(config) {
   delete config.audiencePage.accessKey;
   config.audiencePage.autoRefreshMs = clampInt(config.audiencePage.autoRefreshMs ?? 2500, 500, 30000);
   config.audiencePage.requireUniqueSession = Boolean(config.audiencePage.requireUniqueSession ?? true);
+  config.intiface = config.intiface || {};
+  config.intiface.enabled = Boolean(config.intiface.enabled ?? false);
+  config.intiface.websocketUrl = String(config.intiface.websocketUrl || "ws://127.0.0.1:12345");
+  config.intiface.defaultPreviewDurationMs = clampInt(config.intiface.defaultPreviewDurationMs ?? 5000, 500, 15000);
+  config.intiface.maxPreviewDurationMs = clampInt(config.intiface.maxPreviewDurationMs ?? 15000, 500, 60000);
+  config.intiface.autoStopOnDisconnect = Boolean(config.intiface.autoStopOnDisconnect ?? true);
+  config.intiface.autoAssignByLabel = Boolean(config.intiface.autoAssignByLabel ?? true);
+  config.intiface.cacheEnabled = Boolean(config.intiface.cacheEnabled ?? true);
+  config.intiface.cacheFile = String(config.intiface.cacheFile || "data/intiface-device-cache.json");
+  config.intiface.templateLibraryPath = String(config.intiface.templateLibraryPath || "config/intiface-templates.json");
+  config.intiface.capabilityDatabasePath = String(config.intiface.capabilityDatabasePath || "data/intiface-capabilities.json");
+  config.intiface.capabilityDatabaseEnabled = Boolean(config.intiface.capabilityDatabaseEnabled ?? true);
+  config.intiface.liveMonitorEnabled = Boolean(config.intiface.liveMonitorEnabled ?? true);
+  config.intiface.previewSpeedMinPercent = clampInt(config.intiface.previewSpeedMinPercent ?? 25, 10, 100);
+  config.intiface.previewSpeedMaxPercent = clampInt(config.intiface.previewSpeedMaxPercent ?? 300, 100, 500);
+  config.intiface.previewMaxRepeats = clampInt(config.intiface.previewMaxRepeats ?? 20, 1, 100);
+  config.intiface.previewLoopAllowed = Boolean(config.intiface.previewLoopAllowed ?? true);
+  config.intiface.commandTimeoutMs = clampInt(config.intiface.commandTimeoutMs ?? 5000, 500, 30000);
+  config.intiface.commandGapMs = clampInt(config.intiface.commandGapMs ?? 120, 0, 5000);
+  config.intiface.healthCheckIntervalMs = clampInt(config.intiface.healthCheckIntervalMs ?? 15000, 3000, 300000);
+  config.intiface.healthCheckTimeoutMs = clampInt(config.intiface.healthCheckTimeoutMs ?? 5000, 1000, 30000);
+  config.intiface.autoReconnectOnCommandTimeout = Boolean(config.intiface.autoReconnectOnCommandTimeout ?? true);
+  config.intiface.gameIntegrationEnabled = Boolean(config.intiface.gameIntegrationEnabled ?? false);
+  config.intiface.reconnect = config.intiface.reconnect && typeof config.intiface.reconnect === "object" ? config.intiface.reconnect : {};
+  config.intiface.reconnect.enabled = Boolean(config.intiface.reconnect.enabled ?? true);
+  config.intiface.reconnect.maxAttempts = clampInt(config.intiface.reconnect.maxAttempts ?? 5, 0, 50);
+  config.intiface.reconnect.initialDelayMs = clampInt(config.intiface.reconnect.initialDelayMs ?? 1000, 100, 60000);
+  config.intiface.reconnect.maxDelayMs = clampInt(config.intiface.reconnect.maxDelayMs ?? 30000, 1000, 300000);
+  config.intiface.reconnect.backoffMultiplier = Math.max(1, Math.min(10, Number(config.intiface.reconnect.backoffMultiplier ?? 2) || 2));
+  config.intiface.deviceKeepAwake = config.intiface.deviceKeepAwake && typeof config.intiface.deviceKeepAwake === "object" ? config.intiface.deviceKeepAwake : {};
+  config.intiface.deviceKeepAwake.enabled = Boolean(config.intiface.deviceKeepAwake.enabled ?? true);
+  config.intiface.deviceKeepAwake.intervalMs = clampInt(config.intiface.deviceKeepAwake.intervalMs ?? 60000, 10000, 3600000);
+  config.intiface.deviceKeepAwake.commandTimeoutMs = clampInt(config.intiface.deviceKeepAwake.commandTimeoutMs ?? 3000, 500, 30000);
+  config.intiface.deviceKeepAwake.strategy = String(config.intiface.deviceKeepAwake.strategy || "idle-stop-command");
+  if (!Array.isArray(config.intiface.labelSeparators) || !config.intiface.labelSeparators.length) {
+    config.intiface.labelSeparators = [" - ", " – ", " — ", "-", "–", "—"];
+  }
+  config.intiface.labelSeparators = Array.from(new Set(config.intiface.labelSeparators.map(separator => String(separator || "")).filter(Boolean)));
+  if (!Array.isArray(config.intiface.featureRoles) || !config.intiface.featureRoles.length) {
+    config.intiface.featureRoles = ["ignore", "main", "secondary", "tertiary", "vibration", "suction", "air", "rotation", "oscillation", "other"];
+  }
+  config.intiface.featureRoles = Array.from(new Set(config.intiface.featureRoles.map(role => String(role || "").trim()).filter(Boolean)));
+
   config.server = config.server || {};
   config.server.host = String(config.server.host || "0.0.0.0");
   config.server.publicBaseUrl = String(config.server.publicBaseUrl || "");

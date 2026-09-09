@@ -1,4 +1,46 @@
 
+function getIntifaceCachePath() {
+  return path.join(DATA_DIR, "intiface-device-cache.json");
+}
+
+function normalizeIntifaceCache(raw) {
+  const profiles = raw && typeof raw === "object" && raw.profiles && typeof raw.profiles === "object" ? raw.profiles : {};
+  return { profiles };
+}
+
+function readIntifaceCache() {
+  const filePath = getIntifaceCachePath();
+  try {
+    if (!fs.existsSync(filePath)) return { profiles: {} };
+    return normalizeIntifaceCache(JSON.parse(fs.readFileSync(filePath, "utf8")));
+  } catch (err) {
+    console.warn(`Could not read Intiface cache: ${err.message}`);
+    return { profiles: {} };
+  }
+}
+
+function writeIntifaceCache(cache) {
+  const filePath = getIntifaceCachePath();
+  const normalized = normalizeIntifaceCache(cache);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify({ ...normalized, updatedAt: new Date().toISOString() }, null, 2));
+  return normalized;
+}
+
+function mergeIntifaceCache(existing, incoming) {
+  const current = normalizeIntifaceCache(existing);
+  const next = normalizeIntifaceCache(incoming);
+  return { profiles: { ...current.profiles, ...next.profiles } };
+}
+
+
+
+function getIntifaceTemplatesPath() { return path.join(APP_ROOT, "config", "intiface-templates.json"); }
+function getIntifaceCapabilitiesPath() { return path.join(DATA_DIR, "intiface-capabilities.json"); }
+function readJsonFileOr(filePath, fallback) { try { return fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf8")) : fallback; } catch (err) { console.warn(`Could not read ${filePath}: ${err.message}`); return fallback; } }
+function writeJsonFile(filePath, value) { fs.mkdirSync(path.dirname(filePath), { recursive: true }); fs.writeFileSync(filePath, JSON.stringify(value, null, 2)); return value; }
+function normalizeCapabilityDatabase(raw) { return { schemaVersion: 1, devices: raw && raw.devices && typeof raw.devices === "object" ? raw.devices : {} }; }
+
 var server = http.createServer(async (req, res) => {
   const requestStartedAt = Date.now();
   let urlForLogging = null;
@@ -43,6 +85,145 @@ var server = http.createServer(async (req, res) => {
     if (url.pathname === "/diagnostics" || url.pathname === "/debug") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       return sendDiagnosticsHtml(res, APP_ROOT);
+    }
+
+    if ((url.pathname === "/intiface/setup" || url.pathname === "/intiface/setup/") && req.method === "GET") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      return serveHtmlFile(res, path.join(APP_ROOT, "intiface", "setup.html"));
+    }
+
+
+    if (url.pathname === "/api/intiface/templates" && req.method === "GET") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      return sendJson(res, 200, readJsonFileOr(getIntifaceTemplatesPath(), { schemaVersion: 1, templates: [] }));
+    }
+
+    if (url.pathname === "/api/intiface/capabilities" && req.method === "GET") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      return sendJson(res, 200, normalizeCapabilityDatabase(readJsonFileOr(getIntifaceCapabilitiesPath(), { devices: {} })));
+    }
+
+    if (url.pathname === "/api/intiface/capabilities" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      const body = await readBody(req);
+      const db = normalizeCapabilityDatabase(readJsonFileOr(getIntifaceCapabilitiesPath(), { devices: {} }));
+      for (const item of Array.isArray(body.devices) ? body.devices.slice(0, 100) : []) {
+        const key = String(item.key || "").trim();
+        if (!key) continue;
+        db.devices[key] = { ...(db.devices[key] || {}), ...item, lastSeenAt: new Date().toISOString() };
+      }
+      writeJsonFile(getIntifaceCapabilitiesPath(), db);
+      return sendJson(res, 200, { ok: true, capabilities: db });
+    }
+
+    if (url.pathname === "/api/intiface/connect" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      intifaceService.connect({ automatic: false }).catch(() => {});
+      return sendJson(res, 202, { ok: true, runtime: intifaceService.snapshot() });
+    }
+
+    if (url.pathname === "/api/intiface/reconnect" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      return sendJson(res, 202, { ok: true, runtime: await intifaceService.forceReconnect() });
+    }
+
+    if (url.pathname === "/api/intiface/disconnect" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      return sendJson(res, 200, { ok: true, runtime: intifaceService.disconnect() });
+    }
+
+    if (url.pathname === "/api/intiface/scan" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      try { return sendJson(res, 200, { ok: true, runtime: await intifaceService.scan() }); }
+      catch (err) { return sendJson(res, 503, { error: err.message, runtime: intifaceService.snapshot() }); }
+    }
+
+    if (url.pathname === "/api/intiface/command" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      const body = await readBody(req);
+      try {
+        const response = await intifaceService.sendRaw(body.messages || body.message || body, body.waitForResponse !== false, body.timeoutMs);
+        return sendJson(res, 200, { ok: true, response, runtime: intifaceService.snapshot() });
+      } catch (err) {
+        return sendJson(res, 503, { error: err.message, runtime: intifaceService.snapshot() });
+      }
+    }
+
+    if (url.pathname === "/api/intiface/state" && req.method === "GET") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      const state = readSessionState();
+      const cache = readIntifaceCache();
+      if (!state.intiface || typeof state.intiface !== "object") state.intiface = { mappings: {} };
+      state.intiface.cache = cache;
+      let players = [];
+      try {
+        const { shockers } = await getShockers();
+        players = buildLogicalPlayersFromShockers(shockers || []);
+      } catch (err) {
+        players = [];
+      }
+      const runtime = intifaceService.snapshot();
+      const intifaceConfig = { ...(CONFIG.intiface || {}) };
+      return sendJson(res, 200, { config: intifaceConfig, intiface: state.intiface || { mappings: {}, cache }, cache, players, runtime, devices: runtime.devices });
+    }
+
+    if (url.pathname === "/api/intiface/mappings" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      const body = await readBody(req);
+      const state = readSessionState();
+      const mappings = body.mappings && typeof body.mappings === "object" ? body.mappings : {};
+      const devices = Array.isArray(body.devices) ? body.devices.slice(0, 50) : [];
+      const cache = writeIntifaceCache(mergeIntifaceCache(readIntifaceCache(), body.cache));
+      state.intiface = {
+        ...(state.intiface || {}),
+        mappings,
+        cache,
+        cachePath: path.relative(APP_ROOT, getIntifaceCachePath()).replace(/\\/g, "/"),
+        lastSeenDevices: devices,
+        updatedAt: new Date().toISOString()
+      };
+      writeSessionState(state);
+      return sendJson(res, 200, { ok: true, intiface: state.intiface, cache });
+    }
+
+    if (url.pathname === "/api/intiface/cache" && req.method === "GET") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      const cache = readIntifaceCache();
+      return sendJson(res, 200, { ok: true, cache, cachePath: path.relative(APP_ROOT, getIntifaceCachePath()).replace(/\\/g, "/") });
+    }
+
+    if (url.pathname === "/api/intiface/cache" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      const body = await readBody(req);
+      const incoming = normalizeIntifaceCache(body.cache || body);
+      const mode = String(body.mode || "merge").toLowerCase();
+      const cache = writeIntifaceCache(mode === "replace" ? incoming : mergeIntifaceCache(readIntifaceCache(), incoming));
+      const state = readSessionState();
+      state.intiface = { ...(state.intiface || {}), cache, cachePath: path.relative(APP_ROOT, getIntifaceCachePath()).replace(/\\/g, "/"), updatedAt: new Date().toISOString() };
+      writeSessionState(state);
+      return sendJson(res, 200, { ok: true, cache, intiface: state.intiface });
+    }
+
+    if (url.pathname === "/api/intiface/cache" && req.method === "DELETE") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      const cache = writeIntifaceCache({ profiles: {} });
+      const state = readSessionState();
+      state.intiface = { ...(state.intiface || {}), cache, cachePath: path.relative(APP_ROOT, getIntifaceCachePath()).replace(/\\/g, "/"), updatedAt: new Date().toISOString() };
+      writeSessionState(state);
+      return sendJson(res, 200, { ok: true, cache, intiface: state.intiface });
+    }
+
+    if (url.pathname === "/api/intiface/cache/profile" && req.method === "DELETE") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      const key = String(url.searchParams.get("key") || "");
+      if (!key) return sendJson(res, 400, { error: "Missing cache profile key" });
+      const cache = readIntifaceCache();
+      delete cache.profiles[key];
+      const saved = writeIntifaceCache(cache);
+      const state = readSessionState();
+      state.intiface = { ...(state.intiface || {}), cache: saved, cachePath: path.relative(APP_ROOT, getIntifaceCachePath()).replace(/\\/g, "/"), updatedAt: new Date().toISOString() };
+      writeSessionState(state);
+      return sendJson(res, 200, { ok: true, cache: saved, intiface: state.intiface });
     }
 
     if (url.pathname === "/api/debug/stats" && req.method === "GET") {
@@ -331,9 +512,9 @@ var server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/config" && req.method === "POST") {
       if (!validateRoleAccess("host", req, url) && !isLocalRequest(req)) return sendJson(res, 403, { error: "Invalid host key" });
       const incoming = await readBody(req);
-      const validated = validateConfig(incoming);
+      const validated = validateConfig(normalizeConfigForRuntime(incoming));
       writeConfig(validated);
-      CONFIG = validated;
+      CONFIG = readConfig();
       clearShockerCache();
       return sendJson(res, 200, { saved: true, config: CONFIG });
     }
@@ -406,6 +587,7 @@ var server = http.createServer(async (req, res) => {
       incoming.hostCommands = current.hostCommands || [];
       incoming.hostPaused = current.hostPaused || false;
       incoming.roleAccessKeys = current.roleAccessKeys || {};
+      incoming.intiface = incoming.intiface && typeof incoming.intiface === "object" ? incoming.intiface : (current.intiface || { mappings: {} });
       return sendJson(res, 200, { saved: true, session: writeSessionState(incoming) });
     }
 
@@ -457,6 +639,7 @@ var server = http.createServer(async (req, res) => {
 server.listen(PORT, process.env.HOST || CONFIG.server?.host || "0.0.0.0", () => {
   console.log(`${CONFIG.app?.serverBanner || CONFIG.app?.displayTitle || 'OpenShock Roulette'} running at http://localhost:${PORT}`);
   getLanAddresses().forEach(ip => console.log(`Player pages available at http://${ip}:${PORT}/player`));
+  console.log(`Intiface setup available at http://localhost:${PORT}/intiface/setup`);
   console.log(`Config source: ${CONFIG_PATH}; defaults: ${CONFIG_EXAMPLE_PATH}`);
   console.log(`SQLite JSON blob state DB: ${DB_PATH}`);
   if (!TOKEN) console.log("WARNING: OPENSHOCK_TOKEN / OPENSHOCK_API_TOKEN is not set.");

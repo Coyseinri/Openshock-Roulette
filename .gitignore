@@ -5,6 +5,7 @@ package-lock.json
 # Local runtime config
 config/*.json
 !config/*.example.json
+!config/intiface-templates.json
 config.json
 shockers.json
 .env
@@ -29,5 +30,6 @@ data/
 *.db
 *.db-wal
 *.db-shm
-
+# Local development notes
+PATCH_NOTES_*.txt
 

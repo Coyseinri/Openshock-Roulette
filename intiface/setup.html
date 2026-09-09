@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OSR Intiface Setup</title>
+  <link rel="stylesheet" href="/intiface/intiface.css" />
+</head>
+<body data-intiface-page="setup">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">OpenShock Roulette</p>
+      <h1>Intiface Setup & Device Mapping</h1>
+      <p class="muted">OSR connects to Intiface Central automatically. Inspect detected output features, label them, assign toys to players, and preview safe templates. No game activation yet.</p>
+    </div>
+    <nav>
+      <a href="/">Game</a>
+      <a href="/host">Host</a>
+      <a href="/diagnostics">Diagnostics</a>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <section class="panel connection-panel">
+      <h2>Connection</h2>
+      <p class="muted">The WebSocket is managed by the OSR server. Start Intiface Central before OSR, or let the server reconnect automatically when it becomes available.</p>
+      <div class="button-row">
+        <button id="scanBtn" class="secondary">Scan / Refresh Devices</button>
+        <button id="stopAllBtn" class="danger">Stop All</button>
+      </div>
+      <dl class="status-grid">
+        <div><dt>WS</dt><dd id="wsStatus">Disconnected</dd></div>
+        <div><dt>Server</dt><dd id="serverStatus">Unknown</dd></div>
+        <div><dt>Devices</dt><dd id="deviceCount">0</dd></div>
+        <div><dt>Mapping</dt><dd id="mappingStatus">Not saved</dd></div>
+        <div><dt>Cache</dt><dd id="cacheStatus">No cached profiles</dd></div>
+        <div><dt>Service health</dt><dd id="heartbeatStatus">Idle</dd></div>
+        <div><dt>Latency</dt><dd id="latencyStatus">—</dd></div>
+        <div><dt>Toy keep-awake</dt><dd id="keepAwakeStatus">Disabled</dd></div>
+        <div><dt>Current pattern</dt><dd id="currentPatternStatus">Idle</dd></div>
+      </dl>
+    </section>
+
+    <section class="panel setup-only">
+      <h2>Players</h2>
+      <p class="muted">Players come from the current OpenShock device/group setup. If the OpenShock token is not configured, you can still test toys; player assignment can be saved later.</p>
+      <div id="playerList" class="list muted">Loading players...</div>
+    </section>
+
+    <section class="panel setup-only">
+      <h2>Cache Management</h2>
+      <p class="muted">Profiles are saved in <code>data/intiface-device-cache.json</code>. Cache uses the toy display name/model plus feature layout, not the temporary DeviceIndex.</p>
+      <div class="button-row">
+        <button id="exportCacheBtn" class="secondary">Export Cache</button>
+        <button id="importCacheBtn" class="secondary">Import Cache</button>
+        <button id="resetCacheBtn" class="danger">Reset Cache</button>
+        <input id="importCacheFile" type="file" accept="application/json,.json" hidden />
+      </div>
+    </section>
+
+    <section class="panel setup-only">
+      <h2>Template Preview</h2>
+      <div class="template-controls">
+        <label class="field">
+          <span>Template</span>
+          <select id="templateSelect"></select>
+        </label>
+        <label class="field small-field">
+          <span>Duration ms</span>
+          <input id="templateDuration" type="number" min="500" max="15000" step="100" />
+        </label>
+        <label class="field small-field">
+          <span>Max power %</span>
+          <input id="templatePower" type="number" min="1" max="100" step="1" value="45" />
+        </label>
+        <label class="field small-field">
+          <span>Speed %</span>
+          <input id="templateSpeed" type="number" min="25" max="300" step="5" value="100" />
+        </label>
+        <label class="field small-field">
+          <span>Repeats</span>
+          <input id="templateRepeats" type="number" min="1" max="20" step="1" value="1" />
+        </label>
+        <label class="field checkbox-field">
+          <input id="templateLoop" type="checkbox" />
+          <span>Loop until stopped</span>
+        </label>
+      </div>
+      <p id="templateDescription" class="muted"></p>
+      <div class="template-flow-wrap">
+        <div class="template-flow-head">
+          <div>
+            <strong>10-second flow view</strong>
+            <span id="templateFlowContext" class="muted">Select a template to show its output curve.</span>
+          </div>
+          <span class="muted">0–100% output</span>
+        </div>
+        <div id="templateFlowGraph" class="template-flow-graph empty" role="img" aria-label="Empty template flow graph">
+          <span>Select a template to preview its 10-second flow.</span>
+        </div>
+        <div id="templateFlowLegend" class="template-flow-legend"></div>
+      </div>
+      <div class="button-row">
+        <button id="previewSelectedBtn">Preview Selected Device</button>
+        <button id="previewAllBtn" class="secondary">Preview All Devices</button>
+        <button id="stopPreviewBtn" class="danger">Stop Preview</button>
+        <button id="saveMappingsBtn" class="secondary">Save Mapping</button>
+      </div>
+    </section>
+
+    <section class="panel setup-only monitor-panel">
+      <h2>Live Intiface Monitor</h2>
+      <p class="muted">Runtime-only health and activity. Battery/RSSI appear only when the device and Intiface expose readable sensors.</p>
+      <div id="liveMonitor" class="monitor-grid muted">Connect OSR Server to Intiface to begin monitoring.</div>
+    </section>
+
+    <section class="panel devices-panel">
+      <h2>Detected Devices</h2>
+      <p class="muted">Feature labels come from Intiface where available. Indexes are shown for debugging only. Do not assume index 0 or 1 means vibration.</p>
+      <div id="deviceList" class="device-list empty">No devices detected yet.</div>
+    </section>
+
+    <section class="panel raw-panel">
+      <h2>Raw JSON Command</h2>
+      <p class="muted">Advanced testing. Payload is sent as-is to Intiface. Use an array of Buttplug messages.</p>
+      <textarea id="rawCommand" spellcheck="false">[
+  { "RequestDeviceList": { "Id": 999 } }
+]</textarea>
+      <div class="button-row">
+        <button id="sendRawBtn" class="secondary">Send Raw</button>
+        <button id="copyLogBtn" class="secondary">Copy Log</button>
+        <button id="clearLogBtn" class="secondary">Clear Log</button>
+      </div>
+    </section>
+
+    <section class="panel log-panel">
+      <h2>Live Log</h2>
+      <pre id="logOutput"></pre>
+    </section>
+  </main>
+
+  <script src="/intiface/intiface-client.js"></script>
+</body>
+</html>
