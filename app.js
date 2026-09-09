@@ -243,6 +243,7 @@ async function spinRound() {
     await sleep(hitDelay);
 
     const appliedById = await activateTargets(targets, value, roundState);
+    await runDeviceAwareEventEffects(roundState, targets, value);
     recordRoundTargets(targets, { value, valueByTargetId: appliedById, wasAll: targetPicked.type === "all" });
     if (value > 0) {
       lastShockedTargets = [...targets];

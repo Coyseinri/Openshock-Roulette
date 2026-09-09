@@ -611,6 +611,18 @@ var server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { schemaVersion: getMeta("schemaVersion"), appVersion: getMeta("appVersion"), storageMode: getMeta("storageMode"), currentGameId: getCurrentGameId(), counts });
     }
 
+    if (url.pathname === "/api/event-effects/run" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      try { return sendJson(res, 200, await runEventDeviceEffects(await readBody(req))); }
+      catch (err) { return sendJson(res, 400, { error: err.message }); }
+    }
+
+    if (url.pathname === "/api/event-effects/cancel" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      cancelAllEventEffectRuns("Event cancelled");
+      return sendJson(res, 200, { cancelled: true });
+    }
+
     if (url.pathname === "/api/event-log" && req.method === "POST") {
       if (!validateRoleAccess("host", req, url) && !isLocalRequest(req)) return sendJson(res, 403, { error: "Invalid host key" });
       const body = await readBody(req);

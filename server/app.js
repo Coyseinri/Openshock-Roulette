@@ -20,6 +20,7 @@ var SERVER_MODULES = [
   "diagnostics-validator-types.js",
   "intiface-service.js",
   "game-activation.js",
+  "event-device-effects.js",
   "routes.js"
 ];
 

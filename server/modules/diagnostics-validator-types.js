@@ -1,5 +1,7 @@
 var DIAGNOSTIC_KNOWN_EVENT_EFFECT_TYPES = [
-  "manualTargetByLastShocked", "manualTargetByHost", "groupVoteTarget",
+  "activateTargetDevices", "activateTargetToys", "activateTargetShocks", "activateAllToys", "activateOtherToys",
+  "activateRandomToyPlayers", "activateRandomShockPlayers", "sequencePlayers", "devicePowerModifier", "deviceDurationModifier", "toyTemplateOverride",
+    "manualTargetByLastShocked", "manualTargetByHost", "groupVoteTarget",
   "excludeLastTarget", "excludeLastShocked", "forcePreviousTarget", "forceLastShockedTarget",
   "forceLeastShockedTarget", "forceMostShockedTarget", "forceLeastSelectedTarget", "forceMostSelectedTarget",
   "forceLeastVibedTarget", "forceMostVibedTarget", "forceLowestIntensityTarget", "forceHighestIntensityTarget",

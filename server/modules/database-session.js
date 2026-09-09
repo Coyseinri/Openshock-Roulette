@@ -317,6 +317,7 @@ function archiveSessionState() {
 }
 
 function resetSessionState() {
+  if (typeof cancelAllEventEffectRuns === "function") cancelAllEventEffectRuns("Session reset");
   const previous = readSessionState();
   const archivedTo = archiveSessionState();
   const fresh = defaultSessionState();

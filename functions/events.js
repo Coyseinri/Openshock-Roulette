@@ -87,6 +87,37 @@ function getEventEffects(card) {
   }).filter(Boolean);
 }
 
+const DEVICE_AWARE_EVENT_EFFECT_TYPES = new Set([
+  "activateTargetDevices", "activateTargetToys", "activateTargetShocks", "activateAllToys", "activateOtherToys",
+  "activateRandomToyPlayers", "activateRandomShockPlayers", "sequencePlayers", "devicePowerModifier", "deviceDurationModifier", "toyTemplateOverride"
+]);
+
+async function runDeviceAwareEventEffects(roundState, targets, rolledValue) {
+  const effects = Array.isArray(roundState?.deviceEffects) ? roundState.deviceEffects : [];
+  if (!effects.length) return null;
+  try {
+    const duration = Number(document.getElementById("duration")?.value || config?.safety?.defaultDurationMs || 700);
+    const res = await fetch("/api/event-effects/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        effects,
+        targetPlayerIds: (targets || []).map(player => player.id),
+        rolledValue: Number(rolledValue || 0),
+        mode: Number(rolledValue || 0) === 0 ? "vibe" : "normal",
+        shockDurationMs: duration
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Device-aware event effect failed");
+    log(`Device-aware event effects started: ${effects.map(effect => effect.type).join(", ")}.`);
+    return data;
+  } catch (err) {
+    log(`Device-aware event effect skipped/failed: ${err.message}`);
+    return null;
+  }
+}
+
 function cardAffects(card, wheel) {
   const effects = getEventEffects(card);
   if (wheel === "target" && card?.targetWheel) return true;
@@ -110,6 +141,7 @@ function cardAffects(card, wheel) {
 
   return effects.some(e => {
     const t = String(e.type || "");
+    if (DEVICE_AWARE_EVENT_EFFECT_TYPES.has(t)) return wheel === "fate";
     if (wheel === "target") return targetEffects.includes(t);
     if (wheel === "fate") return fateEffects.includes(t);
     return false;
@@ -193,6 +225,7 @@ async function runPreRoundEvent(pendingRoundModifiers = []) {
     valueOffset: 0,
     forceAllTargets: false,
     postTargetEffects: [],
+    deviceEffects: [],
     consumedModifierIds: new Set(),
     guaranteedTargets: [],
     virtualTargets: []
@@ -235,6 +268,7 @@ function applyEventEffects(card, roundState) {
     const originalType = String(effect.type || "");
     if (["removeSafe", "removeSAFE", "disableSafeTarget", "disableTargetSafe", "noSafeTarget"].includes(originalType)) effect.type = "disableSafe";
     if (["forceVibe", "vibeOnly", "vibrateOnly"].includes(originalType)) effect.type = "forceVibrateOnly";
+    if (DEVICE_AWARE_EVENT_EFFECT_TYPES.has(effect.type)) roundState.deviceEffects.push({ ...effect });
     if (effect.type === "forceVibrateOnly" || (effect.type === "forceControlType" && String(effect.controlType || effect.value || "").toLowerCase() === "vibrate")) {
       roundState.forceValue = 0;
       roundState.forceFateKey = effect.fateKey || "vibe";
