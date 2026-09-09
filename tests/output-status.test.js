@@ -18,3 +18,7 @@ assert.ok(host.includes("/api/host/stop-all"));
 assert.ok(player.includes("renderOutputStatus(data.outputStatus)"));
 assert.ok(api.includes("setInterval(loadOutputStatus, 2500)"),"Main page status should update without a full page rerender");
 console.log("Output status and Stop All regression test passed.");
+
+const mainHtml=fs.readFileSync(path.join(root,"index.html"),"utf8");
+assert.ok(mainHtml.includes('class="titleStatusLine"'),"Main output status should share the title row");
+assert.equal((mainHtml.match(/id="outputStatusBar"/g)||[]).length,1,"Main output status must not keep a separate duplicate row");

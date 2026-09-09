@@ -769,3 +769,5 @@ canvas.wheelCanvas {
 }
 
 .outputStatusBar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;max-width:1500px;width:100%;margin:0 auto}.outputBadge,.playerOutputStatus span,.deviceStatusDots span{font-weight:800}.status-ok{color:#55d17a}.status-bad{color:#ff6b6b}.status-disabled{opacity:.55}.playerOutputStatus{display:flex;gap:8px;margin-top:4px;font-size:.86rem}
+
+.titleStatusLine{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.titleStatusLine h1{margin:0}.titleOutputStatus{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.titleOutputStatus .outputBadge{white-space:nowrap}@media(max-width:700px){.titleStatusLine{gap:10px}.titleOutputStatus{gap:8px}}

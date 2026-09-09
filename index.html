@@ -20,7 +20,14 @@
   </div>
   <header class="topbar">
     <div>
-      <h1 id="pageTitle">OpenShock Roulette</h1>
+      <div class="titleStatusLine">
+        <h1 id="pageTitle">OpenShock Roulette</h1>
+        <div class="titleOutputStatus" id="outputStatusBar" aria-label="Output status">
+          <span class="outputBadge status-disabled" id="mainShockStatus">● Shock</span>
+          <span class="outputBadge status-disabled" id="mainToyStatus">● Toy</span>
+          <span class="muted" id="outputStatusNote"></span>
+        </div>
+      </div>
       <div class="muted" id="subtitleText">Canvas wheels with labels. Weights affect odds, not visual clutter.</div>
     </div>
     <div class="stats">
@@ -57,11 +64,6 @@
       </div>
     </section>
 
-    <section class="outputStatusBar" id="outputStatusBar" aria-label="Output status">
-      <span class="outputBadge status-disabled" id="mainShockStatus">● Shock</span>
-      <span class="outputBadge status-disabled" id="mainToyStatus">● Toy</span>
-      <span class="muted" id="outputStatusNote"></span>
-    </section>
 
     <section class="controlPanel" aria-label="Game controls">
       <div class="bigResult" id="mainResult">Ready</div>
