@@ -32,6 +32,7 @@ const DIAGNOSTIC_OBJECTIVE_TYPES = new Set([
   "selected", "shocked", "vibes", "safe", "allTargeted", "bodyguards", "cursesUsed",
   "chaosUsed", "tokensBought", "tokensOwned", "highPlusSurvived", "eventCardsExperienced",
   "sabotageEffects", "redirectedHits", "roundsSinceSelected", "roundsSinceShocked",
+  "totalIntensity", "publicProgress", "manual",
   "rounds", "audienceVotesApproved", "objectiveCompletions"
 ]);
 
