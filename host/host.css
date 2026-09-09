@@ -10,3 +10,5 @@
 .hostTopCard .hostPrimaryActions { margin-top: 14px; }
 .hostPrimaryActions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 640px) { .hostPrimaryActions { grid-template-columns: 1fr; } }
+
+.hostOutputStatus{display:grid;gap:6px;margin-top:12px}.hostOutputTop{display:flex;gap:10px;font-weight:900}.hostOutputRow{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-top:1px solid rgba(255,255,255,.08)}.status-ok{color:#55d17a}.status-bad{color:#ff6b6b}.status-disabled{opacity:.55}.hostPrimaryActions{grid-template-columns:repeat(4,minmax(0,1fr))}

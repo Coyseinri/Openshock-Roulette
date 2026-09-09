@@ -392,5 +392,6 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   await loadPlayerObjectivePanel();
+  startOutputStatusPolling();
   startHostCommandPolling();
 })();

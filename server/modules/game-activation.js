@@ -438,7 +438,61 @@ handleControl = async function handleUnifiedGameControl(req, res) {
   }
 };
 
+function safeOutputDeviceStatus(device, shockReachable) {
+  const provider = device.provider === "intiface" ? "intiface" : "openshock";
+  const enabled = device.enabled !== false;
+  const online = provider === "intiface" ? Boolean(device.online) : Boolean(shockReachable);
+  return {
+    provider,
+    name: String(device.memberName || device.name || (provider === "intiface" ? "Toy" : "Shock")),
+    enabled,
+    disabled: !enabled,
+    online: enabled && online,
+    mappingReady: provider === "intiface" ? device.mappingReady !== false : true
+  };
+}
+
+function outputStatusForPlayer(player, shockReachable) {
+  const devices = (player.devices || []).map(device => safeOutputDeviceStatus(device, shockReachable));
+  const providerSummary = provider => {
+    const list = devices.filter(device => device.provider === provider);
+    return {
+      configured: list.length > 0,
+      online: list.some(device => device.enabled && device.online),
+      disabled: list.length > 0 && list.every(device => !device.enabled),
+      count: list.length
+    };
+  };
+  return {
+    playerId: player.id,
+    name: player.name,
+    enabled: player.enabled !== false,
+    shock: providerSummary("openshock"),
+    toy: providerSummary("intiface"),
+    devices
+  };
+}
+
+async function getOutputStatusSnapshot(existingPlayers = null) {
+  const players = Array.isArray(existingPlayers) ? existingPlayers : await getConfiguredPlayers(null, { includeDisabled: true });
+  const shockConfigured = players.some(player => (player.devices || []).some(device => device.provider === "openshock"));
+  const toyConfigured = players.some(player => (player.devices || []).some(device => device.provider === "intiface"));
+  const shockReachable = openShockRuntimeStatus.reachable === null
+    ? Boolean(shockerCache?.value && !shockerCache?.lastError && !shockerCache?.value?.warning)
+    : openShockRuntimeStatus.reachable;
+  const toyRuntime = typeof intifaceService !== "undefined" ? intifaceService.snapshot() : { enabled: false, ready: false };
+  return {
+    updatedAt: new Date().toISOString(),
+    providers: {
+      shock: { configured: shockConfigured, reachable: Boolean(shockReachable), lastRequestAt: openShockRuntimeStatus.lastRequestAt, lastError: openShockRuntimeStatus.lastError },
+      toy: { configured: toyConfigured, enabled: toyRuntime.enabled === true, connected: toyRuntime.ready === true, state: toyRuntime.state || "disabled", deviceCount: Number(toyRuntime.connectedDeviceCount || 0) }
+    },
+    players: players.map(player => outputStatusForPlayer(player, shockReachable))
+  };
+}
+
 async function stopAllGameOutputs(ids = []) {
+  if (typeof cancelAllEventEffectRuns === "function") cancelAllEventEffectRuns("Stop All");
   for (const run of activeGameToyRuns.values()) run.cancelled = true;
   activeGameToyRuns.clear();
   const result = { openshock: { ok: true, skipped: true }, intiface: { ok: true, skipped: true } };

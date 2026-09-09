@@ -28,11 +28,21 @@ function readBody(req) {
   });
 }
 
+var openShockRuntimeStatus = { reachable: null, lastRequestAt: null, lastError: null, lastStatusCode: null };
+
+function markOpenShockRuntimeStatus(ok, { error = null, statusCode = null } = {}) {
+  openShockRuntimeStatus.reachable = Boolean(ok);
+  openShockRuntimeStatus.lastRequestAt = new Date().toISOString();
+  openShockRuntimeStatus.lastError = ok ? null : String(error || (statusCode ? `HTTP ${statusCode}` : "OpenShock request failed"));
+  openShockRuntimeStatus.lastStatusCode = statusCode === null || statusCode === undefined ? null : Number(statusCode);
+}
+
 function requestOpenShock(method, apiPath, body, optionsOverride = {}) {
   return new Promise((resolve, reject) => {
     if (!TOKEN) {
       const err = new Error("Missing OPENSHOCK_TOKEN / OPENSHOCK_API_TOKEN environment variable");
       debugState.counters.openShockErrors += 1;
+      markOpenShockRuntimeStatus(false, { error: err.message });
       logOpenShockCall({
         time: new Date().toISOString(),
         method,
@@ -83,6 +93,7 @@ function requestOpenShock(method, apiPath, body, optionsOverride = {}) {
         debugState.openShockDurations.push(durationMs);
         while (debugState.openShockDurations.length > 100) debugState.openShockDurations.shift();
         if (res.statusCode >= 400) debugState.counters.openShockErrors += 1;
+        markOpenShockRuntimeStatus(res.statusCode >= 200 && res.statusCode < 300, { statusCode: res.statusCode });
         logOpenShockCall({
           time: new Date().toISOString(),
           method,
@@ -106,6 +117,7 @@ function requestOpenShock(method, apiPath, body, optionsOverride = {}) {
       const durationMs = Date.now() - startedAt;
       debugState.counters.openShockErrors += 1;
       if (timedOut) debugState.counters.openShockTimeouts += 1;
+      markOpenShockRuntimeStatus(false, { error: err.message });
       logOpenShockCall({
         time: new Date().toISOString(),
         method,

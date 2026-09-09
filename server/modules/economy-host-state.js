@@ -219,11 +219,13 @@ async function getHostState() {
   const { shockers } = await getShockers();
   const players = await publicPlayers(shockers, state);
   const publicObjectives = publicObjectiveViews(state, players);
+  const outputStatus = await getOutputStatusSnapshot(players);
   writeSessionState(state);
   return {
     roundNumber: state.roundNumber,
     updatedAt: state.updatedAt,
     players,
+    outputStatus,
     economy: economyConfig(),
     hostPage: hostPageConfig(),
     eventCards: hostEventCardsView(),

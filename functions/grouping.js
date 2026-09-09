@@ -169,6 +169,12 @@ function renderPlayers() {
     info.appendChild(idLine);
     info.appendChild(statsLine);
 
+    const outputLine = document.createElement("div");
+    outputLine.className = "playerOutputStatus";
+    outputLine.dataset.playerOutputStatus = s.id;
+    outputLine.innerHTML = `<span class="status-disabled">● checking output</span>`;
+    info.appendChild(outputLine);
+
     if (s.devices?.length > 1 || s.isGrouped) {
       const deviceLine = document.createElement("div");
       deviceLine.className = "playerStats groupedDeviceLine";

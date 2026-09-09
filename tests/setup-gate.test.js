@@ -21,5 +21,5 @@ assert.ok(dbSource.includes("setupCompleted: data.setupCompleted === true"),"ses
 const setupHtml=fs.readFileSync(path.join(__dirname,"..","setup","index.html"),"utf8");
 assert.ok(setupHtml.includes("Start / Continue Game"),"Player Setup must expose a Start / Continue Game action");
 const setupJs=fs.readFileSync(path.join(__dirname,"..","setup","setup.js"),"utf8");
-assert.ok(setupJs.includes("action:'completeSetup'"),"Start / Continue Game must persist setup completion");
+assert.ok(/action\s*:\s*["']completeSetup["']/.test(setupJs),"Start / Continue Game must persist setup completion");
 console.log("Player Setup gate regression test passed.");

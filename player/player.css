@@ -43,3 +43,5 @@ h2 { font-size: 1.2rem; color: #d8d0ff; }
   opacity: .8;
   font-weight: 800;
 }
+
+.playerDeviceStatus{display:grid;gap:8px}.playerDeviceRow{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid rgba(255,255,255,.08)}.playerDeviceRow:first-child{border-top:0}.status-ok{color:#55d17a}.status-bad{color:#ff6b6b}.status-disabled{opacity:.55}

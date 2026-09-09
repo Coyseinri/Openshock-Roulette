@@ -395,6 +395,11 @@ var server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ...playerPagesConfig(), publicBaseUrl: getPublicBaseUrl(req) });
     }
 
+    if (url.pathname === "/api/output-status" && req.method === "GET") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      return sendJson(res, 200, await getOutputStatusSnapshot());
+    }
+
     if (url.pathname === "/api/player-links" && req.method === "GET") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       return sendJson(res, 200, await buildPlayerLinks(req));
@@ -483,6 +488,13 @@ var server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { commands: pending });
     }
 
+    if (url.pathname === "/api/host/stop-all" && req.method === "POST") {
+      if (!hostPageConfig().enabled) return sendJson(res, 403, { error: "Host page is disabled" });
+      if (!validateRoleAccess("host", req, url) && !isLocalRequest(req)) return sendJson(res, 403, { error: "Invalid host key" });
+      const result = await stopAllGameOutputs([]);
+      return sendJson(res, 200, { stopped: true, ...result });
+    }
+
     if (url.pathname === "/api/host/control" && req.method === "POST") {
       if (!hostPageConfig().enabled) return sendJson(res, 403, { error: "Host page is disabled" });
       if (!validateRoleAccess("host", req, url) && !isLocalRequest(req)) return sendJson(res, 403, { error: "Invalid host key" });
@@ -543,7 +555,11 @@ var server = http.createServer(async (req, res) => {
         .filter(m => m.status !== "consumed" && m.type === "bodyguardNextRound")
         .filter(m => String(m.bodyguardPlayerId) === String(playerId) || String(m.targetPlayerId) === String(playerId))
         .map(m => modifierView(m, shockers));
-      return sendJson(res, 200, { player, players, ...getPlayerState(playerId), playerPages: playerPagesConfig(), economy: economyConfig(), pendingActions, activeBodyguards });
+      const outputSnapshot = await getOutputStatusSnapshot(players);
+      const ownOutputStatus = outputSnapshot.players.find(item => String(item.playerId) === String(playerId)) || { playerId, name: player.name, devices: [], shock: { configured: false, online: false }, toy: { configured: false, online: false } };
+      const safePlayer = { id: player.id, name: player.name, enabled: player.enabled !== false, isGrouped: Boolean(player.isGrouped), devices: ownOutputStatus.devices };
+      const safePlayers = players.map(item => ({ id: item.id, name: item.name }));
+      return sendJson(res, 200, { player: safePlayer, players: safePlayers, outputStatus: ownOutputStatus, ...getPlayerState(playerId), playerPages: playerPagesConfig(), economy: economyConfig(), pendingActions, activeBodyguards });
     }
 
     const playerActionMatch = url.pathname.match(/^\/api\/player\/([^/]+)\/action$/);

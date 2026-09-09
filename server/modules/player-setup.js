@@ -435,7 +435,10 @@ async function getPlayerSetupState({ forceRefresh = false } = {}) {
       return { setupCompleted: session.setupCompleted === true, roundNumber: Number(session.roundNumber || 0) };
     })(),
     providers: {
-      shock: { reachable: !shockerError, lastError: shockerError },
+      shock: (() => {
+        const runtime = typeof openShockRuntimeStatus !== "undefined" ? openShockRuntimeStatus : { reachable: null, lastError: null };
+        return { reachable: runtime.reachable === null ? (!shockerError && !shockerResult.warning) : runtime.reachable, lastError: runtime.lastError || shockerError || shockerResult.warning || null };
+      })(),
       toy: { enabled: CONFIG.intiface?.enabled === true, connected: Boolean(typeof intifaceService !== "undefined" && intifaceService.snapshot()?.ready), state: typeof intifaceService !== "undefined" ? intifaceService.snapshot()?.state : "disabled", deviceCount: liveToys.size }
     }
   };

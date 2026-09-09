@@ -6,6 +6,41 @@ let latest = null;
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m])); }
 function setStatus(text) { document.getElementById("statusLine").textContent = text; }
 
+function renderOutputStatus(status) {
+  const host = document.getElementById("hostOutputStatus");
+  if (!host) return;
+  const players = status?.players || [];
+  const provider = status?.providers || {};
+  const top = [
+    provider.shock?.configured ? `<span class="${provider.shock.reachable ? "status-ok" : "status-bad"}">● Shock</span>` : `<span class="status-disabled">● Shock</span>`,
+    provider.toy?.configured ? `<span class="${!provider.toy.enabled ? "status-disabled" : provider.toy.connected ? "status-ok" : "status-bad"}">● Toy</span>` : `<span class="status-disabled">● Toy</span>`
+  ].join(" ");
+  const rows = players.map(p => {
+    const bits = [];
+    if (p.shock?.configured) bits.push(`<span class="${p.shock.disabled ? "status-disabled" : p.shock.online ? "status-ok" : "status-bad"}">● Shock</span>`);
+    if (p.toy?.configured) bits.push(`<span class="${p.toy.disabled ? "status-disabled" : p.toy.online ? "status-ok" : "status-bad"}">● Toy</span>`);
+    if (!bits.length) bits.push(`<span class="status-bad">● No output</span>`);
+    return `<div class="hostOutputRow"><strong>${esc(p.name)}</strong><span>${bits.join(" ")}</span></div>`;
+  }).join("");
+  host.innerHTML = `<div class="hostOutputTop">${top}</div>${rows}`;
+}
+
+async function stopAllOutputs() {
+  const btn = document.getElementById("hostStopAllBtn");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(`/api/host/stop-all?key=${encodeURIComponent(key)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Stop All failed");
+    setStatus(`STOP ALL sent · Shock ${data.openshock?.ok ? "ok" : data.openshock?.skipped ? "skipped" : "failed"} · Toy ${data.intiface?.ok ? "ok" : data.intiface?.skipped ? "skipped" : "failed"}`);
+    await load();
+  } catch (err) {
+    setStatus(`STOP ALL: ${err.message}`);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function fillPlayerSelect(select, players) {
   if (!select) return;
   const current = select.value;
@@ -346,6 +381,7 @@ async function load() {
       pauseBtn.dataset.command = data.hostPaused ? "resume" : "pause";
     }
     renderPlayers(data.players || []);
+    renderOutputStatus(data.outputStatus);
     renderRewardOptions(data.economy || {});
     renderEventCardOptions(data.eventCards || []);
     renderModifiers(data.pendingRoundModifiers || []);
@@ -375,3 +411,6 @@ load();
 document.getElementById("hostSpinBtn")?.addEventListener("click", () => sendSpinnerCommand("spin"));
 document.getElementById("hostPauseToggleBtn")?.addEventListener("click", (event) => sendSpinnerCommand(event.currentTarget.dataset.command || "pause"));
 document.getElementById("hostForceEventBtn")?.addEventListener("click", () => sendSpinnerCommand("forceEventNextRound"));
+
+const hostStopAllButton = document.getElementById("hostStopAllBtn");
+if (hostStopAllButton) hostStopAllButton.onclick = stopAllOutputs;

@@ -17,6 +17,14 @@ function setActionStatus(text) {
   document.getElementById("actionStatus").textContent = text;
 }
 
+function renderOutputStatus(status) {
+  const host = document.getElementById("playerOutputStatus");
+  if (!host) return;
+  const devices = status?.devices || [];
+  if (!devices.length) { host.innerHTML = `<span class="status-bad">● No configured output</span>`; return; }
+  host.innerHTML = devices.map(device => `<div class="playerDeviceRow"><strong>${esc(device.provider === "intiface" ? "Toy" : "Shock")}</strong><span class="${device.disabled ? "status-disabled" : device.online ? "status-ok" : "status-bad"}">● ${esc(device.name)}${device.disabled ? " · disabled" : device.online ? "" : " · offline"}</span></div>`).join("");
+}
+
 function statRow(label, value) {
   return `<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
 }
@@ -114,6 +122,7 @@ function renderActions(data) {
 
 function render(data) {
   latestData = data;
+  renderOutputStatus(data.outputStatus);
   document.getElementById("playerName").textContent = data.player?.name || "Player";
   document.getElementById("roundLine").textContent = `Round ${data.roundNumber ?? 0}`;
   document.getElementById("pointsLine").textContent = `${data.points ?? 0} points`;

@@ -767,3 +767,5 @@ canvas.wheelCanvas {
 .player {
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
+
+.outputStatusBar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;max-width:1500px;width:100%;margin:0 auto}.outputBadge,.playerOutputStatus span,.deviceStatusDots span{font-weight:800}.status-ok{color:#55d17a}.status-bad{color:#ff6b6b}.status-disabled{opacity:.55}.playerOutputStatus{display:flex;gap:8px;margin-top:4px;font-size:.86rem}

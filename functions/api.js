@@ -215,3 +215,50 @@ async function savePlayerMultipliers() {
     log(`Could not save player multipliers: ${err.message}`);
   }
 }
+
+
+let latestOutputStatus = null;
+let outputStatusTimer = null;
+
+function outputBadgeClass(provider) {
+  if (!provider?.configured) return "status-disabled";
+  if (provider.disabled) return "status-disabled";
+  return provider.online || provider.reachable || provider.connected ? "status-ok" : "status-bad";
+}
+
+function renderMainOutputStatus() {
+  if (!latestOutputStatus) return;
+  const shock = latestOutputStatus.providers?.shock || {};
+  const toy = latestOutputStatus.providers?.toy || {};
+  const shockEl = document.getElementById("mainShockStatus");
+  const toyEl = document.getElementById("mainToyStatus");
+  if (shockEl) { shockEl.className = `outputBadge ${!shock.configured ? "status-disabled" : shock.reachable ? "status-ok" : "status-bad"}`; shockEl.textContent = `● Shock${shock.configured ? "" : " (not configured)"}`; }
+  if (toyEl) { toyEl.className = `outputBadge ${!toy.configured || !toy.enabled ? "status-disabled" : toy.connected ? "status-ok" : "status-bad"}`; toyEl.textContent = `● Toy${toy.configured ? toy.enabled ? "" : " (disabled)" : " (not configured)"}`; }
+  document.querySelectorAll("[data-player-output-status]").forEach(el => {
+    const item = latestOutputStatus.players?.find(player => String(player.playerId) === String(el.dataset.playerOutputStatus));
+    if (!item) return;
+    const parts = [];
+    if (item.shock?.configured) parts.push(`<span class="${item.shock.disabled ? "status-disabled" : item.shock.online ? "status-ok" : "status-bad"}">● Shock</span>`);
+    if (item.toy?.configured) parts.push(`<span class="${item.toy.disabled ? "status-disabled" : item.toy.online ? "status-ok" : "status-bad"}">● Toy</span>`);
+    el.innerHTML = parts.join(" ") || `<span class="status-bad">● No output</span>`;
+  });
+}
+
+async function loadOutputStatus() {
+  try {
+    const res = await fetch("/api/output-status", { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Could not load output status");
+    latestOutputStatus = data;
+    renderMainOutputStatus();
+  } catch (err) {
+    const note = document.getElementById("outputStatusNote");
+    if (note) note.textContent = err.message;
+  }
+}
+
+function startOutputStatusPolling() {
+  clearInterval(outputStatusTimer);
+  loadOutputStatus();
+  outputStatusTimer = setInterval(loadOutputStatus, 2500);
+}
