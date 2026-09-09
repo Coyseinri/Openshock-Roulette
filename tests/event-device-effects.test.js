@@ -43,7 +43,21 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,"..","server","modules","eve
  assert.equal(calls.shock[0].devices[0].intensityMultiplier,50);
  assert.equal(calls.toy[0].device.intensityMultiplier,50);
 
- const seq=await context.runEventDeviceEffects({effects:[{type:"sequencePlayers",provider:"shock",count:2,delayMs:100}],rolledValue:20,shockDurationMs:700});
+ await assert.rejects(
+   context.runEventDeviceEffects({effects:[{type:"sequencePlayers",provider:"banana",count:2,delayMs:1000}],rolledValue:20,shockDurationMs:700}),
+   /provider must be any, toy, or shock/
+ );
+ await assert.rejects(
+   context.runEventDeviceEffects({effects:[{type:"devicePowerModifier",multiplier:1.5},{type:"activateTargetToys"}],targetPlayerIds:["p1"],rolledValue:20,shockDurationMs:700}),
+   /between 0 and 1/
+ );
+
+ calls.shock.length=calls.toy.length=0;
+ await context.runEventDeviceEffects({effects:[{type:"activateTargetShocks"}],targetPlayerIds:["p1"],rolledValue:50,shockDurationMs:700});
+ assert.equal(calls.shock[0].devices.length,1);
+ assert.equal(calls.toy.length,0,"Shock-only target primitive must not start Toys");
+
+ const seq=await context.runEventDeviceEffects({effects:[{type:"sequencePlayers",provider:"shock",count:2,delayMs:250}],rolledValue:20,shockDurationMs:700});
  assert.equal(seq.results[0].started,true);
  assert.equal(seq.results[0].provider,"shock");
  assert.equal(seq.results[0].delayMs,1200,"Shock sequence delay must include shock duration plus buffer");

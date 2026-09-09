@@ -88,6 +88,7 @@ function getEventEffects(card) {
 }
 
 const DEVICE_AWARE_EVENT_EFFECT_TYPES = new Set([
+  "suppressNormalActivation",
   "activateTargetDevices", "activateTargetToys", "activateTargetShocks", "activateAllToys", "activateOtherToys",
   "activateRandomToyPlayers", "activateRandomShockPlayers", "sequencePlayers", "devicePowerModifier", "deviceDurationModifier", "toyTemplateOverride"
 ]);
@@ -225,6 +226,7 @@ async function runPreRoundEvent(pendingRoundModifiers = []) {
     valueOffset: 0,
     forceAllTargets: false,
     postTargetEffects: [],
+    suppressNormalActivation: false,
     deviceEffects: [],
     consumedModifierIds: new Set(),
     guaranteedTargets: [],
@@ -268,7 +270,12 @@ function applyEventEffects(card, roundState) {
     const originalType = String(effect.type || "");
     if (["removeSafe", "removeSAFE", "disableSafeTarget", "disableTargetSafe", "noSafeTarget"].includes(originalType)) effect.type = "disableSafe";
     if (["forceVibe", "vibeOnly", "vibrateOnly"].includes(originalType)) effect.type = "forceVibrateOnly";
-    if (DEVICE_AWARE_EVENT_EFFECT_TYPES.has(effect.type)) roundState.deviceEffects.push({ ...effect });
+    if (effect.type === "suppressNormalActivation") {
+      roundState.suppressNormalActivation = true;
+      showEventResult("Normal physical output is replaced by this event's device effects.");
+    } else if (DEVICE_AWARE_EVENT_EFFECT_TYPES.has(effect.type)) {
+      roundState.deviceEffects.push({ ...effect });
+    }
     if (effect.type === "forceVibrateOnly" || (effect.type === "forceControlType" && String(effect.controlType || effect.value || "").toLowerCase() === "vibrate")) {
       roundState.forceValue = 0;
       roundState.forceFateKey = effect.fateKey || "vibe";

@@ -13,7 +13,7 @@ function diagnosticSeverity(ok, severity = "warning") {
 }
 
 const DIAGNOSTIC_KNOWN_EVENT_EFFECTS = new Set([
-  "activateTargetDevices", "activateTargetToys", "activateTargetShocks", "activateAllToys", "activateOtherToys",
+  "suppressNormalActivation",   "activateTargetDevices", "activateTargetToys", "activateTargetShocks", "activateAllToys", "activateOtherToys",
   "activateRandomToyPlayers", "activateRandomShockPlayers", "sequencePlayers", "devicePowerModifier", "deviceDurationModifier", "toyTemplateOverride",
     "manualTargetByLastShocked", "manualTargetByHost", "groupVoteTarget",
   "excludeLastTarget", "excludeLastShocked", "forcePreviousTarget", "forceLastShockedTarget",

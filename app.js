@@ -242,7 +242,10 @@ async function spinRound() {
     log(`Round ${roundNumber}: ${mainText}. Activation in ${hitDelay} ms.`);
     await sleep(hitDelay);
 
-    const appliedById = await activateTargets(targets, value, roundState);
+    const appliedById = roundState.suppressNormalActivation
+      ? Object.fromEntries((targets || []).filter(Boolean).map(target => [target.id, value]))
+      : await activateTargets(targets, value, roundState);
+    if (roundState.suppressNormalActivation) log(`Round ${roundNumber}: Normal physical output suppressed by event ${roundState.card?.title || roundState.card?.id || "card"}.`);
     await runDeviceAwareEventEffects(roundState, targets, value);
     recordRoundTargets(targets, { value, valueByTargetId: appliedById, wasAll: targetPicked.type === "all" });
     if (value > 0) {

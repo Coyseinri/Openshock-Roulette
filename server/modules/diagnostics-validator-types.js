@@ -1,5 +1,5 @@
 var DIAGNOSTIC_KNOWN_EVENT_EFFECT_TYPES = [
-  "activateTargetDevices", "activateTargetToys", "activateTargetShocks", "activateAllToys", "activateOtherToys",
+  "suppressNormalActivation",   "activateTargetDevices", "activateTargetToys", "activateTargetShocks", "activateAllToys", "activateOtherToys",
   "activateRandomToyPlayers", "activateRandomShockPlayers", "sequencePlayers", "devicePowerModifier", "deviceDurationModifier", "toyTemplateOverride",
     "manualTargetByLastShocked", "manualTargetByHost", "groupVoteTarget",
   "excludeLastTarget", "excludeLastShocked", "forcePreviousTarget", "forceLastShockedTarget",
@@ -29,7 +29,19 @@ validateDiagnosticEventCards = function validateDiagnosticEventCards(cardsData) 
   const checks = [];
   const warnings = [];
   const duplicates = duplicateIds(cards);
+  const duplicateTitles = Object.entries(cards.reduce((acc, card) => {
+    const title = String(card?.title || "").trim().toLowerCase();
+    if (title) (acc[title] ||= []).push(card?.id || "unknown");
+    return acc;
+  }, {})).filter(([, ids]) => ids.length > 1);
+  const functional = Object.entries(cards.reduce((acc, card) => {
+    const signature = JSON.stringify({ targetWheel: Boolean(card?.targetWheel), fateWheel: Boolean(card?.fateWheel), waitOnly: Boolean(card?.waitOnly), effects: card?.effects || [] });
+    (acc[signature] ||= []).push(card?.id || "unknown");
+    return acc;
+  }, {})).filter(([, ids]) => ids.length > 1);
   checks.push({ id: "event-duplicate-ids", label: "No duplicate event card IDs", ok: duplicates.length === 0, severity: diagnosticSeverity(duplicates.length === 0), details: duplicates });
+  checks.push({ id: "event-duplicate-titles", label: "No duplicate event card titles", ok: duplicateTitles.length === 0, severity: diagnosticSeverity(duplicateTitles.length === 0), details: duplicateTitles });
+  checks.push({ id: "event-functional-duplicates", label: "No exact functional duplicate event cards", ok: functional.length === 0, severity: functional.length ? "warning" : "ok", details: functional });
 
   for (const card of cards) {
     const cardId = card?.id || "unknown";
@@ -41,6 +53,22 @@ validateDiagnosticEventCards = function validateDiagnosticEventCards(cardsData) 
       const type = String(effect?.type || "").trim();
       if (!type) warnings.push(`Event card ${cardId} contains an effect without a type.`);
       else if (!knownEffects.has(type)) warnings.push(`Event card ${cardId} references unknown effect type '${type}'.`);
+      if (type === "sequencePlayers") {
+        if (!["any", "toy", "shock"].includes(String(effect.provider || "any").toLowerCase())) warnings.push(`Event card ${cardId} has invalid sequencePlayers.provider.`);
+        if (!Number.isFinite(Number(effect.count)) || Number(effect.count) < 1 || Number(effect.count) > 50) warnings.push(`Event card ${cardId} has invalid sequencePlayers.count.`);
+        if (!Number.isFinite(Number(effect.delayMs)) || Number(effect.delayMs) < 250 || Number(effect.delayMs) > 60000) warnings.push(`Event card ${cardId} has invalid sequencePlayers.delayMs.`);
+      }
+      if (type === "devicePowerModifier" && (!Number.isFinite(Number(effect.multiplier)) || Number(effect.multiplier) < 0 || Number(effect.multiplier) > 1)) warnings.push(`Event card ${cardId} has invalid devicePowerModifier.multiplier.`);
+      if (type === "deviceDurationModifier" && (!Number.isFinite(Number(effect.multiplier)) || Number(effect.multiplier) < 0.1 || Number(effect.multiplier) > 5)) warnings.push(`Event card ${cardId} has invalid deviceDurationModifier.multiplier.`);
+      if (["activateRandomToyPlayers", "activateRandomShockPlayers"].includes(type) && effect.count !== undefined && (!Number.isFinite(Number(effect.count)) || Number(effect.count) < 1 || Number(effect.count) > 50)) warnings.push(`Event card ${cardId} has invalid ${type}.count.`);
+      if (effect.powerMultiplier !== undefined && (!Number.isFinite(Number(effect.powerMultiplier)) || Number(effect.powerMultiplier) < 0 || Number(effect.powerMultiplier) > 1)) warnings.push(`Event card ${cardId} has invalid ${type}.powerMultiplier.`);
+      if (effect.durationMultiplier !== undefined && (!Number.isFinite(Number(effect.durationMultiplier)) || Number(effect.durationMultiplier) < 0.1 || Number(effect.durationMultiplier) > 5)) warnings.push(`Event card ${cardId} has invalid ${type}.durationMultiplier.`);
+      if (type === "toyTemplateOverride") {
+        const templateId = String(effect.templateId || effect.template || effect.value || "");
+        try {
+          if (typeof readGameIntifaceTemplates === "function" && !readGameIntifaceTemplates().some(template => String(template.id) === templateId)) warnings.push(`Event card ${cardId} references unknown Toy template '${templateId}'.`);
+        } catch {}
+      }
     }
   }
 

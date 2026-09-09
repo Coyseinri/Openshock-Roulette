@@ -33,7 +33,7 @@ async function eligibleEventPlayers(provider = "any", excludedIds = []) {
 }
 
 function scaleEventDevice(device, powerMultiplier = 1) {
-  const multiplier = Math.max(0, Math.min(10, Number(powerMultiplier ?? 1) || 0));
+  const multiplier = Math.max(0, Math.min(1, Number(powerMultiplier ?? 1) || 0));
   return { ...device, intensityMultiplier: clampPercent((Number(device.intensityMultiplier ?? 100) || 0) * multiplier) };
 }
 
@@ -112,7 +112,11 @@ async function executeEventSequence(run) {
 
 async function startEventSequence(effect, context) {
   const provider = normalizeEventProvider(effect.provider || context.provider || "any");
-  const candidates = await eligibleEventPlayers(provider, effect.excludePlayerIds || []);
+  const exclusions = [
+    ...(Array.isArray(effect.excludePlayerIds) ? effect.excludePlayerIds : []),
+    ...(effect.excludeTargets === true ? (context.targetPlayerIds || []) : [])
+  ];
+  const candidates = await eligibleEventPlayers(provider, exclusions);
   if (!candidates.length) return { ok: true, skipped: true, reason: `No eligible ${provider} players` };
   const allowRepeat = effect.allowRepeat === true;
   let count = Math.max(1, Math.round(Number(effect.count || candidates.length)));
@@ -160,7 +164,8 @@ async function executeEventActivationEffect(effect, context) {
   if (type === "activateAllToys" || type === "activateOtherToys" || type === "activateRandomToyPlayers") provider = "toy";
   if (type === "activateRandomShockPlayers") provider = "shock";
 
-  const all = await eligibleEventPlayers(provider, type === "activateOtherToys" ? targetIds : []);
+  const excludedIds = (type === "activateOtherToys" || effect.excludeTargets === true) ? targetIds : [];
+  const all = await eligibleEventPlayers(provider, excludedIds);
   if (["activateTargetDevices", "activateTargetToys", "activateTargetShocks"].includes(type)) players = all.filter(player => targetIds.includes(String(player.id)));
   else if (["activateRandomToyPlayers", "activateRandomShockPlayers"].includes(type)) players = pickRandomPlayers(all, effect);
   else players = all;
@@ -181,20 +186,70 @@ async function executeEventActivationEffect(effect, context) {
   return { ok: results.some(result => result.ok), type, provider, results };
 }
 
-async function runEventDeviceEffects({ effects = [], targetPlayerIds = [], rolledValue = 0, mode = null, shockDurationMs = 700 } = {}) {
+function validateEventDeviceEffect(raw) {
+  const effect = raw && typeof raw === "object" ? { ...raw } : {};
+  const type = String(effect.type || "");
   const allowed = new Set([
     "activateTargetDevices", "activateTargetToys", "activateTargetShocks", "activateAllToys", "activateOtherToys",
     "activateRandomToyPlayers", "activateRandomShockPlayers", "sequencePlayers", "devicePowerModifier", "deviceDurationModifier", "toyTemplateOverride"
   ]);
+  if (!allowed.has(type)) throw new Error(`Unsupported device-aware event effect '${type || "missing"}'`);
+
+  if (effect.powerMultiplier !== undefined) {
+    const power = Number(effect.powerMultiplier);
+    if (!Number.isFinite(power) || power < 0 || power > 1) throw new Error(`${type}.powerMultiplier must be between 0 and 1`);
+    effect.powerMultiplier = power;
+  }
+  if (effect.durationMultiplier !== undefined) {
+    const duration = Number(effect.durationMultiplier);
+    if (!Number.isFinite(duration) || duration < 0.1 || duration > 5) throw new Error(`${type}.durationMultiplier must be between 0.1 and 5`);
+    effect.durationMultiplier = duration;
+  }
+  if (["activateRandomToyPlayers", "activateRandomShockPlayers"].includes(type) && effect.count !== undefined) {
+    const count = Number(effect.count);
+    if (!Number.isFinite(count) || count < 1 || count > 50) throw new Error(`${type}.count must be between 1 and 50`);
+    effect.count = Math.round(count);
+  }
+  if (type === "sequencePlayers") {
+    const provider = String(effect.provider || "any").toLowerCase();
+    if (!["any", "toy", "shock"].includes(provider)) throw new Error("sequencePlayers.provider must be any, toy, or shock");
+    effect.provider = provider;
+    const count = Number(effect.count ?? 1);
+    if (!Number.isFinite(count) || count < 1 || count > 50) throw new Error("sequencePlayers.count must be between 1 and 50");
+    effect.count = Math.round(count);
+    const delayMs = Number(effect.delayMs ?? 1200);
+    if (!Number.isFinite(delayMs) || delayMs < 250 || delayMs > 60000) throw new Error("sequencePlayers.delayMs must be between 250 and 60000");
+    effect.delayMs = Math.round(delayMs);
+    effect.allowRepeat = effect.allowRepeat === true;
+  }
+  if (type === "devicePowerModifier") {
+    const multiplier = Number(effect.multiplier ?? effect.value);
+    if (!Number.isFinite(multiplier) || multiplier < 0 || multiplier > 1) throw new Error("devicePowerModifier.multiplier must be between 0 and 1");
+    effect.multiplier = multiplier;
+  }
+  if (type === "deviceDurationModifier") {
+    const multiplier = Number(effect.multiplier ?? effect.value);
+    if (!Number.isFinite(multiplier) || multiplier < 0.1 || multiplier > 5) throw new Error("deviceDurationModifier.multiplier must be between 0.1 and 5");
+    effect.multiplier = multiplier;
+  }
+  if (type === "toyTemplateOverride") {
+    const templateId = String(effect.templateId || effect.template || effect.value || "").trim();
+    const templates = readGameIntifaceTemplates();
+    if (!templateId || !templates.some(template => String(template.id) === templateId)) throw new Error(`Unknown Toy template '${templateId || "missing"}'`);
+    effect.templateId = templateId;
+  }
+  return effect;
+}
+
+async function runEventDeviceEffects({ effects = [], targetPlayerIds = [], rolledValue = 0, mode = null, shockDurationMs = 700 } = {}) {
   const context = { targetPlayerIds, rolledValue, mode, shockDurationMs, powerMultiplier: 1, durationMultiplier: 1, templateOverride: null };
   const results = [];
   for (const raw of Array.isArray(effects) ? effects : []) {
-    const effect = raw && typeof raw === "object" ? raw : {};
-    const type = String(effect.type || "");
-    if (!allowed.has(type)) continue;
-    if (type === "devicePowerModifier") { context.powerMultiplier *= Math.max(0, Number(effect.multiplier ?? effect.value ?? 1) || 0); continue; }
-    if (type === "deviceDurationModifier") { context.durationMultiplier *= Math.max(0.1, Number(effect.multiplier ?? effect.value ?? 1) || 1); continue; }
-    if (type === "toyTemplateOverride") { context.templateOverride = String(effect.templateId || effect.template || effect.value || "") || null; continue; }
+    const effect = validateEventDeviceEffect(raw);
+    const type = effect.type;
+    if (type === "devicePowerModifier") { context.powerMultiplier *= effect.multiplier; continue; }
+    if (type === "deviceDurationModifier") { context.durationMultiplier *= effect.multiplier; continue; }
+    if (type === "toyTemplateOverride") { context.templateOverride = effect.templateId; continue; }
     results.push(await executeEventActivationEffect(effect, context));
   }
   return { ok: true, results };

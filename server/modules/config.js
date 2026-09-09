@@ -144,11 +144,50 @@ function resetGameConfigToDefaults() {
   return validated;
 }
 
+var RETIRED_DEFAULT_EVENT_CARD_IDS = new Set(["nemesis", "everybody-hates-safe"]);
+var ADDED_DEFAULT_EVENT_CARD_IDS = new Set(["everybody-but-you","buzz-roulette","buzz-buddies","chain-reaction","long-game","short-fuse","random-buzz","toy-takeover","crossfire","split-decision","reverse-split","mixed-hot-potato","shock-and-buzz","shock-potato","random-tax","repeat-performance","dealers-mercy","loaded-crowd"]);
+
+function mergeEventCardDefaultsForRuntime(raw) {
+  const input = raw && typeof raw === "object" ? { ...raw } : {};
+  const defaults = fs.existsSync(EVENT_CARDS_EXAMPLE_PATH)
+    ? JSON.parse(fs.readFileSync(EVENT_CARDS_EXAMPLE_PATH, "utf8"))
+    : { cards: [] };
+  const defaultCards = Array.isArray(defaults.cards) ? defaults.cards : [];
+  let cards = Array.isArray(input.cards) ? input.cards.filter(card => !RETIRED_DEFAULT_EVENT_CARD_IDS.has(String(card?.id || ""))) : [];
+  const byId = new Map(cards.filter(card => card && card.id).map(card => [String(card.id), card]));
+
+  for (const def of defaultCards) {
+    if (!def?.id) continue;
+    const id = String(def.id);
+    if (ADDED_DEFAULT_EVENT_CARD_IDS.has(id) && !byId.has(id)) {
+      const added = JSON.parse(JSON.stringify(def));
+      cards.push(added);
+      byId.set(id, added);
+    }
+  }
+
+  const existingToyParty = byId.get("toy-party");
+  const defaultToyParty = defaultCards.find(card => card?.id === "toy-party");
+  const oldToyPartyEffects = JSON.stringify([
+    { type: "devicePowerModifier", multiplier: 0.6 },
+    { type: "activateAllToys", mode: "vibe" }
+  ]);
+  if (existingToyParty && defaultToyParty && JSON.stringify(existingToyParty.effects || []) === oldToyPartyEffects) {
+    const preservedEnabled = existingToyParty.enabled;
+    const preservedWeight = existingToyParty.weight;
+    Object.assign(existingToyParty, JSON.parse(JSON.stringify(defaultToyParty)));
+    if (preservedEnabled !== undefined) existingToyParty.enabled = preservedEnabled;
+    if (preservedWeight !== undefined) existingToyParty.weight = preservedWeight;
+  }
+
+  return { ...input, cards };
+}
+
 function readEventCards() {
   ensureLocalFilesFromExamples();
   const source = fs.existsSync(EVENT_CARDS_PATH) ? EVENT_CARDS_PATH : EVENT_CARDS_EXAMPLE_PATH;
   const raw = fs.existsSync(source) ? JSON.parse(fs.readFileSync(source, "utf8")) : { enabled: true, chancePercent: 45, displayDurationMs: 10000, cards: [] };
-  return validateEventCards(raw);
+  return validateEventCards(mergeEventCardDefaultsForRuntime(raw));
 }
 
 var CONFIG = readConfig();
