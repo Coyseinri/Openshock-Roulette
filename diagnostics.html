@@ -82,7 +82,7 @@
     <div class="tabs" id="tabs">
       <button class="tab active" data-tab="overview">Overview</button>
       <button class="tab" data-tab="preflight">Pre-flight</button>
-      <button class="tab" data-tab="devices">Devices & Groups</button>
+      <button class="tab" data-tab="devices">Players & Devices</button>
       <button class="tab" data-tab="tests">Safe Tests</button>
       <button class="tab" data-tab="api">API Explorer</button>
       <button class="tab" data-tab="inspectors">Inspectors</button>
@@ -152,29 +152,37 @@ function restoreDiagnosticsScrollState(state) { if (!state) return; const byKey 
 function renderOverview(d) {
   const warnings = d.configValidation?.warnings || [];
   const openShockOk = Boolean(d.server?.tokenConfigured) && !(d.shockers?.warning);
+  const r = d.players?.readiness || { active:0, ready:0, items:[] };
+  const toyCount = (d.players?.setup?.devices?.toy || []).filter(device => device.assigned).length;
+  const shockCount = (d.players?.setup?.devices?.shock || []).filter(device => device.assigned).length;
   document.getElementById('overview').innerHTML = `
     <div class="grid">
       ${metricCard('App version', d.system.appVersion, d.system.packageName)}
       ${metricCard('Node', d.system.nodeVersion, `${d.system.platform} ${d.system.arch}`)}
-      ${metricCard('Uptime', `${Math.round((d.system.uptimeSeconds || 0)/60)}m`, `PID ${d.system.pid}`)}
-      ${metricCard('Memory RSS', `${d.system.memory.rssMb} MB`, `Heap ${d.system.memory.heapUsedMb}/${d.system.memory.heapTotalMb} MB`)}
-      ${metricCard('Physical shockers', d.shockers.physicalCount, `Source: ${esc(d.shockers.source || 'unknown')}`)}
-      ${metricCard('Logical players', d.shockers.logicalCount, `${d.shockers.groups.filter(g => g.isGrouped).length} grouped`)}
+      ${metricCard('Logical players', r.total ?? d.shockers.logicalCount, `${r.ready}/${r.active} active ready`)}
+      ${metricCard('Shock devices', shockCount, d.shockers.physicalCount + ' discovered from OpenShock')}
+      ${metricCard('Toy devices', toyCount, `${d.intiface.connectedDeviceCount} currently connected`)}
+      ${metricCard('Ready players', `${r.ready}/${r.active}`, r.warnings ? `${r.warnings} player(s) with warnings` : 'All active players have usable output')}
       ${metricCard('OpenShock calls', d.debug.counters.openShockTotal, `${d.debug.counters.openShockErrors} errors, avg ${d.debug.averages.openShockResponseMs}ms`)}
       ${metricCard('Incoming calls', d.debug.counters.incomingTotal, `${d.debug.counters.incomingErrors} errors, avg ${d.debug.averages.incomingResponseMs}ms`)}
     </div>
     <div class="wideGrid" style="margin-top:12px;">
       <div class="card"><h2>Health</h2>
-        <p>${statusPill(d.database.ok, 'SQLite')} ${statusPill(d.server.tokenConfigured, 'OpenShock token')} ${statusPill(openShockOk, 'OpenShock/device load')} ${statusPill(d.tools.preflight.ready, 'Pre-flight')}</p>
+        <p>${statusPill(d.database.ok, 'SQLite')} ${statusPill(r.ready === r.active && r.active > 0, 'Player outputs')} ${shockCount ? statusPill(openShockOk, 'OpenShock') : warnPill('OpenShock unused')} ${toyCount ? statusPill(d.intiface.ready, 'Intiface') : warnPill('Intiface unused')} ${statusPill(d.tools.preflight.ready, 'Pre-flight')}</p>
         <p>${d.shockers.cached ? warnPill('Using cached shockers') : statusPill(true, 'Fresh/current shocker state')} ${d.server.adminLocalhostOnly ? statusPill(true, 'Admin localhost only') : warnPill('Admin remote access enabled')} ${d.server.access?.diagnosticsLocalhostOnly ? statusPill(true, 'Diagnostics localhost only') : statusPill(false, 'Diagnostics remote access')}</p>
         ${d.shockers.warning ? `<p class="status bad">${esc(d.shockers.warning)}</p>` : ''}
+        ${d.intiface.lastError ? `<p class="status bad">Intiface: ${esc(d.intiface.lastError)}</p>` : ''}
+      </div>
+      <div class="card"><h2>Provider status</h2>
+        <p>${shockCount ? statusPill(Boolean(d.players.outputStatus?.providers?.shock?.reachable), 'Shock reachable') : warnPill('No Shock outputs configured')}</p>
+        <p>${toyCount ? statusPill(d.intiface.ready, `Intiface ${d.intiface.state}`) : warnPill('No Toys configured')}</p>
+        <p class="small muted">Toy gameplay integration: ${d.intiface.gameIntegrationEnabled ? 'enabled' : 'disabled'} · connected Toys: ${d.intiface.connectedDeviceCount}</p>
       </div>
       <div class="card"><h2>OpenShock API Key</h2>
         <p>${statusPill(d.server.apiKeyCheck?.tokenConfigured, 'Token configured')} ${statusPill(d.server.apiKeyCheck?.readOwnShockers?.ok, 'Read shockers')} ${d.server.apiKeyCheck?.controlPermission?.tested ? statusPill(d.server.apiKeyCheck.controlPermission.ok, 'Control permission') : warnPill('Control permission not tested')}</p>
         <div class="toolbar"><button id="apiKeyReadCheckBtn">Check read permission</button><button id="apiKeyControlCheckBtn" class="warn">Check control with STOP</button></div>
         <pre id="apiKeyCheckResult">${esc(JSON.stringify(d.server.apiKeyCheck || {}, null, 2))}</pre>
       </div>
-      <div class="card"><h2>Browser Diagnostics</h2>${browserDiagnosticsHtml()}</div>
       <div class="card"><h2>Warnings</h2>
         ${warnings.length ? `<ul class="warningList">${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '<p class="muted">No config warnings found. Suspiciously calm.</p>'}
       </div>
@@ -206,87 +214,92 @@ function renderPreflight(d) {
 }
 
 function renderDevices(d) {
-  const groups = d.shockers.groups || [];
+  const readiness = d.players?.readiness || { items: [], duplicateAssignments: [] };
+  const shockPool = d.players?.setup?.devices?.shock || [];
+  const toyPool = d.players?.setup?.devices?.toy || [];
+  const playerHtml = readiness.items.map(player => `<div class="group">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><strong>${esc(player.name)}</strong><span>${player.enabled ? (player.ready ? statusPill(true,'READY') : warnPill('NOT READY')) : warnPill('disabled')}</span></div>
+    <div class="small muted">ID: <code>${esc(player.id)}</code> · usable outputs: ${player.usableOutputCount}</div>
+    ${player.warnings.length ? `<div class="small" style="color:var(--warn);margin-top:6px;">${player.warnings.map(esc).join(' · ')}</div>` : ''}
+    ${player.devices.map(dev => `<div class="device"><span><strong>${dev.provider === 'intiface' ? 'Toy' : 'Shock'} · ${esc(dev.name)}</strong><br><span class="small muted">${dev.enabled ? 'enabled' : 'disabled'} · ${dev.online ? 'online' : 'offline'} · multiplier ${dev.intensityMultiplier}%${dev.provider === 'intiface' ? ` · template ${esc(dev.preferredTemplate || 'default')} · mapping ${dev.mappingReady ? 'ready' : 'missing'}${dev.mappedFeatureCount !== null ? ` (${dev.mappedFeatureCount})` : ''}` : ''}</span></span><span>${dev.online && dev.mappingReady && dev.intensityMultiplier > 0 ? statusPill(true,'usable') : warnPill('check')}</span></div>`).join('') || '<p class="muted small">No devices assigned.</p>'}
+  </div>`).join('');
   document.getElementById('devices').innerHTML = `
-    <div class="card"><h2>OpenShock / Grouping</h2>
-      <p>${statusPill(Boolean(d.shockers.physicalCount), `${d.shockers.physicalCount} physical devices`)} ${statusPill(Boolean(d.shockers.logicalCount), `${d.shockers.logicalCount} logical players`)} ${d.shockers.grouping.enabled ? statusPill(true, `Grouping enabled: ${d.shockers.grouping.separator}`) : warnPill('Grouping disabled')}</p>
-      <p class="muted small">Reload Shockers also rebuilds grouped players from current OpenShock names.</p>
+    <div class="card"><h2>Logical Players & Output Readiness</h2>
+      <p>${statusPill(readiness.ready === readiness.active && readiness.active > 0, `${readiness.ready}/${readiness.active} active players ready`)} ${readiness.duplicateAssignments.length ? statusPill(false,`${readiness.duplicateAssignments.length} duplicate assignments`) : statusPill(true,'No duplicate assignments')}</p>
+      <p class="muted small">Logical players are authoritative. Legacy OpenShock grouping is shown below only as discovery/debug context.</p>
     </div>
     <div class="wideGrid">
-      <div class="card"><h2>Grouped View</h2>
-        ${groups.length ? groups.map(g => `<div class="group"><strong>${esc(g.name)}</strong> ${g.isGrouped ? `<span class="muted">(${g.devices.length} devices)</span>` : '<span class="muted">(standalone)</span>'}<div class="small muted">ID: <code>${esc(g.id)}</code></div>${g.devices.map(dev => `<div class="device"><span>${esc(dev.memberName)}<br><span class="small muted">${esc(dev.name)} · <code>${esc(dev.id)}</code></span></span><span>${esc(dev.multiplier)}%</span></div>`).join('')}</div>`).join('') : '<p class="muted">No devices loaded.</p>'}
+      <div class="card"><h2>Players</h2>${playerHtml || '<p class="muted">No logical players configured.</p>'}</div>
+      <div class="card"><h2>Device Pools</h2>
+        <h3>Shock</h3>${table(['Name','Assigned','Online'], shockPool.map(dev => [esc(dev.name), dev.assigned ? statusPill(true,'yes') : warnPill('unassigned'), dev.online === false ? statusPill(false,'offline') : statusPill(true,'online')]))}
+        <h3 style="margin-top:16px;">Toys</h3>${table(['Name','Assigned','Connected','Mapping'], toyPool.map(dev => [esc(dev.name), dev.assigned ? statusPill(true,'yes') : warnPill('unassigned'), dev.online ? statusPill(true,'online') : statusPill(false,'offline'), dev.mappingReady ? statusPill(true,'ready') : warnPill('incomplete')]))}
       </div>
-      <div class="card"><h2>Physical Devices</h2>${table(['Name','ID'], d.shockers.physical.map(s => [esc(s.name), `<code>${esc(s.id)}</code>`]))}</div>
-    </div>`;
+    </div>
+    ${detailsBlock('legacyGrouping','Legacy OpenShock grouping', `<p class="small muted">Separator: ${esc(d.shockers.grouping?.separator || '')} · enabled: ${Boolean(d.shockers.grouping?.enabled)}</p>${table(['Name','Devices'], (d.shockers.groups||[]).map(g => [esc(g.name), esc((g.devices||[]).map(dev=>dev.memberName||dev.name).join(', '))]))}`)}
+  `;
 }
 
 function testTargetOptions(d) {
-  const opts = [];
-  opts.push(`<optgroup label="Grouped / logical players">${(d.shockers.groups || []).map(g => `<option value="group:${esc(g.id)}">${esc(g.name)}${g.isGrouped ? ` (${g.devices.length} devices)` : ''}</option>`).join('')}</optgroup>`);
-  opts.push(`<optgroup label="Individual devices">${(d.shockers.groups || []).flatMap(g => g.devices.map(dev => `<option value="device:${esc(dev.id)}">${esc(g.name)} - ${esc(dev.memberName)}</option>`)).join('')}</optgroup>`);
-  opts.push(`<option value="all:*">ALL DEVICES</option>`);
-  return opts.join('');
+  const players = d.players?.readiness?.items || [];
+  const playerOptions = players.map(player => `<option value="player|${esc(player.id)}">${esc(player.name)} · logical player</option>`).join('');
+  const deviceOptions = players.flatMap(player => player.devices.map(device => `<option value="device|${esc(device.provider)}|${esc(device.id)}">${esc(player.name)} · ${device.provider === 'intiface' ? 'Toy' : 'Shock'} · ${esc(device.name)}</option>`)).join('');
+  return `<optgroup label="Logical players">${playerOptions}</optgroup><optgroup label="Individual devices">${deviceOptions}</optgroup>`;
 }
 function captureTestForm() {
   return {
     target: document.getElementById('testTarget')?.value || localStorage.getItem('osrDiagTestTarget') || '',
-    mode: document.getElementById('testMode')?.value || localStorage.getItem('osrDiagTestMode') || 'Vibrate',
+    mode: document.getElementById('testMode')?.value || localStorage.getItem('osrDiagTestMode') || 'Vibe',
     intensity: document.getElementById('testIntensity')?.value || localStorage.getItem('osrDiagTestIntensity') || '5',
     duration: document.getElementById('testDuration')?.value || localStorage.getItem('osrDiagTestDuration') || ''
   };
 }
 function restoreTestForm(form) {
-  const set = (id, value) => {
-    const el = document.getElementById(id);
-    if (!el || value === undefined || value === null || value === '') return;
-    if ([...el.options || []].some(o => o.value === value) || el.tagName !== 'SELECT') el.value = value;
-  };
-  set('testTarget', form.target);
-  set('testMode', form.mode);
-  set('testIntensity', form.intensity);
-  set('testDuration', form.duration);
+  const set = (id, value) => { const el=document.getElementById(id); if(!el || value===undefined || value===null || value==='') return; if(el.tagName!=='SELECT' || [...el.options].some(o=>o.value===value)) el.value=value; };
+  set('testTarget',form.target); set('testMode',form.mode); set('testIntensity',form.intensity); set('testDuration',form.duration);
 }
 function saveTestForm() {
-  const form = captureTestForm();
-  localStorage.setItem('osrDiagTestTarget', form.target);
-  localStorage.setItem('osrDiagTestMode', form.mode);
-  localStorage.setItem('osrDiagTestIntensity', form.intensity);
-  localStorage.setItem('osrDiagTestDuration', form.duration);
+  const form=captureTestForm();
+  localStorage.setItem('osrDiagTestTarget',form.target); localStorage.setItem('osrDiagTestMode',form.mode); localStorage.setItem('osrDiagTestIntensity',form.intensity); localStorage.setItem('osrDiagTestDuration',form.duration);
+}
+function diagnosticsTargetPayload() {
+  const raw=document.getElementById('testTarget').value.split('|');
+  return raw[0]==='player'
+    ? {targetType:'player',targetId:raw[1]}
+    : {targetType:'device',provider:raw[1],targetId:raw.slice(2).join('|')};
+}
+async function runDiagnosticsOutputTest(preview=false) {
+  saveTestForm();
+  const mode=document.getElementById('testMode').value;
+  const payload={...diagnosticsTargetPayload(),preview,mode,selectedValue:Number(document.getElementById('testIntensity').value||5),duration:Number(document.getElementById('testDuration').value||700),testPower:25};
+  if(!preview && mode==='Shock' && !confirm(`Send a REAL normal outcome using selected value ${payload.selectedValue}? Shock devices may Shock; Toys may run their configured template. Device multipliers and the server max still apply.`)) return;
+  try {
+    const result=await post('/api/diagnostics/test',payload);
+    lastTestResultData=result;
+    document.getElementById('testResult').textContent=JSON.stringify(result,null,2);
+    toast(preview?'Preview generated':'Diagnostics test completed','ok');
+    if(!preview) await load(true);
+  } catch(err){toast(err.message,'bad');}
 }
 function renderTests(d) {
-  const savedForm = captureTestForm();
-  const maxShock = Number(d.safety.serverMaxShockIntensity || 99);
-  const minDur = Number(d.safety.minDurationMs || 300);
-  const maxDur = Number(d.safety.maxDurationMs || 1000);
-  document.getElementById('tests').innerHTML = `
-    <div class="card"><h2>Safe Test Controls</h2>
-      <p class="muted">Default is vibrate. Shock tests are capped by server safety and still apply device multipliers.</p>
+  const savedForm=captureTestForm();
+  const maxShock=Number(d.safety.serverMaxShockIntensity||99);
+  const minDur=Number(d.safety.minDurationMs||300);
+  document.getElementById('tests').innerHTML=`
+    <div class="card"><h2>Unified Safe Test Controls</h2>
+      <p class="muted">Tests use the same configured players, per-device multipliers, Toy mappings/templates and safety limits as the rest of OSR. Preview sends nothing.</p>
       <div class="toolbar">
         <label>Target<br><select id="testTarget">${testTargetOptions(d)}</select></label>
-        <label>Action<br><select id="testMode"><option value="Vibrate">Vibrate</option><option value="Shock">Shock</option></select></label>
-        <label>Intensity<br><input id="testIntensity" type="number" min="1" max="${esc(maxShock)}" value="5"></label>
-        <label>Duration ms<br><input id="testDuration" type="number" min="${esc(minDur)}" max="${esc(maxDur)}" value="${esc(d.safety.defaultDurationMs || 700)}"></label>
+        <label>Action<br><select id="testMode"><option value="Vibe">Vibe / full activation</option><option value="Toy">Toy only</option><option value="Shock">Normal outcome / Shock value</option><option value="Stop">Stop selected</option></select></label>
+        <label>Selected value<br><input id="testIntensity" type="number" min="1" max="${esc(maxShock)}" value="5"></label>
+        <label>Duration ms<br><input id="testDuration" type="number" min="${esc(minDur)}" max="3000" value="${esc(d.safety.defaultDurationMs||700)}"></label>
       </div>
-      <div class="toolbar" style="margin-top:12px;"><button id="previewTestBtn">Preview Plan</button><button id="sendTestBtn" class="ok">Send Test</button><button id="stopSelectedBtn" class="warn">Stop Selected</button><button id="stopAllBtn" class="danger stopAll">STOP ALL</button></div>
-      <div id="testResult" class="resultBox"></div>
-    </div>
-    <div class="card"><h2>Danger Zone</h2><p class="muted">These are setup tools. They should not be used as gameplay controls unless everyone involved knows what is happening.</p><button id="resetSessionBtn" class="danger">Archive and Reset Session</button> <button id="clearCacheBtn" class="warn">Clear Shocker Cache</button> <button id="clearDebugBtn" class="warn">Clear Debug Counters</button></div>`;
+      <div class="toolbar" style="margin-top:12px;"><button id="previewTestBtn">Preview Plan</button><button id="sendTestBtn" class="ok">Send Test</button><button id="stopAllBtn" class="danger stopAll">STOP ALL OUTPUTS</button></div>
+      <pre id="testResult" class="resultBox">${esc(JSON.stringify(lastTestResultData || {note:'No test run yet.'},null,2))}</pre>
+    </div>`;
   restoreTestForm(savedForm);
-  if (lastTestResultData) renderTestResult(lastTestResultData);
-  wireTestButtons();
-  ['testTarget','testMode','testIntensity','testDuration'].forEach(id => document.getElementById(id)?.addEventListener('change', saveTestForm));
-}
-function selectedTargetPayload() { const raw = document.getElementById('testTarget').value; const [targetType, targetId] = raw.split(':'); return { targetType, targetId }; }
-function renderTestResult(data) { lastTestResultData = data; const rows = (data.sent || []).map(s => [esc(s.playerName || ''), esc(s.deviceName || s.id), esc(s.type), esc(s.selectedValue ?? ''), s.multiplierPercent == null ? '' : `${esc(s.multiplierPercent)}%`, esc(s.intensity), esc(s.duration)]); document.getElementById('testResult').innerHTML = detailsBlock('tests:last-result', 'Last test result', `${table(['Player','Device','Type','Selected','Multiplier','Sent','Duration'], rows)}<pre>${esc(JSON.stringify(data, null, 2))}</pre>`, true); restoreDetailsState(); }
-function previewDiagnosticPlan() { saveTestForm(); const target = document.getElementById('testTarget').selectedOptions[0]?.textContent || ''; const mode = document.getElementById('testMode').value; const intensity = Number(document.getElementById('testIntensity').value || 5); const duration = Number(document.getElementById('testDuration').value || 700); document.getElementById('testResult').innerHTML = detailsBlock('tests:preview', 'Shock Plan Preview', `<p><strong>Target:</strong> ${esc(target)}</p><p><strong>Action:</strong> ${esc(mode)}</p><p><strong>Selected value:</strong> ${esc(intensity)}</p><p><strong>Duration:</strong> ${esc(duration)}ms</p><p class="muted">Final device values are shown after server-side validation because multipliers and caps live on the server.</p>`, true); restoreDetailsState(); }
-function wireTestButtons() {
-  document.getElementById('previewTestBtn').onclick = previewDiagnosticPlan;
-  document.getElementById('sendTestBtn').onclick = async () => { saveTestForm(); const payload = { ...selectedTargetPayload(), mode: document.getElementById('testMode').value, selectedValue: Number(document.getElementById('testIntensity').value || 5), duration: Number(document.getElementById('testDuration').value || 700) }; if (payload.mode === 'Shock' && !confirm(`Send a SHOCK test to ${document.getElementById('testTarget').selectedOptions[0].textContent}?`)) return; try { const data = await post('/api/diagnostics/test', payload); renderTestResult(data); toast('Test sent', 'ok'); await load(false); } catch (err) { toast(err.message, 'bad'); } };
-  document.getElementById('stopSelectedBtn').onclick = async () => { saveTestForm(); try { const data = await post('/api/diagnostics/test', { ...selectedTargetPayload(), mode: 'Stop' }); renderTestResult(data); toast('Stop sent', 'ok'); await load(false); } catch (err) { toast(err.message, 'bad'); } };
-  document.getElementById('stopAllBtn').onclick = stopAll;
-  document.getElementById('resetSessionBtn').onclick = async () => { if (!confirm('Archive and reset the current session?')) return; try { const data = await post('/api/diagnostics/archive-reset-session'); toast(`Session reset. Archived to ${data.archivedTo || 'archive'}`, 'ok'); await load(true); } catch (err) { toast(err.message, 'bad'); } };
-  document.getElementById('clearCacheBtn').onclick = async () => { try { await post('/api/diagnostics/clear-shocker-cache'); toast('Shocker cache cleared', 'ok'); await load(true); } catch (err) { toast(err.message, 'bad'); } };
-  document.getElementById('clearDebugBtn').onclick = async () => { try { await post('/api/diagnostics/clear-debug'); toast('Debug counters cleared', 'ok'); await load(true); } catch (err) { toast(err.message, 'bad'); } };
+  document.getElementById('previewTestBtn').onclick=()=>runDiagnosticsOutputTest(true);
+  document.getElementById('sendTestBtn').onclick=()=>runDiagnosticsOutputTest(false);
+  document.getElementById('stopAllBtn').onclick=async()=>{if(!confirm('STOP ALL OpenShock + Intiface outputs and cancel active event/Toy runs?'))return;try{lastTestResultData=await post('/api/diagnostics/stop-all',{});document.getElementById('testResult').textContent=JSON.stringify(lastTestResultData,null,2);toast('Unified STOP ALL completed','ok');await load(true);}catch(err){toast(err.message,'bad');}};
 }
 
 function renderApi(d) {
@@ -320,12 +333,25 @@ function renderApi(d) {
 }
 
 function renderInspectors(d) {
+  const toyRows=(d.players?.readiness?.items||[]).flatMap(player=>player.devices.filter(device=>device.provider==='intiface').map(device=>[
+    esc(player.name),esc(device.name),device.online?statusPill(true,'connected'):statusPill(false,'offline'),esc(device.intensityMultiplier+'%'),esc(device.preferredTemplate||'default'),device.mappingReady?statusPill(true,'ready'):warnPill('incomplete'),esc(device.mappedFeatureCount ?? '-'),esc(device.DeviceIndex ?? '-')
+  ]));
+  const eventCompat=d.game?.eventCards?.compatibility || {deviceAware:0,likelyNoOp:[]};
+  const diagnosticsExtras=`
+    <div class="wideGrid">
+      <div class="card"><h2>Intiface / Toy Inspector</h2><p>${d.intiface.enabled?statusPill(true,'service enabled'):warnPill('service disabled')} ${d.intiface.ready?statusPill(true,'connected'):statusPill(false,'not connected')} ${statusPill(!d.intiface.lastError,'no current error')}</p>
+      <p class="small muted">State: ${esc(d.intiface.state)} · endpoint: <code>${esc(d.intiface.websocketUrl||'')}</code> · health latency: ${esc(d.intiface.lastHealthLatencyMs ?? '-')} ms · pending: ${esc(d.intiface.pendingRequestCount)}</p>
+      ${table(['Player','Toy','State','Multiplier','Template','Mapping','Mapped features','DeviceIndex'],toyRows)}</div>
+      <div class="card"><h2>Event / Hardware Compatibility</h2><p>${statusPill(eventCompat.likelyNoOp.length===0,`${eventCompat.deviceAware} device-aware cards checked`)} ${eventCompat.likelyNoOp.length?warnPill(`${eventCompat.likelyNoOp.length} may no-op`):statusPill(true,'No obvious hardware gaps')}</p>
+      ${eventCompat.likelyNoOp.length?table(['Card','Needs Shock','Needs Toy'],eventCompat.likelyNoOp.map(card=>[esc(card.title),esc(card.requiresShock),esc(card.requiresToy)])):'<p class="muted">Current configured hardware can satisfy the shipped device-aware event primitives.</p>'}</div>
+    </div>`;
+
   const i = d.tools.inspector;
   const cardDetails = i.eventCards.cards.map(c => detailsBlock(`card:${c.id}`, `Raw card: ${c.title}`, `<pre>${esc(JSON.stringify(c.raw, null, 2))}</pre>`)).join('');
   const objectiveDetails = i.objectives.private.map(o => detailsBlock(`objective:${o.id}`, `Raw objective: ${o.title}`, `<pre>${esc(JSON.stringify(o.raw, null, 2))}</pre>`)).join('');
   const publicDetails = i.objectives.public.map(o => detailsBlock(`public-objective:${o.id}`, `Raw public objective: ${o.title}`, `<pre>${esc(JSON.stringify(o.raw, null, 2))}</pre>`)).join('');
   const roleDetails = i.objectives.roles.map(r => detailsBlock(`role:${r.id}`, `Raw role: ${r.title}`, `<pre>${esc(JSON.stringify(r.raw, null, 2))}</pre>`)).join('');
-  document.getElementById('inspectors').innerHTML = `<div class="card"><h2>Inspectors</h2><p class="muted">Read-only inspectors. Wider layout, less sardine can. Expand raw entries only when you need the gory details.</p></div><div class="inspectorGrid">
+  document.getElementById('inspectors').innerHTML = diagnosticsExtras + `<div class="card"><h2>Inspectors</h2><p class="muted">Read-only inspectors. Wider layout, less sardine can. Expand raw entries only when you need the gory details.</p></div><div class="inspectorGrid">
     <div class="card"><h2>Event Card Inspector</h2><p class="muted">Use host manual event controls to queue cards. This view is for validation and preview.</p>${table(['Title','ID','Enabled','Weight','Effects','Type','Category'], i.eventCards.cards.map(c => [esc(c.title), `<code>${esc(c.id)}</code>`, c.enabled ? 'Yes' : 'No', esc(c.weight), esc(c.effectsCount), esc(c.type || ''), esc(c.category || '')]))}${cardDetails}</div>
     <div class="card"><h2>Private Objective Inspector</h2>${table(['Title','ID','Type','Target','Reward','Enabled'], i.objectives.private.map(o => [esc(o.title), `<code>${esc(o.id)}</code>`, esc(o.type), esc(o.target), esc(o.rewardPoints), o.enabled ? 'Yes' : 'No']))}${objectiveDetails}</div>
     <div class="card"><h2>Public Objective Inspector</h2>${table(['Title','ID','Type','Target','Reward','Enabled'], i.objectives.public.map(o => [esc(o.title), `<code>${esc(o.id)}</code>`, esc(o.type), esc(o.target), esc(o.rewardPoints), o.enabled ? 'Yes' : 'No']))}${publicDetails}</div>

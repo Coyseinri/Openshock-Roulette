@@ -406,6 +406,10 @@ async function buildDiagnosticsState({ forceRefresh = false } = {}) {
     shockerResult = { source: "error", shockers: [], warning: err.message, errors: [err.message] };
   }
   const players = await getConfiguredPlayers(shockerResult.shockers || [], { includeDisabled: true });
+  const setupState = await getPlayerSetupState({ forceRefresh: false });
+  const outputStatus = await getOutputStatusSnapshot(players);
+  const readiness = buildDiagnosticsPlayerReadiness(setupState, outputStatus);
+  const intiface = typeof intifaceService !== "undefined" ? intifaceService.snapshot() : { enabled: false, ready: false, state: "unavailable", devices: [], connectedDeviceCount: 0 };
   const debug = getDebugSnapshot();
   const db = getDatabaseSummary();
   const configValidation = getConfigValidationSummary();
@@ -418,7 +422,8 @@ async function buildDiagnosticsState({ forceRefresh = false } = {}) {
   const inspectors = buildInspectorData(state, players);
   const storage = buildStorageExplorer(db);
   const links = await buildQrLinkDiagnostics(players);
-  const preflight = buildPreflightChecks(state, players, shockerResult, configValidation, db);
+  const eventCompatibility = buildDiagnosticsEventCompatibility(eventCards, readiness);
+  const preflight = buildPreflightChecks(state, players, shockerResult, configValidation, db, setupState, outputStatus, eventCards, readiness);
   const developer = buildDeveloperToolsSummary(players);
   const apiKeyCheck = buildApiKeyCheckSummary(shockerResult);
 
@@ -454,6 +459,26 @@ async function buildDiagnosticsState({ forceRefresh = false } = {}) {
     configValidation,
     database: db,
     debug,
+    players: {
+      readiness,
+      setup: setupState,
+      outputStatus
+    },
+    intiface: {
+      enabled: intiface.enabled === true,
+      ready: intiface.ready === true,
+      state: intiface.state || "unknown",
+      websocketUrl: intiface.websocketUrl || CONFIG?.intiface?.websocketUrl || null,
+      connectedDeviceCount: Number(intiface.connectedDeviceCount || 0),
+      devices: Array.isArray(intiface.devices) ? intiface.devices : [],
+      lastSuccessfulResponseAt: intiface.lastSuccessfulResponseAt || null,
+      lastHealthCheckAt: intiface.lastHealthCheckAt || null,
+      lastHealthLatencyMs: intiface.lastHealthLatencyMs ?? null,
+      lastCommandAt: intiface.lastCommandAt || null,
+      lastError: intiface.lastError || null,
+      pendingRequestCount: Number(intiface.pendingRequestCount || 0),
+      gameIntegrationEnabled: CONFIG?.intiface?.gameIntegrationEnabled === true
+    },
     shockers: {
       source: shockerResult.source,
       warning: shockerResult.warning || null,
@@ -475,7 +500,8 @@ async function buildDiagnosticsState({ forceRefresh = false } = {}) {
         enabled: eventCards.enabled,
         chancePercent: eventCards.chancePercent,
         total: (eventCards.cards || []).length,
-        enabledCount: (eventCards.cards || []).filter(c => c.enabled !== false).length
+        enabledCount: (eventCards.cards || []).filter(c => c.enabled !== false).length,
+        compatibility: eventCompatibility
       },
       rawSession: state
     },
@@ -617,7 +643,7 @@ function buildInspectorData(state, players) {
       public: (objectives.publicObjectives || []).map(o => ({ id: o.id, title: o.title || o.id, type: o.type, target: o.target, rewardPoints: o.rewardPoints ?? o.reward?.points ?? 0, enabled: o.enabled !== false, raw: o })),
       roles: (objectives.hiddenRoles || []).map(r => ({ id: r.id, title: r.title || r.id, triggerType: r.triggerType || null, triggerTarget: r.triggerTarget || null, rewardPoints: r.rewardPoints ?? 0, rewardToken: r.rewardToken || null, enabled: r.enabled !== false, raw: r }))
     },
-    players: (players || []).map(p => ({ id: p.id, name: p.name, isGrouped: Boolean(p.isGrouped), devices: (p.devices || []).map(d => ({ id: d.id, name: d.name, memberName: d.memberName || d.name })) })),
+    players: (players || []).map(p => ({ id: p.id, name: p.name, enabled: p.enabled !== false, isGrouped: Boolean(p.isGrouped), devices: (p.devices || []).map(d => ({ id: d.id, provider: d.provider || "openshock", name: d.name, memberName: d.memberName || d.name, enabled: d.enabled !== false, online: d.online !== false, intensityMultiplier: d.intensityMultiplier ?? 100, preferredTemplate: d.preferredTemplate || null, mappingReady: d.mappingReady, mappedFeatureCount: d.mappedFeatureCount ?? null, DeviceIndex: d.DeviceIndex })) })),
     sessionKeys: state && typeof state === "object" ? Object.keys(state).sort() : []
   };
 }
@@ -669,7 +695,101 @@ function buildDeveloperToolsSummary(players) {
   };
 }
 
-function buildPreflightChecks(state, players, shockerResult, configValidation, db) {
+function buildDiagnosticsPlayerReadiness(setupState, outputStatus) {
+  const players = Array.isArray(setupState?.players) ? setupState.players : [];
+  const statusById = new Map((outputStatus?.players || []).map(item => [String(item.playerId), item]));
+  const deviceAssignments = new Map();
+  const templates = new Set((typeof readGameIntifaceTemplates === "function" ? readGameIntifaceTemplates() : []).map(template => String(template.id)));
+  const items = players.map(player => {
+    const status = statusById.get(String(player.id)) || {};
+    const devices = (player.devices || []).map(device => {
+      const key = `${device.provider}:${device.id}`;
+      const owners = deviceAssignments.get(key) || [];
+      owners.push(player.id);
+      deviceAssignments.set(key, owners);
+      const enabled = device.enabled !== false;
+      const online = enabled && device.online !== false;
+      const mappingReady = device.provider !== "intiface" || device.mappingReady === true;
+      const templateValid = device.provider !== "intiface" || !device.preferredTemplate || templates.has(String(device.preferredTemplate));
+      return {
+        provider: device.provider,
+        id: device.id,
+        name: device.memberName || device.name,
+        enabled,
+        online,
+        intensityMultiplier: clampInt(device.intensityMultiplier ?? 100, 0, 100),
+        preferredTemplate: device.preferredTemplate || null,
+        mappingReady,
+        mappedFeatureCount: device.mappedFeatureCount ?? null,
+        templateValid,
+        DeviceIndex: device.DeviceIndex
+      };
+    });
+    const active = devices.filter(device => device.enabled);
+    const usable = active.filter(device => device.online && device.mappingReady && device.templateValid);
+    const warnings = [];
+    if (player.enabled !== false && !active.length) warnings.push("No enabled output devices");
+    if (active.some(device => device.intensityMultiplier === 0)) warnings.push("One or more enabled devices are set to 0%");
+    if (active.some(device => device.provider === "intiface" && !device.online)) warnings.push("Configured Toy is offline");
+    if (active.some(device => device.provider === "intiface" && !device.mappingReady)) warnings.push("Toy mapping has no active features");
+    if (active.some(device => device.provider === "intiface" && !device.templateValid)) warnings.push("Preferred Toy template is missing");
+    if (active.some(device => device.provider === "openshock" && !device.online)) warnings.push("Configured Shock output is not reachable");
+    return {
+      id: player.id,
+      name: player.name,
+      enabled: player.enabled !== false,
+      ready: player.enabled === false || usable.length > 0,
+      usableOutputCount: usable.length,
+      devices,
+      warnings,
+      shock: status.shock || { configured: devices.some(d => d.provider === "openshock"), online: usable.some(d => d.provider === "openshock") },
+      toy: status.toy || { configured: devices.some(d => d.provider === "intiface"), online: usable.some(d => d.provider === "intiface") }
+    };
+  });
+  const duplicateAssignments = [...deviceAssignments.entries()].filter(([, owners]) => new Set(owners.map(String)).size > 1).map(([device, owners]) => ({ device, playerIds: [...new Set(owners.map(String))] }));
+  const active = items.filter(item => item.enabled);
+  return {
+    items,
+    total: items.length,
+    active: active.length,
+    ready: active.filter(item => item.ready).length,
+    warnings: active.filter(item => !item.ready || item.warnings.length).length,
+    duplicateAssignments
+  };
+}
+
+function buildDiagnosticsEventCompatibility(eventCards, readiness) {
+  const cards = Array.isArray(eventCards?.cards) ? eventCards.cards : [];
+  const activePlayers = (readiness?.items || []).filter(player => player.enabled);
+  const shockPlayers = activePlayers.filter(player => player.devices.some(device => device.enabled && device.provider === "openshock" && device.online && device.intensityMultiplier > 0));
+  const toyPlayers = activePlayers.filter(player => player.devices.some(device => device.enabled && device.provider === "intiface" && device.online && device.mappingReady && device.templateValid && device.intensityMultiplier > 0));
+  const deviceTypes = new Set(["suppressNormalActivation","activateTargetDevices","activateTargetToys","activateTargetShocks","activateAllToys","activateOtherToys","activateRandomToyPlayers","activateRandomShockPlayers","sequencePlayers","devicePowerModifier","deviceDurationModifier","toyTemplateOverride"]);
+  const rows = cards.map(card => {
+    const effects = Array.isArray(card.effects) ? card.effects : [];
+    const deviceAware = effects.some(effect => deviceTypes.has(String(effect?.type || "")));
+    let requiresShock = effects.some(effect => ["activateTargetShocks","activateRandomShockPlayers"].includes(String(effect?.type || "")) || (effect?.type === "sequencePlayers" && String(effect.provider || "any") === "shock"));
+    let requiresToy = effects.some(effect => ["activateTargetToys","activateAllToys","activateOtherToys","activateRandomToyPlayers","toyTemplateOverride"].includes(String(effect?.type || "")) || (effect?.type === "sequencePlayers" && String(effect.provider || "any") === "toy"));
+    const requiresAny = effects.some(effect => effect?.type === "sequencePlayers" && String(effect.provider || "any") === "any");
+    const targetToy = effects.some(effect => effect?.type === "activateTargetToys");
+    const targetShock = effects.some(effect => effect?.type === "activateTargetShocks");
+    const eligible = !deviceAware
+      ? true
+      : (!requiresShock || shockPlayers.length > 0)
+        && (!requiresToy || toyPlayers.length > 0)
+        && (!requiresAny || shockPlayers.length > 0 || toyPlayers.length > 0)
+        && (!targetToy || activePlayers.some(player => player.toy?.online))
+        && (!targetShock || activePlayers.some(player => player.shock?.online));
+    return { id: card.id, title: card.title || card.id, enabled: card.enabled !== false, deviceAware, requiresShock, requiresToy, requiresAny, eligible };
+  });
+  return {
+    total: rows.length,
+    deviceAware: rows.filter(row => row.deviceAware).length,
+    likelyNoOp: rows.filter(row => row.enabled && row.deviceAware && !row.eligible),
+    rows
+  };
+}
+
+function buildPreflightChecks(state, players, shockerResult, configValidation, db, setupState = null, outputStatus = null, eventCards = null, readiness = null) {
   const checks = [];
   const add = (id, label, ok, severity = "error", details = null) => checks.push({ id, label, ok: Boolean(ok), severity, details });
   add("config", "Runtime config loads", !configValidation.checks.some(c => !c.ok), "error", configValidation.checks);
@@ -680,8 +800,27 @@ function buildPreflightChecks(state, players, shockerResult, configValidation, d
   add("api-read", "OpenShock token can read own shockers", apiKeyCheck.readOwnShockers.ok, shockConfigured ? "error" : "warning", apiKeyCheck.readOwnShockers);
   add("shockers", "Configured Shock devices are reachable", !shockConfigured || (shockerResult.shockers || []).length > 0, shockConfigured ? "error" : "warning", shockerResult.warning || null);
   add("players", "At least one logical player available", (players || []).length > 0, "error");
-  add("grouping", "Grouping config valid", !(shockerGroupingConfig().enabled && !shockerGroupingConfig().separator), "warning", shockerGroupingConfig());
+  const playerReadiness = readiness || buildDiagnosticsPlayerReadiness(setupState || {}, outputStatus || {});
+  const activePlayers = playerReadiness.items.filter(player => player.enabled);
+  add("player-outputs", "Every active player has a usable output", activePlayers.length > 0 && activePlayers.every(player => player.ready), "error", activePlayers.filter(player => !player.ready).map(player => ({ id: player.id, name: player.name, warnings: player.warnings })));
+  add("device-assignments", "No physical output is assigned to multiple players", playerReadiness.duplicateAssignments.length === 0, "error", playerReadiness.duplicateAssignments);
+  const toyDevices = activePlayers.flatMap(player => player.devices.filter(device => device.provider === "intiface" && device.enabled));
+  const shockDevices = activePlayers.flatMap(player => player.devices.filter(device => device.provider === "openshock" && device.enabled));
+  const toyInUse = toyDevices.length > 0;
+  const intiface = typeof intifaceService !== "undefined" ? intifaceService.snapshot() : { enabled: false, ready: false, state: "unavailable", lastError: "Intiface service unavailable" };
+  add("intiface-enabled", "Intiface service enabled when Toys are configured", !toyInUse || intiface.enabled === true, toyInUse ? "error" : "warning", { toyCount: toyDevices.length, state: intiface.state });
+  add("intiface-connected", "Intiface connected when Toys are configured", !toyInUse || intiface.ready === true, toyInUse ? "error" : "warning", { state: intiface.state, lastError: intiface.lastError, connectedDeviceCount: intiface.connectedDeviceCount });
+  add("toy-online", "Configured Toys are connected", !toyInUse || toyDevices.every(device => device.online), toyInUse ? "error" : "warning", toyDevices.filter(device => !device.online));
+  add("toy-mapping", "Configured Toys have active feature mappings", !toyInUse || toyDevices.every(device => device.mappingReady), toyInUse ? "error" : "warning", toyDevices.filter(device => !device.mappingReady));
+  add("toy-templates", "Preferred Toy templates exist", !toyInUse || toyDevices.every(device => device.templateValid), toyInUse ? "error" : "warning", toyDevices.filter(device => !device.templateValid));
+  const integrationEnabled = CONFIG?.intiface?.gameIntegrationEnabled === true;
+  add("intiface-game-integration", "Toy gameplay integration enabled", !toyInUse || integrationEnabled, toyInUse ? "warning" : "warning", { enabled: integrationEnabled });
+  const zeroProfiles = activePlayers.flatMap(player => player.devices.filter(device => device.enabled && device.intensityMultiplier === 0).map(device => ({ player: player.name, provider: device.provider, device: device.name })));
+  add("zero-output-profiles", "Enabled output profiles are above 0%", zeroProfiles.length === 0, "warning", zeroProfiles);
+  add("grouping", "Legacy Shock grouping config valid", !(shockerGroupingConfig().enabled && !shockerGroupingConfig().separator), "warning", shockerGroupingConfig());
   add("events", "Event cards loaded", !configValidation.warnings.some(w => /^Event card error/.test(w)), "warning");
+  const compatibility = buildDiagnosticsEventCompatibility(eventCards || {}, playerReadiness);
+  add("event-hardware", "Device-aware event cards have eligible hardware where possible", compatibility.likelyNoOp.length === 0, "warning", compatibility.likelyNoOp);
   add("objectives", "Objectives loaded", !configValidation.warnings.some(w => /^Objective error/.test(w)), "warning");
   add("safety", "Server max shock is within OSR limit", clampInt(CONFIG?.safety?.serverMaxShockIntensity ?? 0, 0, 1000) <= 99 && clampInt(CONFIG?.safety?.serverMaxShockIntensity ?? 0, 0, 1000) > 0, "error", CONFIG?.safety);
   add("host", "Host page enabled", CONFIG?.pages?.host?.enabled !== false, "warning");
@@ -721,76 +860,98 @@ async function resolveDiagnosticTestDevices(body) {
   return resolveLogicalControlDevices(targetId);
 }
 
-async function handleDiagnosticsTest(req, res) {
-  const body = await readBody(req);
-  const s = safety();
-  const maxShock = clampInt(s.serverMaxShockIntensity ?? 99, 1, 99);
-  const maxVibe = clampInt(s.serverMaxVibrateIntensity ?? 100, 1, 100);
-  const duration = clampInt(body.duration ?? s.defaultDurationMs ?? 700, s.minDurationMs ?? 300, s.maxDurationMs ?? 1000);
-  const exclusive = Boolean(body.exclusive ?? true);
-  const mode = String(body.mode || body.type || "Vibrate");
-  const normalizedType = mode.toLowerCase() === "shock" ? "Shock" : mode.toLowerCase() === "stop" ? "Stop" : "Vibrate";
-  const selectedValue = normalizedType === "Shock" ? clampInt(body.selectedValue ?? body.intensity ?? 5, 1, maxShock) : 0;
-  const devices = await resolveDiagnosticTestDevices(body);
-  if (!devices.length) return sendJson(res, 404, { error: "No matching devices found" });
-
-  const state = readSessionState();
-  const shocks = devices.map(device => {
-    const multiplierPercent = normalizedType === "Shock" ? multiplierForDiagnosticTarget(state, device, device.playerId) : null;
-    const intensity = normalizedType === "Shock"
-      ? applyDiagnosticMultiplier(selectedValue, multiplierPercent, maxShock)
-      : normalizedType === "Vibrate"
-        ? maxVibe
-        : 0;
-    return {
-      id: device.id,
-      type: normalizedType,
-      intensity,
-      duration,
-      exclusive,
-      selectedValue,
-      maxShock,
-      multiplierPercent,
-      playerId: device.playerId,
-      playerName: device.playerName,
-      deviceName: device.name,
-      memberName: device.memberName || device.name
-    };
+async function diagnosticsTestPreview(body = {}) {
+  const targetType = String(body.targetType || "player");
+  const targetId = String(body.targetId || body.playerId || body.id || "");
+  const provider = String(body.provider || "");
+  const mode = String(body.mode || "Vibe");
+  const selectedValue = clampInt(body.selectedValue ?? body.intensity ?? 5, 0, 99);
+  const duration = clampInt(body.duration ?? safety().defaultDurationMs ?? 700, safety().minDurationMs ?? 300, Math.max(safety().maxDurationMs ?? 1000, 3000));
+  const players = await getConfiguredPlayers(null, { includeDisabled: true });
+  const describeDevice = device => ({
+    provider: device.provider || "openshock",
+    id: device.id,
+    name: device.memberName || device.name,
+    enabled: device.enabled !== false,
+    online: device.online !== false,
+    multiplier: clampInt(device.intensityMultiplier ?? 100, 0, 100),
+    mappingReady: device.provider !== "intiface" || device.mappingReady === true,
+    preferredTemplate: device.preferredTemplate || null,
+    estimatedPower: Math.round(selectedValue * (clampInt(device.intensityMultiplier ?? 100, 0, 100) / 100))
   });
-
-  const requestBody = {
-    shocks: shocks.map(({ id, type, intensity, duration, exclusive }) => ({ id, type, intensity, duration, exclusive }))
-  };
-
-  if (normalizedType === "Stop") debugState.counters.stopCommands += shocks.length;
-  else debugState.counters.shockCommands += shocks.length;
-
-  const result = await requestOpenShock("POST", "/2/shockers/control", requestBody, { action: `diagnostics:${normalizedType.toLowerCase()}` });
-  writeDatabaseEvent({ type: "diagnosticsTest", title: `Diagnostics ${normalizedType}`, description: `${normalizedType} sent to ${shocks.length} device(s)`, metadata: { sent: shocks } });
-  return sendJson(res, result.statusCode, { ok: result.statusCode >= 200 && result.statusCode < 300, sent: shocks, openshock: result.body });
+  if (targetType === "player") {
+    const player = findLogicalPlayerById(players, targetId);
+    if (!player) throw new Error("Unknown logical player");
+    return { targetType, targetId, targetName: player.name, mode, selectedValue, duration, devices: (player.devices || []).map(describeDevice) };
+  }
+  if (targetType === "device") {
+    for (const player of players) {
+      const device = (player.devices || []).find(item => String(item.id) === targetId && (!provider || item.provider === provider));
+      if (device) return { targetType, targetId, targetName: `${player.name} / ${device.memberName || device.name}`, mode, selectedValue, duration, devices: [describeDevice(device)] };
+    }
+    throw new Error("Unknown configured device");
+  }
+  throw new Error("Unsupported diagnostics target");
 }
 
-async function handleDiagnosticsStopAll(req, res) {
-  let ids = [];
+async function handleDiagnosticsTest(req, res) {
+  const body = await readBody(req);
   try {
-    const body = await readBody(req);
-    ids = Array.isArray(body.ids) ? body.ids.map(String).filter(Boolean) : [];
-  } catch {
-    ids = [];
+    if (body.preview === true) return sendJson(res, 200, { ok: true, preview: await diagnosticsTestPreview(body) });
+    const targetType = String(body.targetType || "player");
+    const targetId = String(body.targetId || body.playerId || body.id || "");
+    const provider = String(body.provider || "");
+    const mode = String(body.mode || "Vibe").toLowerCase();
+    const duration = clampInt(body.duration ?? safety().defaultDurationMs ?? 700, safety().minDurationMs ?? 300, 3000);
+    const selectedValue = clampInt(body.selectedValue ?? body.intensity ?? 5, 0, 99);
+
+    if (targetType === "player") {
+      const player = await resolveConfiguredPlayer(targetId);
+      if (!player) return sendJson(res, 404, { error: "Unknown logical player" });
+      let result;
+      if (mode === "stop") result = await stopGamePlayerOutputs(player);
+      else if (mode === "toy") {
+        const toys = (player.devices || []).filter(device => device.provider === "intiface");
+        result = { intiface: [] };
+        for (const device of toys) result.intiface.push(await testSetupDevice({ provider: "intiface", deviceId: device.id, testPower: clampInt(body.testPower ?? 25, 1, 100), durationMs: duration }));
+        result.ok = result.intiface.some(item => item.ok);
+      } else {
+        result = await activateGamePlayer({ playerId: player.id, rolledValue: mode === "shock" ? Math.max(1, selectedValue) : 0, mode: mode === "shock" ? "normal" : "vibe", shockDurationMs: duration });
+      }
+      writeDatabaseEvent({ type: "diagnosticsTest", title: `Diagnostics ${mode}`, description: `${mode} test for logical player ${player.name}`, metadata: { playerId: player.id, mode } });
+      return sendJson(res, 200, { ok: result.ok !== false, result });
+    }
+
+    if (targetType === "device") {
+      if (!provider) return sendJson(res, 400, { error: "Device diagnostics require provider" });
+      if (provider === "intiface" && mode === "shock") return sendJson(res, 400, { error: "Shock test is not valid for an individual Toy. Use Toy or Vibe." });
+      if (provider === "openshock" && mode === "toy") return sendJson(res, 400, { error: "Toy-only test is not valid for an individual Shock device." });
+      let result;
+      if (mode === "stop") result = await stopSetupDevice({ provider, deviceId: targetId });
+      else if (provider === "intiface") result = await testSetupDevice({ provider, deviceId: targetId, testType: "toy", testPower: clampInt(body.testPower ?? 25, 1, 100), durationMs: duration });
+      else result = await testSetupDevice({ provider, deviceId: targetId, testType: mode === "shock" ? "shock" : "vibe", testValue: Math.max(1, selectedValue), testPower: clampInt(body.testPower ?? 25, 1, 100), durationMs: duration });
+      writeDatabaseEvent({ type: "diagnosticsTest", title: `Diagnostics device ${mode}`, description: `${mode} test for ${provider} device`, metadata: { provider, deviceId: targetId, mode } });
+      return sendJson(res, result.ok || result.skipped ? 200 : 503, { ok: result.ok, result });
+    }
+
+    return sendJson(res, 400, { error: "Unsupported diagnostics target type" });
+  } catch (err) {
+    return sendJson(res, 400, { error: err.message });
   }
-  if (!ids.length) {
-    const { shockers } = await getShockers();
-    ids = (shockers || []).map(s => String(s.id)).filter(Boolean);
-  }
-  if (!ids.length) return sendJson(res, 400, { error: "No shocker ids available" });
-  const s = safety();
-  const requestBody = {
-    shocks: ids.map(id => ({ id, type: "Stop", intensity: 0, duration: s.minDurationMs ?? 300, exclusive: true }))
-  };
-  debugState.counters.stopCommands += ids.length;
-  const result = await requestOpenShock("POST", "/2/shockers/control", requestBody, { action: "diagnostics:stopAll" });
-  writeDatabaseEvent({ type: "diagnosticsStopAll", title: "Diagnostics STOP ALL", description: `Stop sent to ${ids.length} device(s)`, metadata: { ids } });
-  return sendJson(res, result.statusCode, { stopped: ids.length, ids, openshock: result.body });
+}
+
+async function handleDiagnosticsStopAll(_req, res) {
+  const result = await stopAllGameOutputs([]);
+  writeDatabaseEvent({
+    type: "diagnosticsStopAll",
+    title: "Diagnostics STOP ALL",
+    description: "Unified Stop All sent to OpenShock and Intiface; active Toy/event runs cancelled.",
+    metadata: {
+      openshock: { ok: result.openshock?.ok, stopped: result.openshock?.stopped || 0, error: result.openshock?.error || null },
+      intiface: { ok: result.intiface?.ok, stopped: result.intiface?.stopped || false, error: result.intiface?.error || null }
+    }
+  });
+  return sendJson(res, 200, { stopped: true, ...result });
 }
 
 async function handleDiagnosticsReloadShockers(_req, res) {
