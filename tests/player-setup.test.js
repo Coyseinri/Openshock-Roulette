@@ -42,6 +42,11 @@ const stableToyB={...stableToyA,DeviceIndex:42};
 assert.equal(context.stableIntifaceDeviceKey(stableToyA),context.stableIntifaceDeviceKey(stableToyB));
 assert.ok(!context.stableIntifaceDeviceKey(stableToyA).includes("42"));
 
+// A missing per-device duration override must remain null so global 4x/6x game timing applies.
+assert.equal(context.normalizePlayerDevice({ provider: "intiface", id: "toy-null", durationMultiplierOverride: null }).durationMultiplierOverride, null);
+assert.equal(context.normalizePlayerDevice({ provider: "intiface", id: "toy-missing" }).durationMultiplierOverride, null);
+assert.equal(context.normalizePlayerDevice({ provider: "intiface", id: "toy-explicit", durationMultiplierOverride: 2.5 }).durationMultiplierOverride, 2.5);
+
 // A legacy group multiplier should seed each physical Shock device once, then the stale group key is removed.
 session={playerStats:{"player:team-a":{selected:1}},playerMultipliers:{"player:team-a":55},intiface:{mappings:{}},roleAccessKeys:{playerKeys:{}},eliminatedIds:[]};
 delete stateStore.playerSetup;

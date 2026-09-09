@@ -24,7 +24,11 @@ function normalizePlayerDevice(device = {}) {
     enabled: device.enabled !== false,
     intensityMultiplier: clampPercent(device.intensityMultiplier ?? device.multiplier ?? 100),
     preferredTemplate: provider === "intiface" ? String(device.preferredTemplate || "soft-wave") : null,
-    durationMultiplierOverride: provider === "intiface" && Number.isFinite(Number(device.durationMultiplierOverride))
+    durationMultiplierOverride: provider === "intiface"
+      && device.durationMultiplierOverride !== null
+      && device.durationMultiplierOverride !== undefined
+      && device.durationMultiplierOverride !== ""
+      && Number.isFinite(Number(device.durationMultiplierOverride))
       ? Math.max(0.1, Math.min(20, Number(device.durationMultiplierOverride)))
       : null,
     notes: String(device.notes || ""),
