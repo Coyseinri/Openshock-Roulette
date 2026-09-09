@@ -29,6 +29,66 @@ function getTriggeredEventDisplayDuration(card) {
   return Math.max(1200, parsed || 4000);
 }
 
+function eventHardwareAvailability() {
+  const players = (configuredPlayers || shockers || []).filter(player => player && player.enabled !== false);
+  const devices = players.flatMap(player => Array.isArray(player.devices) ? player.devices : []);
+  const shock = devices.some(device =>
+    (device.provider || "openshock") === "openshock"
+    && device.enabled !== false
+    && device.online !== false
+  );
+  const toy = devices.some(device =>
+    device.provider === "intiface"
+    && device.enabled !== false
+    && device.online !== false
+    && device.mappingReady !== false
+  );
+  return { shock, toy, any: shock || toy };
+}
+
+function replacementEventHardwareRequirement(card) {
+  const effects = getEventEffects(card);
+  if (!effects.some(effect => effect.type === "suppressNormalActivation")) {
+    return { replacement: false, shock: false, toy: false, any: false };
+  }
+  let shock = false;
+  let toy = false;
+  let any = false;
+  for (const effect of effects) {
+    const type = String(effect.type || "");
+    if (["activateTargetShocks", "activateRandomShockPlayers"].includes(type)) shock = true;
+    if (["activateTargetToys", "activateAllToys", "activateOtherToys", "activateRandomToyPlayers", "toyTemplateOverride"].includes(type)) toy = true;
+    if (type === "activateTargetDevices") any = true;
+    if (type === "sequencePlayers") {
+      const provider = String(effect.provider || "any").toLowerCase();
+      if (provider === "shock") shock = true;
+      else if (provider === "toy") toy = true;
+      else any = true;
+    }
+  }
+  return { replacement: true, shock, toy, any };
+}
+
+function eventCardHardwareEligible(card, availability = eventHardwareAvailability()) {
+  const required = replacementEventHardwareRequirement(card);
+  if (!required.replacement) return true;
+  if (required.shock && !availability.shock) return false;
+  if (required.toy && !availability.toy) return false;
+  if (required.any && !availability.any) return false;
+  return true;
+}
+
+function hardwareEligibleEventCards(cards) {
+  const availability = eventHardwareAvailability();
+  const eligible = [];
+  const skipped = [];
+  for (const card of cards || []) {
+    if (eventCardHardwareEligible(card, availability)) eligible.push(card);
+    else skipped.push(card);
+  }
+  return { eligible, skipped, availability };
+}
+
 function rollEventCard(force = false, forcedCardId = null) {
   const ec = getEventRuntimeConfig();
 
@@ -42,13 +102,24 @@ function rollEventCard(force = false, forcedCardId = null) {
     return null;
   }
 
+  const hardware = hardwareEligibleEventCards(ec.cards);
+  if (hardware.skipped.length) {
+    log(`Event hardware filter skipped ${hardware.skipped.length} replacement card(s): ${hardware.skipped.map(card => card.title || card.id).join(", ")}. Available: Shock=${hardware.availability.shock}, Toy=${hardware.availability.toy}.`);
+  }
+  if (!hardware.eligible.length) {
+    log("Event card roll skipped: no hardware-compatible event cards found.");
+    return null;
+  }
+
   if (forcedCardId) {
-    const picked = ec.cards.find(c => String(c.id) === String(forcedCardId));
+    const requested = ec.cards.find(c => String(c.id) === String(forcedCardId));
+    const picked = hardware.eligible.find(c => String(c.id) === String(forcedCardId));
     if (picked) {
       log(`Event card forced by host. Picked specific card: ${picked.title || picked.id}.`);
       return picked;
     }
-    log(`Host requested unknown event card '${forcedCardId}'. Falling back to weighted forced event roll.`);
+    if (requested) log(`Host requested event card '${forcedCardId}', but required output hardware is unavailable. Falling back to weighted forced event roll.`);
+    else log(`Host requested unknown event card '${forcedCardId}'. Falling back to weighted forced event roll.`);
   }
 
   const roll = Math.random() * 100;
@@ -57,7 +128,7 @@ function rollEventCard(force = false, forcedCardId = null) {
     return null;
   }
 
-  const picked = weightedPick(ec.cards.map(c => ({ ...c, weight: Math.max(0, Number(c.weight ?? 1)) })));
+  const picked = weightedPick(hardware.eligible.map(c => ({ ...c, weight: Math.max(0, Number(c.weight ?? 1)) })));
   if (force) log(`Event card forced by host. Picked: ${picked.title || picked.id}.`);
   else log(`Event card roll hit: ${roll.toFixed(1)} < ${ec.chancePercent}%. Picked: ${picked.title || picked.id}.`);
   return picked;
