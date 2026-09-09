@@ -4,7 +4,8 @@
   "description": "A local browser-based roulette party game for OpenShock.",
   "main": "server.js",
   "scripts": {
-    "start": "node --no-warnings server.js"
+    "start": "node --no-warnings server.js",
+    "test:intiface": "node tests/intiface-command-batching.test.js"
   },
   "keywords": [
     "openshock",
