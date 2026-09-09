@@ -591,6 +591,7 @@ var server = http.createServer(async (req, res) => {
       const incoming = await readBody(req);
       const current = readSessionState();
       incoming.playerStats = mergePlayerStatsForSessionSave(incoming.playerStats, current.playerStats);
+      incoming.setupCompleted = typeof incoming.setupCompleted === "boolean" ? incoming.setupCompleted : current.setupCompleted === true;
       incoming.objectiveAssignments = current.objectiveAssignments || {};
       incoming.playerPoints = current.playerPoints || {};
       incoming.playerTokens = current.playerTokens || {};

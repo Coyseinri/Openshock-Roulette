@@ -191,11 +191,18 @@ function restoreLastTargetPicked(data) {
   return null;
 }
 
+function shouldRedirectToPlayerSetup(state = null) {
+  const completed = state && typeof state === "object" ? state.setupCompleted === true : setupCompleted === true;
+  const round = state && typeof state === "object" ? Math.max(0, Math.round(Number(state.roundNumber || 0))) : roundNumber;
+  return !completed && round === 0;
+}
+
 function buildSessionSnapshot() {
   return {
     version: 1,
     updatedAt: new Date().toISOString(),
     roundNumber,
+    setupCompleted,
     eliminatedIds: Array.from(eliminated),
     playerStats,
     playerMultipliers,
@@ -210,6 +217,7 @@ function applySessionSnapshot(state) {
   if (!state || typeof state !== "object") return;
 
   roundNumber = Math.max(0, Math.round(Number(state.roundNumber || 0)));
+  setupCompleted = state.setupCompleted === true;
   eliminated = new Set(Array.isArray(state.eliminatedIds) ? state.eliminatedIds.map(String) : []);
   playerStats = state.playerStats && typeof state.playerStats === "object" ? state.playerStats : {};
   playerMultipliers = state.playerMultipliers && typeof state.playerMultipliers === "object" ? state.playerMultipliers : {};

@@ -58,5 +58,13 @@ assert.equal(session.playerMultipliers["shock-1"],55);
 assert.equal(session.playerMultipliers["shock-2"],55);
 assert.equal(session.playerMultipliers["player:team-a"],undefined);
 
+
+// Completing Player Setup is session-scoped and must not require online devices.
+(async()=>{
+  session.setupCompleted=false;
+  await context.applyPlayerSetupAction({action:"completeSetup"});
+  assert.equal(session.setupCompleted,true,"Completing setup must persist on the game session");
+})().catch(err=>{console.error(err);process.exitCode=1;});
+
 console.log("Player Setup migration regression test passed.");
 fs.rmSync(dir,{recursive:true,force:true});

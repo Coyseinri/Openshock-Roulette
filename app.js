@@ -5,6 +5,7 @@ let eliminated = new Set();
 let targetRotation = 0;
 let fateRotation = 0;
 let roundNumber = 0;
+let setupCompleted = false;
 let fateDeck = [];
 let eventCardsConfig = { enabled: false, cards: [] };
 let activeRoundEvent = null;
@@ -386,6 +387,10 @@ document.addEventListener("keydown", (event) => {
   await loadConfig();
   await loadShockers({ preserveSession: true });
   await loadSessionState();
+  if (shouldRedirectToPlayerSetup()) {
+    window.location.replace("/setup");
+    return;
+  }
   await loadPlayerObjectivePanel();
   startHostCommandPolling();
 })();

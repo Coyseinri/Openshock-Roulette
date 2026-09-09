@@ -425,6 +425,10 @@ async function getPlayerSetupState({ forceRefresh = false } = {}) {
     devices: { shock: availableShock, toy: availableToys },
     suggestions,
     readiness,
+    session: (() => {
+      const session = readSessionState();
+      return { setupCompleted: session.setupCompleted === true, roundNumber: Number(session.roundNumber || 0) };
+    })(),
     providers: {
       shock: { reachable: !shockerError, lastError: shockerError },
       toy: { enabled: CONFIG.intiface?.enabled === true, connected: Boolean(typeof intifaceService !== "undefined" && intifaceService.snapshot()?.ready), state: typeof intifaceService !== "undefined" ? intifaceService.snapshot()?.state : "disabled" }
@@ -499,6 +503,10 @@ async function applyPlayerSetupAction(body = {}) {
     if (!existing) throw new Error("Device assignment not found");
     const [device] = existing.player.devices.splice(existing.index, 1);
     if (provider === "intiface") syncIntifaceAssignmentToStorage(deviceId, "", device);
+  } else if (action === "completeSetup") {
+    const session = readSessionState();
+    session.setupCompleted = true;
+    writeSessionState(session);
   } else if (action === "updateDevice") {
     const provider = String(body.provider || "") === "intiface" ? "intiface" : "openshock";
     const deviceId = String(body.deviceId || "");
