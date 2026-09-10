@@ -393,6 +393,36 @@ async function stopSetupDevice({ provider, deviceId } = {}) {
   }
 }
 
+async function controlHostDevice({ playerId, provider, deviceId, mode = null, intensity = 0, durationMs = null } = {}) {
+  const normalizedProvider = String(provider || "").toLowerCase();
+  if (!['openshock', 'intiface'].includes(normalizedProvider)) throw new Error("Unsupported device provider");
+  const id = String(deviceId || "");
+  if (!id) throw new Error("Missing device id");
+  const found = await findConfiguredOutputDevice(normalizedProvider, id);
+  if (!found || (playerId && String(found.player.id) !== String(playerId))) throw new Error("Device is not assigned to the selected player");
+  if (found.device.enabled === false) throw new Error("Device is disabled");
+
+  const requestedMode = String(mode || "").toLowerCase();
+  const allowedModes = normalizedProvider === "intiface" ? ["activate", "stop"] : ["shock", "vibrate", "stop"];
+  if (!allowedModes.includes(requestedMode)) throw new Error(`Unsupported ${normalizedProvider === "intiface" ? "Toy" : "Shock"} control mode`);
+  if (requestedMode === "stop") {
+    return { playerId: found.player.id, playerName: found.player.name, deviceId: id, deviceName: found.device.name, ...(await stopSetupDevice({ provider: normalizedProvider, deviceId: id })) };
+  }
+
+  const s = safety();
+  const duration = clampInt(durationMs ?? s.defaultDurationMs ?? 700, s.minDurationMs ?? 300, normalizedProvider === "intiface" ? 3000 : s.maxDurationMs ?? 1000);
+  const power = clampInt(intensity, 1, normalizedProvider === "openshock" && requestedMode === "shock" ? s.serverMaxShockIntensity ?? 99 : 100);
+  const result = await testSetupDevice({
+    provider: normalizedProvider,
+    deviceId: id,
+    testType: normalizedProvider === "openshock" && requestedMode === "shock" ? "shock" : normalizedProvider === "intiface" ? "toy" : "vibe",
+    testValue: power,
+    testPower: power,
+    durationMs: duration
+  });
+  return { playerId: found.player.id, playerName: found.player.name, deviceId: id, deviceName: found.device.name, ...result };
+}
+
 async function activateGamePlayer({ playerId, rolledValue = 0, mode = null, shockDurationMs = null, exclusive = true, outputRunToken = null } = {}) {
   assertOutputRunActive(outputRunToken);
   const id = String(playerId || "");

@@ -492,7 +492,12 @@ var server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/host/control" && req.method === "POST") {
       if (!hostPageConfig().enabled) return sendJson(res, 403, { error: "Host page is disabled" });
       if (!validateRoleAccess("host", req, url) && !isLocalRequest(req)) return sendJson(res, 403, { error: "Invalid host key" });
-      return await handleControl(req, res);
+      try {
+        const result = await controlHostDevice(await readBody(req));
+        return sendJson(res, result.ok === false ? 503 : 200, { ok: result.ok !== false, result });
+      } catch (err) {
+        return sendJson(res, /not assigned|Unknown|not found/i.test(err.message) ? 404 : 400, { error: err.message });
+      }
     }
 
     if (url.pathname === "/api/audience/session" && (req.method === "GET" || req.method === "POST")) {

@@ -55,32 +55,58 @@ function fillPlayerSelect(select, players) {
   if ([...select.options].some(o => o.value === current)) select.value = current;
 }
 
-function fillManualControlSelect(select, players) {
-  if (!select) return;
-  const current = select.value;
-  select.innerHTML = "";
+function fillManualDeviceSelect(players) {
+  const playerSelect = document.getElementById("manualPlayer");
+  const deviceSelect = document.getElementById("manualDevice");
+  if (!playerSelect || !deviceSelect) return;
+  const current = deviceSelect.value;
+  const player = (players || []).find(item => String(item.id) === String(playerSelect.value));
+  deviceSelect.innerHTML = "";
+  for (const device of player?.devices || []) {
+    const opt = document.createElement("option");
+    opt.value = device.id;
+    opt.dataset.provider = device.provider === "intiface" ? "intiface" : "openshock";
+    opt.textContent = `${opt.dataset.provider === "intiface" ? "Toy" : "Shock"}: ${device.memberName || device.name || device.id}${device.enabled === false ? " (disabled)" : device.online === false ? " (offline)" : ""}`;
+    opt.disabled = device.enabled === false || device.online === false;
+    deviceSelect.appendChild(opt);
+  }
+  if ([...deviceSelect.options].some(option => option.value === current && !option.disabled)) deviceSelect.value = current;
+  if (deviceSelect.selectedOptions[0]?.disabled) deviceSelect.value = [...deviceSelect.options].find(option => !option.disabled)?.value || "";
+  syncManualDeviceControls();
+}
 
-  (players || []).forEach(p => {
-    const groupOpt = document.createElement("option");
-    groupOpt.value = p.id;
-    groupOpt.textContent = p.name;
-    select.appendChild(groupOpt);
+function syncManualDeviceControls() {
+  const deviceSelect = document.getElementById("manualDevice");
+  const typeSelect = document.getElementById("manualType");
+  const sendButton = document.getElementById("manualSendBtn");
+  if (!deviceSelect || !typeSelect) return;
+  const current = typeSelect.value;
+  const provider = deviceSelect.selectedOptions[0]?.dataset.provider || "";
+  const choices = provider === "intiface"
+    ? [["Activate", "Activate"], ["Stop", "Stop"]]
+    : [["Vibrate", "Vibrate"], ["Shock", "Shock"], ["Stop", "Stop"]];
+  typeSelect.innerHTML = choices.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
+  if ([...typeSelect.options].some(option => option.value === current)) typeSelect.value = current;
+  if (sendButton) sendButton.disabled = !deviceSelect.value;
+  syncManualControlFields();
+}
 
-    if (Array.isArray(p.devices) && p.devices.length > 1) {
-      p.devices.forEach(device => {
-        const opt = document.createElement("option");
-        opt.value = device.id;
-        opt.textContent = ` - ${device.name || device.memberName || device.id}`;
-        select.appendChild(opt);
-      });
-    }
-  });
-
-  if ([...select.options].some(o => o.value === current)) select.value = current;
+function syncManualControlFields() {
+  const provider = document.getElementById("manualDevice")?.selectedOptions[0]?.dataset.provider || "";
+  const type = document.getElementById("manualType")?.value || "";
+  const intensity = document.getElementById("manualIntensity");
+  const duration = document.getElementById("manualDuration");
+  const stopped = type === "Stop";
+  if (intensity) {
+    intensity.disabled = stopped;
+    intensity.max = String(provider === "openshock" && type === "Shock" ? Math.min(99, Number(latest?.safety?.serverMaxShockIntensity ?? 99)) : 100);
+  }
+  if (duration) duration.disabled = stopped;
 }
 
 function renderPlayers(players) {
-  fillManualControlSelect(document.getElementById("manualPlayer"), players);
+  fillPlayerSelect(document.getElementById("manualPlayer"), players);
+  fillManualDeviceSelect(players);
   fillPlayerSelect(document.getElementById("rewardPlayer"), players);
   fillPlayerSelect(document.getElementById("forcePlayer"), players);
 }
@@ -344,18 +370,23 @@ async function sendReward() {
 
 async function sendManual() {
   try {
-    const id = document.getElementById("manualPlayer").value;
+    const playerId = document.getElementById("manualPlayer").value;
+    const deviceSelect = document.getElementById("manualDevice");
+    const deviceId = deviceSelect.value;
+    const provider = deviceSelect.selectedOptions[0]?.dataset.provider;
     const type = document.getElementById("manualType").value;
     const intensity = Number(document.getElementById("manualIntensity").value || 0);
     const duration = Number(document.getElementById("manualDuration").value || 500);
     const res = await fetch(`/api/host/control?key=${encodeURIComponent(key)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, selectedValue: type === "Shock" ? intensity : 0, duration, exclusive: true })
+      body: JSON.stringify({ playerId, deviceId, provider, mode: type, intensity, durationMs: duration })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Manual control failed");
-    document.getElementById("manualStatus").textContent = `${type} sent.`;
+    const result = data.result || {};
+    const applied = result.type === "Shock" ? ` · applied ${result.intensity}` : result.maxPowerPercent !== undefined ? ` · max ${result.maxPowerPercent}%` : "";
+    document.getElementById("manualStatus").textContent = `${type} sent to ${result.deviceName || deviceSelect.selectedOptions[0]?.textContent || deviceId}${applied}.`;
   } catch (err) {
     document.getElementById("manualStatus").textContent = err.message;
   }
@@ -402,6 +433,9 @@ async function load() {
 }
 
 document.getElementById("manualSendBtn").onclick = sendManual;
+document.getElementById("manualPlayer").addEventListener("change", () => fillManualDeviceSelect(latest?.players || []));
+document.getElementById("manualDevice").addEventListener("change", syncManualDeviceControls);
+document.getElementById("manualType").addEventListener("change", syncManualControlFields);
 document.getElementById("rewardSendBtn")?.addEventListener("click", sendReward);
 document.getElementById("forcePlayerBtn")?.addEventListener("click", sendForcePlayer);
 document.getElementById("hostForceSpecificEventBtn")?.addEventListener("click", sendSpecificEvent);

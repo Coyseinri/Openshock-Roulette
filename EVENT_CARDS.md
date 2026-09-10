@@ -494,6 +494,82 @@ Example:
 
 Safety note: value modifiers do not bypass the server-side safety maximum. The app still caps the final send value and applies per-player multipliers before OpenShock receives the command.
 
+## Device-aware physical output effects
+
+These effects can target Shock devices, Intiface Toys, or both. OSR evaluates hardware eligibility before selecting a default card, so a Toy-only card is skipped when no active player has a ready Toy mapping.
+
+| Effect | Fields | Meaning |
+| --- | --- | --- |
+| `suppressNormalActivation` | none | Skips the normal target activation so later device effects can replace it. |
+| `activateTargetDevices` | common fields | Activates all eligible devices assigned to the selected target. |
+| `activateTargetToys` | common fields | Activates only the selected target's mapped Toys. |
+| `activateTargetShocks` | common fields | Activates only the selected target's Shock devices. |
+| `activateAllToys` | common fields | Activates mapped Toys belonging to all eligible active players. |
+| `activateOtherToys` | common fields | Activates eligible Toys except those assigned to the selected target. |
+| `activateRandomToyPlayers` | `count`, common fields | Activates Toys for a random number of eligible players. |
+| `activateRandomShockPlayers` | `count`, common fields | Activates Shock devices for a random number of eligible players. |
+| `sequencePlayers` | `provider`, `count`, `delayMs`, `allowRepeat` | Starts a timed sequence across eligible players. Provider is `toy`, `shock`, or `any`. |
+| `devicePowerModifier` | `multiplier` | Multiplies the power of later device effects. Range: `0` through `1`. |
+| `deviceDurationModifier` | `multiplier` | Multiplies the duration of later device effects. Range: `0.1` through `5`. |
+| `toyTemplateOverride` | `templateId` | Uses one configured Intiface template for later Toy effects. |
+
+Common activation fields:
+
+| Field | Meaning |
+| --- | --- |
+| `mode` | Use `vibe` for a Vibe-style activation or omit it to follow the rolled result. |
+| `powerMultiplier` | Applies an additional `0` through `1` multiplier to this activation. |
+| `durationMultiplier` | Applies an additional `0.1` through `5` duration multiplier. |
+| `excludeTargets` | Excludes the current round targets when set to `true`. |
+
+Device modifiers apply to the effects after them in the same card. Keep `suppressNormalActivation` when the device effects replace the normal result; omit it when they are a bonus activation.
+
+Example Toy replacement:
+
+```json
+{
+  "effects": [
+    { "type": "suppressNormalActivation" },
+    { "type": "devicePowerModifier", "multiplier": 0.5 },
+    { "type": "activateTargetToys" }
+  ]
+}
+```
+
+Example mixed-provider bonus:
+
+```json
+{
+  "effects": [
+    { "type": "activateRandomShockPlayers", "count": 1, "powerMultiplier": 0.4, "excludeTargets": true },
+    { "type": "activateRandomToyPlayers", "count": 1, "mode": "vibe", "powerMultiplier": 0.4, "excludeTargets": true }
+  ]
+}
+```
+
+### Default device-aware cards
+
+| Card ID | Output behavior |
+| --- | --- |
+| `hot-potato-toys` | Adds a Toy sequence after the normal result. |
+| `collateral-buzz` | Adds reduced Toy output for everyone except the target. |
+| `toy-party` | Replaces normal output with all eligible Toys. |
+| `everybody-but-you` | Replaces normal output with Toys belonging to everyone except the target. |
+| `buzz-roulette` | Replaces normal output with one random Toy player. |
+| `buzz-buddies` | Replaces normal output with two random Toy players. |
+| `chain-reaction` | Replaces normal output with a no-repeat Toy sequence. |
+| `long-game` | Runs the target's Toy longer at reduced power. |
+| `short-fuse` | Runs the target's Toy briefly at moderate power. |
+| `random-buzz` | Adds a low-power Toy activation for another player. |
+| `toy-takeover` | Runs all eligible Toys with the `all-steady` template. |
+| `crossfire` | Adds one other Shock player and one other Toy player. |
+| `split-decision` | Sends the target result to Shock and a reduced Vibe to another Toy player. |
+| `reverse-split` | Sends the target result to Toy and a reduced result to another Shock player. |
+| `mixed-hot-potato` | Replaces normal output with a mixed-provider sequence. |
+| `shock-and-buzz` | Sends the target result to Shock and a separate reduced Vibe to their Toys. |
+| `shock-potato` | Replaces normal output with a paced Shock-only sequence. |
+| `random-tax` | Adds a reduced Shock activation for another player. |
+
 ## Combining effects
 
 Cards can combine multiple effects. Effects are read in order, but the final result depends on where they apply in the round flow.
@@ -681,6 +757,21 @@ Fate/value effects:
 - `setDoubleHitChance`
 - `valueMultiplier`
 - `valueOffset`
+
+Device-aware physical output effects:
+
+- `suppressNormalActivation`
+- `activateTargetDevices`
+- `activateTargetToys`
+- `activateTargetShocks`
+- `activateAllToys`
+- `activateOtherToys`
+- `activateRandomToyPlayers`
+- `activateRandomShockPlayers`
+- `sequencePlayers`
+- `devicePowerModifier`
+- `deviceDurationModifier`
+- `toyTemplateOverride`
 
 ## What not to do
 

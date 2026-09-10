@@ -254,5 +254,31 @@ vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "server", "modules", 
   assert.equal(failedToyStop.ok, false);
   failIntifaceStopAll = false;
 
+  // Host manual control targets exactly one assigned device and uses provider-specific behavior.
+  sentOpenShock.length = 0;
+  sentIntiface.length = 0;
+  const manualShock = await context.controlHostDevice({ playerId: player.id, provider: "openshock", deviceId: "shock-1", mode: "Shock", intensity: 20, durationMs: 100 });
+  assert.equal(manualShock.intensity, 15, "Manual Shock must retain the selected device's 75% multiplier");
+  assert.equal(sentOpenShock.at(-1).body.shocks.length, 1);
+  assert.equal(sentOpenShock.at(-1).body.shocks[0].id, "shock-1");
+  assert.equal(sentIntiface.some(item => item?.ScalarCmd || (Array.isArray(item) && item.some(msg => msg.ScalarCmd))), false);
+
+  sentOpenShock.length = 0;
+  sentIntiface.length = 0;
+  const manualToy = await context.controlHostDevice({ playerId: player.id, provider: "intiface", deviceId: toyKey, mode: "Activate", intensity: 40, durationMs: 500 });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(manualToy.maxPowerPercent, 12, "Manual Toy power must retain the selected device's 30% multiplier");
+  assert.equal(sentOpenShock.length, 0, "Selecting a Toy must not activate the player's Shock device");
+  assert.ok(sentIntiface.some(item => item?.ScalarCmd || (Array.isArray(item) && item.some(msg => msg.ScalarCmd))));
+  await assert.rejects(
+    context.controlHostDevice({ playerId: "wrong-player", provider: "intiface", deviceId: toyKey, mode: "Activate", intensity: 20, durationMs: 500 }),
+    /not assigned/
+  );
+  await assert.rejects(
+    context.controlHostDevice({ playerId: player.id, provider: "intiface", deviceId: toyKey, mode: "Shock", intensity: 20, durationMs: 500 }),
+    /Unsupported Toy control mode/
+  );
+  await context.stopAllGameOutputs([]);
+
   console.log("Game activation regression test passed.");
 })().catch(err => { console.error(err); process.exitCode = 1; });
