@@ -55,6 +55,8 @@ Version 1.4.0 adds optional Intiface/Toy support and a new Player Setup workflow
 - Device-aware event cards for Toy, Shock and mixed-provider rounds
 - Hardware eligibility checks prevent incompatible event cards from being selected
 - Unified output status on the game, setup, host and diagnostics pages
+- Collapsible Host device cards with readiness, mappings, effective settings and recent output results
+- Provider-specific per-device Control and Stop actions without losing entered values during refresh
 - STOP ALL covers both providers and cancels delayed double hits, event sequences and pending output work
 
 ### Safety and Access
@@ -648,6 +650,7 @@ The STOP ALL button is traditionally discovered approximately one round later th
 - Device-aware event cards and hardware eligibility checks
 - Hard 99% Shock limit and final output-boundary validation
 - Participant path isolation and private-file access protection
+- Live Host per-device readiness and sanitized output history
 - Full Node.js regression test command through `npm test`
 
 Things escalated quickly.

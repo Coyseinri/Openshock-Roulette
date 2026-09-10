@@ -9,20 +9,64 @@ function setStatus(text) { document.getElementById("statusLine").textContent = t
 function renderOutputStatus(status) {
   const host = document.getElementById("hostOutputStatus");
   if (!host) return;
+  const expanded = new Set([...host.querySelectorAll("details[open][data-player-device-card]")].map(item => item.dataset.playerDeviceCard));
+  const scrollY = window.scrollY;
   const players = status?.players || [];
   const provider = status?.providers || {};
   const top = [
     provider.shock?.configured ? `<span class="${provider.shock.reachable ? "status-ok" : "status-bad"}">● Shock</span>` : `<span class="status-disabled">● Shock</span>`,
     provider.toy?.configured ? `<span class="${!provider.toy.enabled ? "status-disabled" : provider.toy.connected ? "status-ok" : "status-bad"}">● Toy</span>` : `<span class="status-disabled">● Toy</span>`
   ].join(" ");
-  const rows = players.map(p => {
-    const bits = [];
-    if (p.shock?.configured) bits.push(`<span class="${p.shock.disabled ? "status-disabled" : p.shock.online ? "status-ok" : "status-bad"}">● Shock</span>`);
-    if (p.toy?.configured) bits.push(`<span class="${p.toy.disabled ? "status-disabled" : p.toy.online ? "status-ok" : "status-bad"}">● Toy</span>`);
-    if (!bits.length) bits.push(`<span class="status-bad">● No output</span>`);
-    return `<div class="hostOutputRow"><strong>${esc(p.name)}</strong><span>${bits.join(" ")}</span></div>`;
+  const cards = players.map(p => {
+    const ready = Number(p.readiness?.ready || 0), total = Number(p.readiness?.total || 0);
+    const devices = (p.devices || []).map(device => {
+      const providerName = device.provider === "intiface" ? "Toy" : "OpenShock";
+      const readinessClass = device.ready ? "status-ok" : device.readiness === "disabled" ? "status-disabled" : "status-bad";
+      const roles = (device.roles || []).length ? device.roles.join(", ") : "none";
+      const duration = device.duration?.type === "multiplier"
+        ? `${device.duration.value == null ? "default" : `${device.duration.value}×`} · effective ${device.duration.effectiveMs} ms`
+        : `${device.duration?.effectiveMs || 0} ms`;
+      const last = device.lastOutput
+        ? `${device.lastOutput.success ? "✓" : "✕"} ${device.lastOutput.mode} · requested ${device.lastOutput.requestedValue} · applied ${device.lastOutput.appliedValue} · ${new Date(device.lastOutput.requestedAt).toLocaleTimeString()}${device.lastOutput.error ? ` · ${esc(device.lastOutput.error)}` : ""}`
+        : "No output recorded this run.";
+      return `<div class="hostDeviceRow" data-provider="${esc(device.provider)}" data-device-id="${esc(device.id)}">
+        <div class="hostDeviceIdentity"><strong>${esc(device.name)}</strong><span class="providerBadge">${providerName}</span></div>
+        <div class="hostDeviceFacts"><span class="${readinessClass}">● ${esc(device.connection)} · ${esc(device.readiness)}</span><span>Roles: ${esc(roles)}</span><span>Power: ${esc(device.intensityMultiplier)}%</span><span>Duration: ${esc(duration)}</span></div>
+        <div class="hostDeviceLast ${device.lastOutput?.success === false ? "status-bad" : ""}">${last}</div>
+        <div class="hostDeviceActions"><button class="hostButton deviceControlJump" data-player="${esc(p.playerId)}" data-provider="${esc(device.provider)}" data-device="${esc(device.id)}" ${device.canActivate ? "" : "disabled"}>Control</button><button class="hostButton reject deviceQuickStop" data-player="${esc(p.playerId)}" data-provider="${esc(device.provider)}" data-device="${esc(device.id)}" ${device.canStop ? "" : "disabled"}>Stop</button></div>
+      </div>`;
+    }).join("") || `<div class="mutedLine">No assigned devices.</div>`;
+    return `<details class="hostDeviceCard" data-player-device-card="${esc(p.playerId)}" ${expanded.has(String(p.playerId)) ? "open" : ""}><summary><strong>${esc(p.name)}</strong><span class="${ready === total && total ? "status-ok" : "status-bad"}">${ready}/${total} devices ready</span></summary><div class="hostDeviceList">${devices}</div></details>`;
   }).join("");
-  host.innerHTML = `<div class="hostOutputTop">${top}</div>${rows}`;
+  host.innerHTML = `<div class="hostOutputTop">${top}</div>${cards}`;
+  document.querySelectorAll(".deviceControlJump").forEach(button => button.onclick = () => focusManualDevice(button.dataset.player, button.dataset.provider, button.dataset.device));
+  document.querySelectorAll(".deviceQuickStop").forEach(button => button.onclick = () => quickStopDevice(button));
+  if (Math.abs(window.scrollY - scrollY) > 2) window.scrollTo({ top: scrollY });
+}
+
+function focusManualDevice(playerId, provider, deviceId) {
+  const playerSelect = document.getElementById("manualPlayer");
+  if (playerSelect) playerSelect.value = playerId;
+  fillManualDeviceSelect(latest?.players || []);
+  const deviceSelect = document.getElementById("manualDevice");
+  if (deviceSelect && [...deviceSelect.options].some(option => option.dataset.deviceId === deviceId && option.dataset.provider === provider)) deviceSelect.value = `${provider}:${deviceId}`;
+  syncManualDeviceControls();
+  document.getElementById("manualControlCard")?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function quickStopDevice(button) {
+  button.disabled = true;
+  try {
+    const res = await fetch(`/api/host/control?key=${encodeURIComponent(key)}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId: button.dataset.player, provider: button.dataset.provider, deviceId: button.dataset.device, mode: "Stop" })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Device stop failed");
+    setStatus(`Stop sent to ${data.result?.deviceName || "device"}.`);
+    await load();
+  } catch (err) { setStatus(`Stop failed: ${err.message}`); }
+  finally { button.disabled = false; }
 }
 
 async function stopAllOutputs() {
@@ -64,8 +108,9 @@ function fillManualDeviceSelect(players) {
   deviceSelect.innerHTML = "";
   for (const device of player?.devices || []) {
     const opt = document.createElement("option");
-    opt.value = device.id;
     opt.dataset.provider = device.provider === "intiface" ? "intiface" : "openshock";
+    opt.dataset.deviceId = device.id;
+    opt.value = `${opt.dataset.provider}:${device.id}`;
     opt.textContent = `${opt.dataset.provider === "intiface" ? "Toy" : "Shock"}: ${device.memberName || device.name || device.id}${device.enabled === false ? " (disabled)" : device.online === false ? " (offline)" : ""}`;
     opt.disabled = device.enabled === false || device.online === false;
     deviceSelect.appendChild(opt);
@@ -372,7 +417,7 @@ async function sendManual() {
   try {
     const playerId = document.getElementById("manualPlayer").value;
     const deviceSelect = document.getElementById("manualDevice");
-    const deviceId = deviceSelect.value;
+    const deviceId = deviceSelect.selectedOptions[0]?.dataset.deviceId || "";
     const provider = deviceSelect.selectedOptions[0]?.dataset.provider;
     const type = document.getElementById("manualType").value;
     const intensity = Number(document.getElementById("manualIntensity").value || 0);
@@ -387,6 +432,7 @@ async function sendManual() {
     const result = data.result || {};
     const applied = result.type === "Shock" ? ` · applied ${result.intensity}` : result.maxPowerPercent !== undefined ? ` · max ${result.maxPowerPercent}%` : "";
     document.getElementById("manualStatus").textContent = `${type} sent to ${result.deviceName || deviceSelect.selectedOptions[0]?.textContent || deviceId}${applied}.`;
+    await load();
   } catch (err) {
     document.getElementById("manualStatus").textContent = err.message;
   }

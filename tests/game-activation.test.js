@@ -46,8 +46,8 @@ const player = {
   id: "osr-player:test",
   name: "Test Player",
   devices: [
-    { provider: "openshock", id: "shock-1", name: "Collar", enabled: true, intensityMultiplier: 75 },
-    { provider: "intiface", id: toyKey, name: "Buck", enabled: true, intensityMultiplier: 30, preferredTemplate: "all-steady" }
+    { provider: "openshock", id: "shock-1", name: "Collar", enabled: true, online: true, intensityMultiplier: 75 },
+    { provider: "intiface", id: toyKey, name: "Buck", enabled: true, online: true, mappingReady: true, intensityMultiplier: 30, preferredTemplate: "all-steady" }
   ]
 };
 
@@ -122,6 +122,8 @@ const context = {
   stableIntifaceDeviceKey: deviceKey,
   resolveConfiguredPlayer: async id => String(id) === player.id || String(id) === "shock-1" ? player : null,
   debugState: { counters: { shockCommands: 0, stopCommands: 0 } },
+  openShockRuntimeStatus: { reachable: true, lastRequestAt: null, lastError: null },
+  shockerCache: { value: { shockers: [] }, lastError: null },
   requestOpenShock: async (_method, _route, body, meta) => {
     sentOpenShock.push({ body, meta });
     if (delayOpenShockActivation && ["shock", "vibrate"].includes(meta?.action)) {
@@ -131,7 +133,7 @@ const context = {
     return { statusCode: 200, body: { ok: true } };
   },
   intifaceService: {
-    snapshot: () => ({ ready: true, devices: [rawToy] }),
+    snapshot: () => ({ enabled: true, ready: true, state: "ready", connectedDeviceCount: 1, devices: [rawToy] }),
     sendRaw: async messages => {
       sentIntiface.push(messages);
       if (failIntifaceStopAll && messages?.StopAllDevices) throw new Error("Intiface stop failed");
@@ -270,6 +272,17 @@ vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "server", "modules", 
   assert.equal(manualToy.maxPowerPercent, 12, "Manual Toy power must retain the selected device's 30% multiplier");
   assert.equal(sentOpenShock.length, 0, "Selecting a Toy must not activate the player's Shock device");
   assert.ok(sentIntiface.some(item => item?.ScalarCmd || (Array.isArray(item) && item.some(msg => msg.ScalarCmd))));
+  const status = await context.getOutputStatusSnapshot([player]);
+  assert.equal(status.players[0].readiness.ready, 2);
+  assert.deepEqual(Array.from(status.players[0].devices[1].roles), ["main", "secondary"]);
+  assert.equal(status.players[0].devices[0].intensityMultiplier, 75);
+  assert.equal(status.players[0].devices[0].lastOutput.appliedValue, 15);
+  assert.equal(status.players[0].devices[1].lastOutput.appliedValue, 12);
+  assert.equal("DeviceIndex" in status.players[0].devices[1], false, "Host status must use stable Toy identities");
+  context.recordOutputDeviceAttempt("openshock", "shock-1", { mode: "shock", success: false, error: "failed at https://private.invalid token=supersecret" });
+  const sanitized = (await context.getOutputStatusSnapshot([player])).players[0].devices[0].lastOutput.error;
+  assert.equal(sanitized.includes("private.invalid"), false);
+  assert.equal(sanitized.includes("supersecret"), false);
   await assert.rejects(
     context.controlHostDevice({ playerId: "wrong-player", provider: "intiface", deviceId: toyKey, mode: "Activate", intensity: 20, durationMs: 500 }),
     /not assigned/
@@ -278,6 +291,22 @@ vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "server", "modules", 
     context.controlHostDevice({ playerId: player.id, provider: "intiface", deviceId: toyKey, mode: "Shock", intensity: 20, durationMs: 500 }),
     /Unsupported Toy control mode/
   );
+  player.devices[1].mappingReady = false;
+  await assert.rejects(
+    context.controlHostDevice({ playerId: player.id, provider: "intiface", deviceId: toyKey, mode: "Activate", intensity: 20, durationMs: 500 }),
+    /unmapped/
+  );
+  player.devices[1].mappingReady = true;
+  player.devices[0].online = false;
+  await assert.rejects(
+    context.controlHostDevice({ playerId: player.id, provider: "openshock", deviceId: "shock-1", mode: "Shock", intensity: 20, durationMs: 100 }),
+    /offline/
+  );
+  player.devices[0].online = true;
+  player.devices[0].enabled = false;
+  const disabledStop = await context.controlHostDevice({ playerId: player.id, provider: "openshock", deviceId: "shock-1", mode: "Stop" });
+  assert.equal(disabledStop.ok, true, "Stop must remain available for a disabled device");
+  player.devices[0].enabled = true;
   await context.stopAllGameOutputs([]);
 
   console.log("Game activation regression test passed.");
