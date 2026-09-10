@@ -1,6 +1,7 @@
 "use strict";
 let state = null;
 let templates = [];
+let importValidationId = null;
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
@@ -149,4 +150,30 @@ $("createPlayerBtn").onclick = () => { const name = $("newPlayerName").value.tri
 $("startGameBtn").onclick = () => setupAction({ action: "completeSetup" }).then(() => { window.location.href = "/"; }).catch(showError);
 $("refreshShockBtn").onclick = () => { setMessage("Refreshing OpenShock devices…"); load(true).then(() => setMessage("Shock devices refreshed.")).catch(showError); };
 $("scanToyBtn").onclick = () => { setMessage("Scanning Intiface devices…"); postJson("/api/setup/scan-intiface").then(data => { state = data; render(); setMessage("Toy scan complete."); }).catch(showError); };
+$("exportConfigBtn").onclick = () => {
+  const scopes = [...document.querySelectorAll("[data-export-scope]:checked")].map(input => input.value);
+  if (!scopes.length) return setMessage("Select at least one export scope.", true);
+  window.location.href = `/api/setup/config-export?scopes=${encodeURIComponent(scopes.join(","))}`;
+};
+$("previewImportBtn").onclick = async () => {
+  try {
+    const file = $("importConfigFile").files[0];
+    if (!file) throw new Error("Choose a JSON export first.");
+    if (file.size > 1024 * 1024) throw new Error("Import file exceeds 1 MiB.");
+    const result = await postJson("/api/setup/config-import/preview", { document: JSON.parse(await file.text()), mode: $("importMode").value });
+    importValidationId = result.validationId; $("applyImportBtn").disabled = false; $("importPreview").hidden = false;
+    $("importPreview").textContent = JSON.stringify({ mode: result.mode, scopes: result.scopes, changes: result.diff, warnings: result.warnings }, null, 2);
+    $("importWarning").textContent = (result.warnings || []).join(" ");
+    setMessage("Import is valid. Review the preview before applying.");
+  } catch (err) { importValidationId = null; $("applyImportBtn").disabled = true; showError(err); }
+};
+$("applyImportBtn").onclick = async () => {
+  try {
+    if (!importValidationId) throw new Error("Validate the import first.");
+    if (!window.confirm("Apply this validated import? A local backup will be created first.")) return;
+    const result = await postJson("/api/setup/config-import/apply", { validationId: importValidationId });
+    importValidationId = null; $("applyImportBtn").disabled = true; await load();
+    setMessage(`Import applied. Backup: ${result.backup}`);
+  } catch (err) { showError(err); }
+};
 load().catch(showError);

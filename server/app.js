@@ -10,6 +10,7 @@ var SERVER_MODULES = [
   "config.js",
   "grouping.js",
   "player-setup.js",
+  "config-transfer.js",
   "objectives-roles.js",
   "access-pages.js",
   "economy-host-state.js",

@@ -124,6 +124,12 @@ Enable Intiface in `config/config.json`:
 
 Configure every Toy in Advanced Toy Setup before enabling it for gameplay. Give identical devices unique display names in Intiface; OSR intentionally refuses an ambiguous identity instead of guessing which device should activate.
 
+### Configuration export and import
+
+Player Setup can export and import three selectable scopes: logical players, stable device mappings and the reusable game profile. Imports support **Merge** and **Replace selected scopes**. OSR validates the complete file first, shows a grouped change preview, and only enables Apply for that exact validated version. A local backup is created in `data/config-import-backups/` before anything changes.
+
+Exports deliberately omit the OpenShock API token, sessions, audience state, logs, databases, absolute machine paths and temporary Intiface device indexes. Imports are limited to 1 MiB, remain localhost/admin-only, and reject secrets, paths, external references and unsupported schema versions.
+
 ### Grouped Shockers
 
 OSR can group multiple OpenShock devices into one logical player or team by using a name prefix.

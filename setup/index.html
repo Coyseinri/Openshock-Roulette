@@ -6,6 +6,7 @@
   <title>OSR Player Setup</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/setup/setup.css">
+  <link rel="stylesheet" href="/setup/config-transfer.css">
 </head>
 <body>
   <main class="setup-shell">
@@ -31,6 +32,13 @@
     <section class="card"><div class="setup-create"><input id="newPlayerName" placeholder="Player name"><button id="createPlayerBtn">Add player</button></div><div id="players"></div></section>
     <section class="setup-grid"><div class="card"><h2>Unassigned Shock devices</h2><div id="shockDevices"></div></div><div class="card"><h2>Unassigned Toys</h2><div id="toyDevices"></div></div></section>
     <section class="card"><h2>Suggested matches</h2><div id="suggestions"></div></section>
+    <section class="card config-transfer"><h2>Export / import configuration</h2>
+      <p class="device-meta">Move player setup, stable device mappings and game settings without API tokens, sessions or logs.</p>
+      <div class="transfer-scopes"><label><input type="checkbox" data-export-scope value="players" checked> Players</label><label><input type="checkbox" data-export-scope value="deviceMappings" checked> Device mappings</label><label><input type="checkbox" data-export-scope value="gameProfile" checked> Game profile</label></div>
+      <div class="setup-actions"><button id="exportConfigBtn" class="secondary">Download export</button><input id="importConfigFile" type="file" accept="application/json,.json"><select id="importMode"><option value="merge">Merge</option><option value="replace">Replace selected scopes</option></select><button id="previewImportBtn" class="secondary">Validate &amp; preview</button></div>
+      <div id="importWarning" class="mapping-warning"></div><pre id="importPreview" class="import-preview" hidden></pre>
+      <button id="applyImportBtn" class="warn" disabled>Apply validated import</button>
+    </section>
     <div id="message" class="setup-message" role="status"></div>
   </main>
   <script src="/setup/setup.js"></script>

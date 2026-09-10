@@ -1,0 +1,19 @@
+.transfer-scopes {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.config-transfer input[type="file"] {
+  max-width: 300px;
+}
+
+.import-preview {
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  white-space: pre-wrap;
+}

@@ -98,6 +98,28 @@ var server = http.createServer(async (req, res) => {
       catch (err) { return sendJson(res, 400, { error: err.message }); }
     }
 
+    if (url.pathname === "/api/setup/config-export" && req.method === "GET") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      try {
+        const scopes = String(url.searchParams.get("scopes") || "").split(",").filter(Boolean);
+        const body = JSON.stringify(buildConfigTransferExport(scopes.length ? scopes : undefined), null, 2);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="openshock-roulette-config-${new Date().toISOString().slice(0, 10)}.json"`, "Cache-Control": "no-store" });
+        return res.end(body);
+      } catch (err) { return sendJson(res, 400, { error: err.message }); }
+    }
+
+    if (url.pathname === "/api/setup/config-import/preview" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      try { const body = await readBody(req); return sendJson(res, 200, previewConfigTransferImport(body.document, body.mode)); }
+      catch (err) { return sendJson(res, 400, { error: err.message }); }
+    }
+
+    if (url.pathname === "/api/setup/config-import/apply" && req.method === "POST") {
+      if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      try { const body = await readBody(req); return sendJson(res, 200, applyConfigTransferImport(body.validationId)); }
+      catch (err) { return sendJson(res, 400, { error: err.message }); }
+    }
+
     if (url.pathname === "/api/setup/scan-intiface" && req.method === "POST") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       try {
