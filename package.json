@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node --no-warnings server.js",
+    "test": "node --test tests/*.test.js",
     "test:intiface": "node tests/intiface-command-batching.test.js",
     "test:game-activation": "node tests/game-activation.test.js && node tests/frontend-activation.test.js"
   },

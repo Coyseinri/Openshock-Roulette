@@ -52,6 +52,7 @@ function templateOptions(selected) {
 }
 
 function deviceStatus(device) {
+  if (device.ambiguous) return `<span class="status-bad">● ambiguous identity — give each Toy a unique Intiface display name and review assignments</span>`;
   if (device.enabled === false) return `<span class="status-disabled">● disabled</span>`;
   if (device.online === false) return `<span class="status-bad">● offline</span>`;
   return `<span class="status-ok">● online</span>`;
@@ -79,7 +80,7 @@ function pool(items, provider) {
   const unassigned = (items || []).filter(device => !device.assigned);
   if (!unassigned.length) return `<p class="device-meta">None.</p>`;
   const options = (state.players || []).map(player => `<option value="${esc(player.id)}">${esc(player.name)}</option>`).join("");
-  return unassigned.map(device => `<div class="device-row"><div><strong>${esc(device.name)}</strong><div class="device-meta">${device.online === false ? "offline" : "online"}${provider === "intiface" && !device.mappingReady ? " · mapping incomplete" : ""}</div></div><select data-assign-player="${esc(provider)}:${esc(device.id)}"><option value="">Assign to…</option>${options}</select></div>`).join("");
+  return unassigned.map(device => `<div class="device-row"><div><strong>${esc(device.name)}</strong><div class="device-meta">${device.ambiguous ? esc(device.identityWarning) : device.online === false ? "offline" : "online"}${provider === "intiface" && !device.mappingReady ? " · mapping incomplete" : ""}</div></div><select ${device.ambiguous ? 'disabled' : ''} data-assign-player="${esc(provider)}:${esc(device.id)}"><option value="">Assign to…</option>${options}</select></div>`).join("");
 }
 
 function render() {

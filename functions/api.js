@@ -177,12 +177,19 @@ async function loadShockers({ preserveSession = true, forceRefresh = false } = {
   saveSessionState("shocker reload");
 }
 
-async function sendControl(shocker, selectedValue) {
+async function beginOutputRun() {
+  const res = await fetch("/api/output-run", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not start output run");
+  return data.outputRunToken;
+}
+
+async function sendControl(shocker, selectedValue, outputRunToken = null) {
   const duration = Number(document.getElementById("duration").value || config?.safety?.defaultDurationMs || 700);
   const res = await fetch("/api/control", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ id: shocker.id, selectedValue, duration, exclusive: true })
+    body: JSON.stringify({ id: shocker.id, selectedValue, duration, exclusive: true, outputRunToken })
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || JSON.stringify(data));
@@ -190,13 +197,16 @@ async function sendControl(shocker, selectedValue) {
 }
 
 async function stopAll() {
+  outputCancellationVersion += 1;
   try {
     const ids = shockers.map(s => s.id);
-    await fetch("/api/stop-all", {
+    const res = await fetch("/api/stop-all", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({ ids })
     });
+    const data = await res.json();
+    if (!res.ok || data.ok === false) throw new Error(data.error || "One or more output providers could not be stopped");
     log("STOP ALL sent.");
   } catch (err) {
     log("STOP failed: " + err.message);

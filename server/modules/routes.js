@@ -73,14 +73,8 @@ var server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://localhost:${PORT}`);
     urlForLogging = url;
 
-    const publicPaths = ["/player", "/player/index.html", "/player/player.js", "/player/player.css", "/player.js", "/player.css", "/host", "/host/index.html", "/host/host.js", "/host/host.css", "/host.js", "/host.css", "/audience", "/audience/index.html", "/audience/audience.js", "/audience/audience.css", "/audience.js", "/audience.css", "/api/player-pages/config"];
-    const isPlayerApi = /^\/api\/player\/[^/]+\/(state|action)$/.test(url.pathname);
-    const isHostApi = /^\/api\/host\/(state|action|control|audience-vote|objective-events\/ack|spinner|reward|force-player)$/.test(url.pathname);
-    const isAudienceApi = /^\/api\/audience\/(state|action|session)$/.test(url.pathname);
-    const isPublicPlayerPath = publicPaths.includes(url.pathname) || url.pathname.startsWith("/player/") || isPlayerApi || isHostApi || isAudienceApi;
-    if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req) && !isPublicPlayerPath) {
-      return sendJson(res, 403, { error: "Admin page/API is available from localhost only. Use /player/<id>?key=<id> for player pages." });
-    }
+    const accessError = requestAccessError(req, url, isLocalRequest(req));
+    if (accessError) return sendJson(res, accessError.status, { error: accessError.error });
 
     if (url.pathname === "/diagnostics" || url.pathname === "/debug") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
@@ -615,6 +609,11 @@ var server = http.createServer(async (req, res) => {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       try { return sendJson(res, 200, await runEventDeviceEffects(await readBody(req))); }
       catch (err) { return sendJson(res, 400, { error: err.message }); }
+    }
+
+    if (url.pathname === "/api/output-run" && req.method === "POST") {
+      if (!isLocalRequest(req)) return sendJson(res, 403, { error: "Output runs can only be started on the game computer" });
+      return sendJson(res, 200, { outputRunToken: beginOutputRun() });
     }
 
     if (url.pathname === "/api/event-effects/cancel" && req.method === "POST") {

@@ -1,6 +1,6 @@
 
 function safety() {
-  return readConfig().safety || {};
+  return normalizeSafety(readConfig().safety);
 }
 
 function sendJson(res, code, data) {
@@ -29,6 +29,14 @@ function readBody(req) {
 }
 
 var openShockRuntimeStatus = { reachable: null, lastRequestAt: null, lastError: null, lastStatusCode: null };
+var cancellableOpenShockRequests = new Set();
+
+function cancelPendingOpenShockRequests() {
+  for (const req of cancellableOpenShockRequests) {
+    req.destroy(new Error("OpenShock activation cancelled by Stop All"));
+  }
+  cancellableOpenShockRequests.clear();
+}
 
 function markOpenShockRuntimeStatus(ok, { error = null, statusCode = null } = {}) {
   openShockRuntimeStatus.reachable = Boolean(ok);
@@ -39,6 +47,15 @@ function markOpenShockRuntimeStatus(ok, { error = null, statusCode = null } = {}
 
 function requestOpenShock(method, apiPath, body, optionsOverride = {}) {
   return new Promise((resolve, reject) => {
+    // Final boundary covers gameplay, diagnostics and any legacy call sites.
+    if (body && Array.isArray(body.shocks)) {
+      const limits = safety();
+      body = { ...body, shocks: body.shocks.map(shock => ({
+        ...shock,
+        intensity: shock.type === 'Stop' ? 0 : clampInt(shock.intensity, 0, shock.type === 'Vibrate' ? limits.serverMaxVibrateIntensity : limits.serverMaxShockIntensity),
+        duration: clampInt(shock.duration, limits.minDurationMs, limits.maxDurationMs)
+      })) };
+    }
     if (!TOKEN) {
       const err = new Error("Missing OPENSHOCK_TOKEN / OPENSHOCK_API_TOKEN environment variable");
       debugState.counters.openShockErrors += 1;
@@ -87,6 +104,7 @@ function requestOpenShock(method, apiPath, body, optionsOverride = {}) {
       let responseData = "";
       res.on("data", chunk => responseData += chunk);
       res.on("end", () => {
+        cancellableOpenShockRequests.delete(req);
         const durationMs = Date.now() - startedAt;
         let parsed = responseData;
         try { parsed = responseData ? JSON.parse(responseData) : null; } catch {}
@@ -109,11 +127,14 @@ function requestOpenShock(method, apiPath, body, optionsOverride = {}) {
       });
     });
 
+    if (optionsOverride.cancellable === true) cancellableOpenShockRequests.add(req);
+
     req.setTimeout(timeoutMs, () => {
       timedOut = true;
       req.destroy(new Error(`OpenShock request timed out after ${timeoutMs}ms: ${method} ${apiPath}`));
     });
     req.on("error", err => {
+      cancellableOpenShockRequests.delete(req);
       const durationMs = Date.now() - startedAt;
       debugState.counters.openShockErrors += 1;
       if (timedOut) debugState.counters.openShockTimeouts += 1;
@@ -379,4 +400,3 @@ async function handleStopAll(req, res) {
   const result = await requestOpenShock("POST", "/2/shockers/control", requestBody, { action: "stop" });
   sendJson(res, result.statusCode, { stopped: ids.length, openshock: result.body });
 }
-

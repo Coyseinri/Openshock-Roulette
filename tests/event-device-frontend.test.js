@@ -9,7 +9,8 @@ const cards=JSON.parse(fs.readFileSync(path.join(root,"config","event-cards.exam
 const validators=fs.readFileSync(path.join(root,"server","modules","diagnostics-validator-types.js"),"utf8");
 assert.ok(events.includes("DEVICE_AWARE_EVENT_EFFECT_TYPES"));
 assert.ok(events.includes('/api/event-effects/run'));
-assert.ok(app.includes("runDeviceAwareEventEffects(roundState, targets, value)"));
+assert.ok(app.includes("runDeviceAwareEventEffects(roundState, targets, value, outputRunToken)"));
+assert.ok(events.includes("outputRunToken"),"Event effects must carry the output-run token");
 for(const type of ["suppressNormalActivation","activateTargetDevices","activateAllToys","activateOtherToys","activateRandomToyPlayers","activateRandomShockPlayers","sequencePlayers","devicePowerModifier","deviceDurationModifier","toyTemplateOverride"]){
  assert.ok(validators.includes(`"${type}"`),`Diagnostics validator missing ${type}`);
 }

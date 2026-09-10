@@ -164,7 +164,7 @@ const DEVICE_AWARE_EVENT_EFFECT_TYPES = new Set([
   "activateRandomToyPlayers", "activateRandomShockPlayers", "sequencePlayers", "devicePowerModifier", "deviceDurationModifier", "toyTemplateOverride"
 ]);
 
-async function runDeviceAwareEventEffects(roundState, targets, rolledValue) {
+async function runDeviceAwareEventEffects(roundState, targets, rolledValue, outputRunToken = null) {
   const effects = Array.isArray(roundState?.deviceEffects) ? roundState.deviceEffects : [];
   if (!effects.length) return null;
   try {
@@ -177,7 +177,8 @@ async function runDeviceAwareEventEffects(roundState, targets, rolledValue) {
         targetPlayerIds: (targets || []).map(player => player.id),
         rolledValue: Number(rolledValue || 0),
         mode: Number(rolledValue || 0) === 0 ? "vibe" : "normal",
-        shockDurationMs: duration
+        shockDurationMs: duration,
+        outputRunToken
       })
     });
     const data = await res.json();

@@ -8,6 +8,9 @@ const vm = require("node:vm");
 const sentIntiface = [];
 const sentOpenShock = [];
 let failOpenShock = false;
+let delayOpenShockActivation = false;
+let releaseOpenShockActivation = null;
+let failIntifaceStopAll = false;
 let gameIntegrationEnabled = true;
 
 const rawToy = {
@@ -121,12 +124,19 @@ const context = {
   debugState: { counters: { shockCommands: 0, stopCommands: 0 } },
   requestOpenShock: async (_method, _route, body, meta) => {
     sentOpenShock.push({ body, meta });
+    if (delayOpenShockActivation && ["shock", "vibrate"].includes(meta?.action)) {
+      await new Promise(resolve => { releaseOpenShockActivation = resolve; });
+    }
     if (failOpenShock) throw new Error("OpenShock offline");
     return { statusCode: 200, body: { ok: true } };
   },
   intifaceService: {
     snapshot: () => ({ ready: true, devices: [rawToy] }),
-    sendRaw: async messages => { sentIntiface.push(messages); return { Ok: { Id: 1 } }; }
+    sendRaw: async messages => {
+      sentIntiface.push(messages);
+      if (failIntifaceStopAll && messages?.StopAllDevices) throw new Error("Intiface stop failed");
+      return { Ok: { Id: 1 } };
+    }
   },
   sendJson() {},
   readBody: async () => ({}),
@@ -221,6 +231,28 @@ vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "server", "modules", 
   assert.equal(stopped.openshock.ok, false);
   assert.equal(stopped.intiface.ok, true);
   assert.ok(sentIntiface.some(item => item?.StopAllDevices), "Intiface Stop All must run even if OpenShock stop fails");
+
+  // A Stop All invalidates an in-flight activation before it can start a Toy run.
+  failOpenShock = false;
+  delayOpenShockActivation = true;
+  sentIntiface.length = 0;
+  const token = context.beginOutputRun();
+  const pending = context.activateGamePlayer({ playerId: player.id, rolledValue: 70, mode: "normal", shockDurationMs: 100, outputRunToken: token });
+  while (!releaseOpenShockActivation) await new Promise(resolve => setTimeout(resolve, 1));
+  await context.stopAllGameOutputs(["shock-1"]);
+  releaseOpenShockActivation();
+  await assert.rejects(pending, /cancelled by Stop All/);
+  assert.equal(sentIntiface.some(item => item?.ScalarCmd || (Array.isArray(item) && item.some(msg => msg.ScalarCmd))), false, "A cancelled in-flight Shock request must not start Toys");
+  delayOpenShockActivation = false;
+  releaseOpenShockActivation = null;
+
+  // Stop failures must be reported instead of being presented as success.
+  failIntifaceStopAll = true;
+  const failedToyStop = await context.stopAllGameOutputs([]);
+  assert.equal(failedToyStop.intiface.ok, false);
+  assert.match(failedToyStop.intiface.error, /Intiface stop failed/);
+  assert.equal(failedToyStop.ok, false);
+  failIntifaceStopAll = false;
 
   console.log("Game activation regression test passed.");
 })().catch(err => { console.error(err); process.exitCode = 1; });

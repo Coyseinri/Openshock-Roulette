@@ -37,7 +37,8 @@ function scaleEventDevice(device, powerMultiplier = 1) {
   return { ...device, intensityMultiplier: clampPercent((Number(device.intensityMultiplier ?? 100) || 0) * multiplier) };
 }
 
-async function activateEventPlayer(player, { provider = "any", rolledValue = 0, mode = null, shockDurationMs = null, powerMultiplier = 1, durationMultiplier = 1, templateOverride = null } = {}) {
+async function activateEventPlayer(player, { provider = "any", rolledValue = 0, mode = null, shockDurationMs = null, powerMultiplier = 1, durationMultiplier = 1, templateOverride = null, outputRunToken = null } = {}) {
+  assertOutputRunActive(outputRunToken);
   const normalizedProvider = normalizeEventProvider(provider);
   const s = safety();
   const selectedValue = clampInt(rolledValue, 0, s.serverMaxShockIntensity ?? 99);
@@ -47,7 +48,8 @@ async function activateEventPlayer(player, { provider = "any", rolledValue = 0, 
   const shockDevices = normalizedProvider === "toy" ? [] : deviceList.filter(device => device.provider === "openshock").map(device => scaleEventDevice(device, powerMultiplier));
   const toyDevices = normalizedProvider === "shock" ? [] : deviceList.filter(device => device.provider === "intiface").map(device => scaleEventDevice(device, powerMultiplier));
 
-  const openshock = await activateOpenShockDevices(player, shockDevices, { rolledValue: selectedValue, mode: outcomeMode, shockDurationMs: Math.round(baseDuration * Math.max(0.1, Number(durationMultiplier) || 1)), exclusive: true });
+  const openshock = await activateOpenShockDevices(player, shockDevices, { rolledValue: selectedValue, mode: outcomeMode, shockDurationMs: Math.round(baseDuration * Math.max(0.1, Number(durationMultiplier) || 1)), exclusive: true, outputRunToken });
+  assertOutputRunActive(outputRunToken);
   const cfg = gameIntifaceConfig();
   const intiface = toyDevices.map(device => {
     const normalDuration = gameToyDurationMs(baseDuration, outcomeMode, device);
@@ -144,7 +146,8 @@ async function startEventSequence(effect, context) {
       shockDurationMs,
       powerMultiplier: Number(effect.powerMultiplier ?? context.powerMultiplier ?? 1),
       durationMultiplier: Number(effect.durationMultiplier ?? context.durationMultiplier ?? 1),
-      templateOverride: effect.templateOverride || context.templateOverride || null
+      templateOverride: effect.templateOverride || context.templateOverride || null,
+      outputRunToken: context.outputRunToken
     }
   };
   activeEventEffectRuns.set(id, run);
@@ -180,7 +183,8 @@ async function executeEventActivationEffect(effect, context) {
       shockDurationMs: context.shockDurationMs,
       powerMultiplier: Number(effect.powerMultiplier ?? context.powerMultiplier ?? 1),
       durationMultiplier: Number(effect.durationMultiplier ?? context.durationMultiplier ?? 1),
-      templateOverride: effect.templateOverride || context.templateOverride || null
+      templateOverride: effect.templateOverride || context.templateOverride || null,
+      outputRunToken: context.outputRunToken
     }));
   }
   return { ok: results.some(result => result.ok), type, provider, results };
@@ -241,10 +245,12 @@ function validateEventDeviceEffect(raw) {
   return effect;
 }
 
-async function runEventDeviceEffects({ effects = [], targetPlayerIds = [], rolledValue = 0, mode = null, shockDurationMs = 700 } = {}) {
-  const context = { targetPlayerIds, rolledValue, mode, shockDurationMs, powerMultiplier: 1, durationMultiplier: 1, templateOverride: null };
+async function runEventDeviceEffects({ effects = [], targetPlayerIds = [], rolledValue = 0, mode = null, shockDurationMs = 700, outputRunToken = null } = {}) {
+  assertOutputRunActive(outputRunToken);
+  const context = { targetPlayerIds, rolledValue, mode, shockDurationMs, powerMultiplier: 1, durationMultiplier: 1, templateOverride: null, outputRunToken };
   const results = [];
   for (const raw of Array.isArray(effects) ? effects : []) {
+    assertOutputRunActive(outputRunToken);
     const effect = validateEventDeviceEffect(raw);
     const type = effect.type;
     if (type === "devicePowerModifier") { context.powerMultiplier *= effect.multiplier; continue; }

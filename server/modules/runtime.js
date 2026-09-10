@@ -8,6 +8,8 @@ var APP_ROOT = path.resolve(__dirname, "..");
 var PACKAGE_JSON = require("../package.json");
 var { createServerPaths } = require("./paths");
 var { sendDiagnosticsHtml, serveHtmlFile, serveRoleStaticFile, serveStaticFile } = require("./static-files");
+var { requestAccessError } = require("./request-access");
+var { normalizeSafety } = require("./output-safety");
 
 var APP_VERSION = String(PACKAGE_JSON.version || "0.0.0");
 var APP_USER_AGENT = `OpenShock-Roulette/${APP_VERSION} (local-party-game)`;
@@ -119,8 +121,12 @@ function logOpenShockCall(entry) {
 
 function safeRequestPath(req, url) {
   const dbg = debugConfig();
-  if (!url) return req.url || "";
-  return dbg.includeQueryString ? `${url.pathname}${url.search || ""}` : url.pathname;
+  if (!url) return String(req.url || "").split("?")[0];
+  const redacted = new URL(url.href);
+  for (const key of redacted.searchParams.keys()) {
+    if (/key|token|password|secret|authorization/i.test(key)) redacted.searchParams.set(key, "[redacted]");
+  }
+  return dbg.includeQueryString ? `${redacted.pathname}${redacted.search || ""}` : redacted.pathname;
 }
 
 function average(values) {
@@ -206,4 +212,3 @@ function loadEnvFile(filePath) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
 }
-

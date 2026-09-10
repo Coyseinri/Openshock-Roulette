@@ -215,10 +215,11 @@ function formatTargetResultText(targetPicked, targets) {
   return `${actualNames || targetPicked?.label || "Target"} selected`;
 }
 
-async function activateTargets(targets, value, roundState = null) {
+async function activateTargets(targets, value, roundState = null, outputRunToken = null, cancellationVersion = outputCancellationVersion) {
   const appliedById = {};
   for (const player of (targets || []).filter(Boolean)) {
-    const sent = await sendControl(player, value);
+    assertRoundOutputActive(cancellationVersion);
+    const sent = await sendControl(player, value, outputRunToken);
     appliedById[player.id] = Number(value) === 0 ? 0 : Number(sent?.appliedValue ?? value);
   }
 
@@ -229,7 +230,8 @@ async function activateTargets(targets, value, roundState = null) {
     const secondDelay = randInt(document.getElementById("doubleDelayMinMs").value, document.getElementById("doubleDelayMaxMs").value);
     log(`Hidden double-hit triggered. Second hit in ${secondDelay} ms.`);
     await sleep(secondDelay);
-    for (const player of (targets || []).filter(Boolean)) await sendControl(player, value);
+    assertRoundOutputActive(cancellationVersion);
+    for (const player of (targets || []).filter(Boolean)) await sendControl(player, value, outputRunToken);
   }
 
   const forcedDoubleIds = roundState?.forcedDoubleShockTargetIds || new Set();
@@ -238,8 +240,9 @@ async function activateTargets(targets, value, roundState = null) {
     const secondDelay = randInt(document.getElementById("doubleDelayMinMs").value, document.getElementById("doubleDelayMaxMs").value);
     log(`Forced double-shock token triggered for ${forcedTargets.map(player => player.name).join(", ")}. Second hit in ${secondDelay} ms.`);
     await sleep(secondDelay);
+    assertRoundOutputActive(cancellationVersion);
     for (const player of forcedTargets) {
-      await sendControl(player, value);
+      await sendControl(player, value, outputRunToken);
       const mod = (roundState.pendingRoundModifiers || []).find(m => m.type === "forcedDoubleShockNextRound" && String(m.targetPlayerId) === String(player.id));
       if (mod) markRoundModifierConsumed(roundState, mod, "forced double shock applied");
     }

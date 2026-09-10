@@ -35,10 +35,12 @@ function roleStaticPath(appRoot, pathname) {
     "/player/player.js": ["player", "player.js"],
     "/host/index.html": ["host", "index.html"],
     "/host/host.css": ["host", "host.css"],
+    "/host/shared.css": ["player", "player.css"],
     "/host/host.js": ["host", "host.js"],
     "/audience/index.html": ["audience", "index.html"],
     "/audience/audience.css": ["audience", "audience.css"],
-    "/audience/audience.js": ["audience", "audience.js"]
+    "/audience/audience.js": ["audience", "audience.js"],
+    "/audience/shared.css": ["player", "player.css"]
   };
   const parts = files[pathname];
   return parts ? path.join(appRoot, ...parts) : null;
@@ -59,6 +61,7 @@ function serveRoleStaticFile(req, res, url, { appRoot, sendJson }) {
 }
 
 function serveStaticFile(req, res, url, { appRoot, sendJson }) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return sendJson(res, 405, { error: 'Method not allowed' });
   const staticAliases = {
     "host.html": path.join("host", "index.html"),
     "host.js": path.join("host", "host.js"),
@@ -73,6 +76,17 @@ function serveStaticFile(req, res, url, { appRoot, sendJson }) {
 
   let requestedPath = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname.slice(1));
   requestedPath = staticAliases[requestedPath] || requestedPath;
+  const allowed = new Set([
+    'index.html', 'app.js', 'style.css', 'diagnostics.html',
+    'setup/index.html', 'setup/setup.js', 'setup/setup.css',
+    'intiface/setup.html', 'intiface/intiface-client.js', 'intiface/intiface.css',
+    'host/index.html', 'host/host.js', 'host/host.css',
+    'player/index.html', 'player/player.js', 'player/player.css',
+    'audience/index.html', 'audience/audience.js', 'audience/audience.css',
+    'functions/api.js', 'functions/core.js', 'functions/events.js', 'functions/grouping.js',
+    'functions/host.js', 'functions/players.js', 'functions/private-player-info.js', 'functions/ui.js', 'functions/wheels.js'
+  ]);
+  if (!allowed.has(requestedPath)) return sendJson(res, 403, { error: 'File is not a public web asset' });
   const safeRoot = path.resolve(appRoot);
   const filePath = path.resolve(safeRoot, requestedPath);
 

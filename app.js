@@ -18,6 +18,11 @@ let sessionSaveEnabled = false;
 let hostSpinPaused = false;
 let hostCommandPollTimer = null;
 let sessionSaveTimer = null;
+let outputCancellationVersion = 0;
+
+function assertRoundOutputActive(version) {
+  if (version !== outputCancellationVersion) throw new Error("Round cancelled by Stop All");
+}
 
 const targetWheel = document.getElementById("targetWheel");
 const fateWheel = document.getElementById("fateWheel");
@@ -36,12 +41,13 @@ const eventResult = document.getElementById("eventResult");
 const eventContinueBtn = document.getElementById("eventContinueBtn");
 
 
-async function activateTargets(targets, value, roundState = null) {
+async function activateTargets(targets, value, roundState = null, outputRunToken = null, cancellationVersion = outputCancellationVersion) {
   const appliedById = {};
   for (const s of targets) {
+    assertRoundOutputActive(cancellationVersion);
     const appliedValue = applyPlayerMultiplier(value, s.id);
     appliedById[s.id] = appliedValue;
-    await sendControl(s, appliedValue);
+    await sendControl(s, appliedValue, outputRunToken);
   }
 
   const doubleChance = roundState?.doubleHitChanceOverride !== null && roundState?.doubleHitChanceOverride !== undefined
@@ -51,7 +57,8 @@ async function activateTargets(targets, value, roundState = null) {
     const secondDelay = randInt(document.getElementById("doubleDelayMinMs").value, document.getElementById("doubleDelayMaxMs").value);
     log(`Hidden double-hit triggered. Second hit in ${secondDelay} ms.`);
     await sleep(secondDelay);
-    for (const s of targets) await sendControl(s, appliedById[s.id] ?? applyPlayerMultiplier(value, s.id));
+    assertRoundOutputActive(cancellationVersion);
+    for (const s of targets) await sendControl(s, appliedById[s.id] ?? applyPlayerMultiplier(value, s.id), outputRunToken);
   }
   const forcedDoubleIds = roundState?.forcedDoubleShockTargetIds || new Set();
   const forcedTargets = (targets || []).filter(s => forcedDoubleIds.has(String(s.id)));
@@ -59,7 +66,8 @@ async function activateTargets(targets, value, roundState = null) {
     const secondDelay = randInt(document.getElementById("doubleDelayMinMs").value, document.getElementById("doubleDelayMaxMs").value);
     log(`Forced double-shock token triggered for ${forcedTargets.map(s => s.name).join(", ")}. Second hit in ${secondDelay} ms.`);
     await sleep(secondDelay);
-    for (const s of forcedTargets) await sendControl(s, appliedById[s.id] ?? applyPlayerMultiplier(value, s.id));
+    assertRoundOutputActive(cancellationVersion);
+    for (const s of forcedTargets) await sendControl(s, appliedById[s.id] ?? applyPlayerMultiplier(value, s.id), outputRunToken);
     for (const s of forcedTargets) {
       const mod = (roundState.pendingRoundModifiers || []).find(m => m.type === "forcedDoubleShockNextRound" && String(m.targetPlayerId) === String(s.id));
       if (mod) markRoundModifierConsumed(roundState, mod, "forced double shock applied");
@@ -81,8 +89,11 @@ async function spinRound() {
   setMainResult("Checking for event card...");
   fateResult.textContent = "Waiting...";
   roundNumber++;
+  const cancellationVersion = outputCancellationVersion;
 
   try {
+    const outputRunToken = await beginOutputRun();
+    assertRoundOutputActive(cancellationVersion);
     let serverPendingRoundModifiers = [];
     try {
       const serverState = await getServerSessionState();
@@ -244,9 +255,10 @@ async function spinRound() {
 
     const appliedById = roundState.suppressNormalActivation
       ? Object.fromEntries((targets || []).filter(Boolean).map(target => [target.id, value]))
-      : await activateTargets(targets, value, roundState);
+      : await activateTargets(targets, value, roundState, outputRunToken, cancellationVersion);
     if (roundState.suppressNormalActivation) log(`Round ${roundNumber}: Normal physical output suppressed by event ${roundState.card?.title || roundState.card?.id || "card"}.`);
-    await runDeviceAwareEventEffects(roundState, targets, value);
+    assertRoundOutputActive(cancellationVersion);
+    await runDeviceAwareEventEffects(roundState, targets, value, outputRunToken);
     recordRoundTargets(targets, { value, valueByTargetId: appliedById, wasAll: targetPicked.type === "all" });
     if (value > 0) {
       lastShockedTargets = [...targets];

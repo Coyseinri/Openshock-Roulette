@@ -26,6 +26,7 @@ function validateEventCards(data) {
 
 function validateConfig(config) {
   if (!config || typeof config !== "object") throw new Error("Config must be an object");
+  config.safety = normalizeSafety(config.safety);
   if (!Array.isArray(config.fateWheel)) throw new Error("config.fateWheel must be an array");
   if (!config.fateWheel.length) throw new Error("config.fateWheel must not be empty");
   config.eventCards = config.eventCards || {};
@@ -133,7 +134,7 @@ function validateConfig(config) {
   config.economy.tokenCosts.immunity = clampInt(config.economy.tokenCosts.immunity ?? config.economy.immunityTokenCost ?? 10, 0, 999);
   config.economy.tokenCosts.doubleShock = clampInt(config.economy.tokenCosts.doubleShock ?? config.economy.doubleShockTokenCost ?? 10, 0, 999);
 
-  const maxShock = clampInt(config.safety?.serverMaxShockIntensity ?? 99, 1, 100);
+  const maxShock = config.safety.serverMaxShockIntensity;
 
   config.fateWheel.forEach((f, i) => {
     if (!f.key || !f.name) throw new Error(`fateWheel[${i}] needs key and name`);

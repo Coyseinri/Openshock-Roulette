@@ -41,6 +41,10 @@ const stableToyA={DeviceIndex:1,DeviceName:"Motorbunny Buck",DeviceDisplayName:"
 const stableToyB={...stableToyA,DeviceIndex:42};
 assert.equal(context.stableIntifaceDeviceKey(stableToyA),context.stableIntifaceDeviceKey(stableToyB));
 assert.ok(!context.stableIntifaceDeviceKey(stableToyA).includes("42"));
+context.intifaceService={snapshot:()=>({devices:[stableToyA,stableToyB]})};
+const duplicateMap=context.liveIntifaceDeviceMap();
+assert.equal(duplicateMap.has(context.stableIntifaceDeviceKey(stableToyA)),false,"Ambiguous identical toys must not be auto-mapped");
+assert.equal(duplicateMap.ambiguous.get(context.stableIntifaceDeviceKey(stableToyA)).length,2);
 
 // A missing per-device duration override must remain null so global 4x/6x game timing applies.
 assert.equal(context.normalizePlayerDevice({ provider: "intiface", id: "toy-null", durationMultiplierOverride: null }).durationMultiplierOverride, null);

@@ -1,5 +1,25 @@
 var activeGameToyRuns = new Map();
 var nextGameToyRunId = 1;
+var outputRunGeneration = 1;
+
+function beginOutputRun() {
+  return outputRunGeneration;
+}
+
+function assertOutputRunActive(token) {
+  if (token !== null && token !== undefined && Number(token) !== outputRunGeneration) {
+    throw new Error("Output run cancelled by Stop All");
+  }
+}
+
+function cancelPendingOutputRuns() {
+  outputRunGeneration += 1;
+  if (typeof cancelPendingOpenShockRequests === "function") cancelPendingOpenShockRequests();
+  if (typeof cancelAllEventEffectRuns === "function") cancelAllEventEffectRuns("Stop All");
+  for (const run of activeGameToyRuns.values()) run.cancelled = true;
+  activeGameToyRuns.clear();
+  return outputRunGeneration;
+}
 
 function gameIntifaceConfig() {
   const cfg = readConfig()?.intiface || {};
@@ -134,8 +154,9 @@ function rawIntifaceDeviceForConfigured(device) {
 }
 
 async function stopGameToyDevice(rawDevice) {
-  if (!rawDevice || typeof intifaceService === "undefined" || !intifaceService.snapshot()?.ready) return;
-  try { await intifaceService.sendRaw({ StopDeviceCmd: { DeviceIndex: Number(rawDevice.DeviceIndex) } }, true); } catch {}
+  if (!rawDevice) throw new Error("Toy is unavailable");
+  if (typeof intifaceService === "undefined" || !intifaceService.snapshot()?.ready) throw new Error("Intiface is disconnected");
+  return intifaceService.sendRaw({ StopDeviceCmd: { DeviceIndex: Number(rawDevice.DeviceIndex) } }, true);
 }
 
 function cancelGameToyRun(cacheKey) {
@@ -220,7 +241,8 @@ function appliedOpenShockIntensity(rolledValue, mode, device, s) {
   return mode === "vibe" ? clampInt(value, 1, 100) : clampInt(Math.max(1, value), 1, s.serverMaxShockIntensity ?? 99);
 }
 
-async function activateOpenShockDevices(player, devices, { rolledValue, mode, shockDurationMs, exclusive }) {
+async function activateOpenShockDevices(player, devices, { rolledValue, mode, shockDurationMs, exclusive, outputRunToken = null }) {
+  assertOutputRunActive(outputRunToken);
   if (!devices.length) return { ok: false, provider: "openshock", skipped: true, devices: [] };
   const s = safety();
   const duration = clampInt(shockDurationMs, s.minDurationMs ?? 300, s.maxDurationMs ?? 1000);
@@ -234,7 +256,8 @@ async function activateOpenShockDevices(player, devices, { rolledValue, mode, sh
   const requestBody = { shocks: active.map(item => ({ id: item.device.id, type, intensity: item.intensity, duration, exclusive })) };
   try {
     debugState.counters.shockCommands += active.length;
-    const result = await requestOpenShock("POST", "/2/shockers/control", requestBody, { action: type === "Vibrate" ? "vibrate" : "shock" });
+    const result = await requestOpenShock("POST", "/2/shockers/control", requestBody, { action: type === "Vibrate" ? "vibrate" : "shock", cancellable: outputRunToken !== null && outputRunToken !== undefined });
+    assertOutputRunActive(outputRunToken);
     const ok = Number(result.statusCode) >= 200 && Number(result.statusCode) < 300;
     return {
       ok,
@@ -370,7 +393,8 @@ async function stopSetupDevice({ provider, deviceId } = {}) {
   }
 }
 
-async function activateGamePlayer({ playerId, rolledValue = 0, mode = null, shockDurationMs = null, exclusive = true } = {}) {
+async function activateGamePlayer({ playerId, rolledValue = 0, mode = null, shockDurationMs = null, exclusive = true, outputRunToken = null } = {}) {
+  assertOutputRunActive(outputRunToken);
   const id = String(playerId || "");
   if (!id) throw new Error("Missing player id");
   const player = await resolveConfiguredPlayer(id);
@@ -396,7 +420,8 @@ async function activateGamePlayer({ playerId, rolledValue = 0, mode = null, shoc
   const shockDevices = enabledDevices.filter(device => device.provider === "openshock");
   const toyDevices = enabledDevices.filter(device => device.provider === "intiface");
 
-  const openshock = await activateOpenShockDevices(player, shockDevices, { rolledValue: selectedValue, mode: outcomeMode, shockDurationMs: duration, exclusive });
+  const openshock = await activateOpenShockDevices(player, shockDevices, { rolledValue: selectedValue, mode: outcomeMode, shockDurationMs: duration, exclusive, outputRunToken });
+  assertOutputRunActive(outputRunToken);
   const intiface = toyDevices.map(device => ({ ...startGameToyRun(device, { rolledValue: selectedValue, mode: outcomeMode, shockDurationMs: duration }), provider: "intiface", deviceId: device.id, deviceName: device.name }));
   if (shockDevices.length && !openshock.ok && !openshock.skipped) {
     console.warn(`[OpenShock] Gameplay activation failed for ${player.name}: ${openshock.error || `HTTP ${openshock.statusCode || "error"}`}`);
@@ -430,7 +455,8 @@ handleControl = async function handleUnifiedGameControl(req, res) {
       rolledValue: body.selectedValue ?? body.rolledValue ?? 0,
       mode: body.mode,
       shockDurationMs: body.duration ?? body.shockDurationMs,
-      exclusive: body.exclusive !== false
+      exclusive: body.exclusive !== false,
+      outputRunToken: body.outputRunToken
     });
     return sendJson(res, 200, { ok: result.ok, sent: result, result });
   } catch (err) {
@@ -492,9 +518,7 @@ async function getOutputStatusSnapshot(existingPlayers = null) {
 }
 
 async function stopAllGameOutputs(ids = []) {
-  if (typeof cancelAllEventEffectRuns === "function") cancelAllEventEffectRuns("Stop All");
-  for (const run of activeGameToyRuns.values()) run.cancelled = true;
-  activeGameToyRuns.clear();
+  const generation = cancelPendingOutputRuns();
   const result = { openshock: { ok: true, skipped: true }, intiface: { ok: true, skipped: true } };
   const s = safety();
   let shockIds = Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
@@ -504,25 +528,26 @@ async function stopAllGameOutputs(ids = []) {
       shockIds = Array.from(new Set(players.flatMap(player => player.devices.filter(device => device.provider === "openshock").map(device => device.id))));
     } catch {}
   }
-  if (shockIds.length) {
-    try {
+  const stopOpenShock = async () => {
+    if (shockIds.length) {
       const requestBody = { shocks: shockIds.map(id => ({ id, type: "Stop", intensity: 0, duration: s.minDurationMs ?? 300, exclusive: true })) };
       debugState.counters.stopCommands += 1;
       const response = await requestOpenShock("POST", "/2/shockers/control", requestBody, { action: "stop" });
-      result.openshock = { ok: Number(response.statusCode) >= 200 && Number(response.statusCode) < 300, statusCode: response.statusCode, stopped: shockIds.length, response: response.body };
-    } catch (err) {
-      result.openshock = { ok: false, error: err.message, stopped: 0 };
+      return { ok: Number(response.statusCode) >= 200 && Number(response.statusCode) < 300, statusCode: response.statusCode, stopped: shockIds.length, response: response.body };
     }
-  }
-  try {
+    return result.openshock;
+  };
+  const stopIntiface = async () => {
     if (typeof intifaceService !== "undefined" && intifaceService.snapshot()?.ready) {
       await intifaceService.sendRaw({ StopAllDevices: {} }, true);
-      result.intiface = { ok: true, stopped: true };
+      return { ok: true, stopped: true };
     }
-  } catch (err) {
-    result.intiface = { ok: false, error: err.message };
-  }
-  return result;
+    return result.intiface;
+  };
+  const [openshockStop, intifaceStop] = await Promise.allSettled([stopOpenShock(), stopIntiface()]);
+  result.openshock = openshockStop.status === "fulfilled" ? openshockStop.value : { ok: false, error: openshockStop.reason?.message || String(openshockStop.reason), stopped: 0 };
+  result.intiface = intifaceStop.status === "fulfilled" ? intifaceStop.value : { ok: false, error: intifaceStop.reason?.message || String(intifaceStop.reason) };
+  return { ...result, ok: result.openshock.ok !== false && result.intiface.ok !== false, outputRunToken: generation };
 }
 
 handleStopAll = async function handleUnifiedStopAll(req, res) {

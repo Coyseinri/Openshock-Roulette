@@ -17,6 +17,7 @@ const context={
  clampInt:(n,min,max)=>Math.max(min,Math.min(max,Math.round(Number(n)||0))),
  clampPercent:n=>Math.max(0,Math.min(100,Math.round(Number(n)||0))),
  safety:()=>({serverMaxShockIntensity:99,defaultDurationMs:700,minDurationMs:300,maxDurationMs:1000}),
+ assertOutputRunActive:()=>{},
  gameIntifaceConfig:()=>({minDurationMs:1000,maxDurationMs:15000}),
  gameToyDurationMs:()=>2800,
  activateOpenShockDevices:async(player,devices,opts)=>{calls.shock.push({player:player.id,devices,opts});return devices.length?{ok:true,devices}:{ok:false,skipped:true,devices:[]};},
@@ -33,6 +34,7 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,"..","server","modules","eve
  assert.equal(calls.shock[0].devices.length,0,"Toy-only primitive must not send Shock devices");
  assert.equal(calls.toy.length,1);
  assert.equal(calls.toy[0].device.id,"t1");
+ assert.equal(calls.shock[0].opts.outputRunToken,null);
 
  calls.shock.length=calls.toy.length=0;
  await context.runEventDeviceEffects({effects:[{type:"activateOtherToys"}],targetPlayerIds:["p1"],rolledValue:40,shockDurationMs:700});
