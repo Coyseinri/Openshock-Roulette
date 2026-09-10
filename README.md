@@ -1,4 +1,4 @@
-# OpenShock Roulette (OSR) v1.3.2
+# OpenShock Roulette (OSR) v1.4.0
 
 > ## AI Notice
 >
@@ -32,30 +32,41 @@ What could possibly go wrong? - Historically, quite a lot.
 
 ---
 
-## What's New in v1.3.2
+## What's New in v1.4.0
 
-Version 1.3.2 is a diagnostics, polish and release-readiness update for the v1.3 game system.
+Version 1.4.0 adds optional Intiface/Toy support and a new Player Setup workflow. A logical player can now use Shock devices, Toys, or both, while the roulette game continues to target the player instead of individual hardware.
 
-The game is still chaos. The toolbox is now less likely to slap itself in the face while you are trying to find out why the chaos happened.
+### Intiface and Player Setup
 
-### Updated Core Functions
+- Player Setup at `/setup` for creating players and assigning Shock and Toy devices
+- Server-managed connection to Intiface Central
+- Persistent Toy profiles and feature mappings that do not depend on temporary device indexes
+- Per-feature roles for vibration, rotation, suction, linear and other supported outputs
+- Configurable Toy templates, a 10-second flow graph and safe preview controls
+- Live connection, device, latency and mapping status
+- Player readiness checks before the game starts
+- Per-device intensity and duration settings
+- OpenShock-only and Toy-only games remain supported
 
-- Expanded diagnostics and testing dashboard
-- Redacted diagnostics JSON export/copy tools
-- OpenShock API key read and control-permission checks
-- Pre-flight checks for config, devices, event cards, objectives, roles and runtime state
-- Safe diagnostics test controls for OpenShock devices
-- Config, event-card and objective validators
-- Diagnostics page scroll-state preservation during auto-refresh
-- Audience link simplified back to a general `/audience` entry point
-- Audience names/sessions reset on server restart so old browser logins do not keep sneaking back in
-- Default configuration and hardcoded fallback cleanup
-- Host dashboard refresh handling improved so collapsible panels stop jumping around
-- Documentation updated to match the current release state
+### Unified Gameplay
 
-This is still v1.3 gameplay.
+- One activation path for Shock and Toy devices
+- Vibe and Shock outcomes translated to the configured hardware for each player
+- Device-aware event cards for Toy, Shock and mixed-provider rounds
+- Hardware eligibility checks prevent incompatible event cards from being selected
+- Unified output status on the game, setup, host and diagnostics pages
+- STOP ALL covers both providers and cancels delayed double hits, event sequences and pending output work
 
-It just has a better flashlight for finding the goblin in the wiring.
+### Safety and Access
+
+- Absolute server-side Shock limit of 99%
+- Output limits validated in config and again immediately before OpenShock requests
+- Ambiguous identical Toys fail closed until they receive unique Intiface display names
+- Remote participants are restricted to the Player, Host or Audience pages and their authorized APIs
+- Runtime files, config, logs, databases and server source are excluded from static web access
+- Cross-site API mutations are rejected and sensitive access keys are redacted from request logs
+
+The game now supports more hardware, more event combinations and more ways to discover that the innocent-looking Bluetooth device was not, in fact, innocent.
 
 ---
 
@@ -84,6 +95,34 @@ It just has a better flashlight for finding the goblin in the wiring.
 - Per-device multipliers, even when devices are grouped
 - Local API token protection
 - Fallback shocker configuration
+
+### Intiface / Toy Integration
+
+Intiface support is optional and disabled by default. OSR connects to Intiface Central through the Node.js server, so the game browser does not manage the hardware connection directly.
+
+Use the two setup pages:
+
+- `/setup` — create logical players, assign devices, test individual outputs and complete game setup
+- `/intiface/setup` — inspect device features, assign feature roles, preview templates and manage cached profiles
+
+Start Intiface Central before OSR and keep its WebSocket server available at the configured address. The default is:
+
+```text
+ws://127.0.0.1:12345
+```
+
+Enable Intiface in `config/config.json`:
+
+```json
+"intiface": {
+  "enabled": true,
+  "websocketUrl": "ws://127.0.0.1:12345",
+  "gameIntegrationEnabled": true,
+  "autoConnect": true
+}
+```
+
+Configure every Toy in Advanced Toy Setup before enabling it for gameplay. Give identical devices unique display names in Intiface; OSR intentionally refuses an ambiguous identity instead of guessing which device should activate.
 
 ### Grouped Shockers
 
@@ -377,8 +416,11 @@ openshock-roulette/
 ├── host/        # Host dashboard page
 ├── player/      # Player dashboard page
 ├── audience/    # Audience dashboard page
+├── setup/       # Player and device assignment workflow
+├── intiface/    # Advanced Intiface mapping, preview and monitoring UI
 ├── functions/   # Main browser-side game logic and UI modules
 ├── server/      # Backend app, routes, persistence and OpenShock API handling
+├── tests/       # Node.js regression tests
 ├── app.js       # Browser entry point
 ├── server.js    # Node.js server entry point
 ├── index.html   # Main game screen
@@ -402,10 +444,11 @@ Same chaos. Less spaghetti.
 ## Requirements
 
 - Node.js 22 LTS
-- OpenShock Account
-- OpenShock API Token
-- OpenShock Controller / Hub
-- Compatible OpenShock devices
+- At least one output provider:
+  - OpenShock account, API token, controller/hub and compatible devices
+  - Intiface Central and compatible Bluetooth devices
+- A modern browser on the game computer
+- Phones or browsers on the same local network for Host, Player and Audience pages
 - At least two volunteers
 - Poor decision-making skills (optional)
 
@@ -417,6 +460,7 @@ Same chaos. Less spaghetti.
 git clone https://github.com/Coyseinri/Openshock-Roulette.git
 cd Openshock-Roulette
 npm install
+npm test
 npm start
 ```
 
@@ -473,13 +517,15 @@ If automatic discovery fails, devices can be configured manually in `config/shoc
 
 1. Verify sound-proofing of the room/house you are playing in.
 2. Verify everyone consents.
-3. Connect OpenShock devices.
-4. Test every device.
-5. Confirm the correct player screams - This step is more important than it sounds.
-6. Start the OSR server.
-7. Open the main screen.
-8. Let players and audience scan their QR codes.
-9. Begin regretting your life choices.
+3. Connect the OpenShock devices and/or start Intiface Central.
+4. Start the OSR server.
+5. Open `/setup` and create or review the players.
+6. Assign every Shock and Toy device to the correct player.
+7. Open `/intiface/setup` when Toy feature mapping or template testing is required.
+8. Test every enabled device at a low setting.
+9. Complete Player Setup and open the main screen.
+10. Let the Host, Players and Audience scan their QR codes.
+11. Begin regretting your life choices.
 
 ---
 
@@ -492,7 +538,7 @@ If automatic discovery fails, devices can be configured manually in `config/shoc
 5. A target is selected.
 6. Fate is selected.
 7. Modifiers are applied.
-8. OpenShock executes the result.
+8. OSR executes the result through the configured Shock and/or Toy devices.
 9. Players earn points.
 10. Players spend points.
 11. Repeat until somebody negotiates a peace treaty.
@@ -504,10 +550,16 @@ If automatic discovery fails, devices can be configured manually in `config/shoc
 The application includes:
 
 - STOP ALL button
+- Unified Stop All for OpenShock and Intiface
+- Cancellation of pending double hits and event sequences
 - Per-player elimination
 - Randomized delays
 - Server-side safety limits
+- Absolute 99% Shock ceiling
+- Ambiguous Toy identity blocking
 - API token protection
+- Local-only root, setup and diagnostics pages
+- Role-specific remote participant pages and APIs
 - Diagnostics/pre-flight checks
 
 Recommended real-world rules:
@@ -579,6 +631,19 @@ The STOP ALL button is traditionally discovered approximately one round later th
 - Diagnostics and host-dashboard refresh/scroll polish
 - Config fallback alignment
 
+### v1.4.0
+
+- Optional Intiface Central and Bluetooth Toy integration
+- Player Setup workflow with persistent logical player identities
+- Shock, Toy and mixed-device player assignments
+- Persistent Toy profiles, feature roles and device mappings
+- Template previews, flow graphs, live monitoring and cache controls
+- Unified game activation, output status and Stop All behavior
+- Device-aware event cards and hardware eligibility checks
+- Hard 99% Shock limit and final output-boundary validation
+- Participant path isolation and private-file access protection
+- Full Node.js regression test command through `npm test`
+
 Things escalated quickly.
 
 ---
@@ -610,7 +675,7 @@ See `LICENSE` for details.
 
 This is a community hobby project and is not affiliated with OpenShock.
 
-OpenShock Roulette controls real OpenShock devices.
+OpenShock Roulette controls real OpenShock and Intiface-compatible devices.
 
 Use at your own risk.
 
