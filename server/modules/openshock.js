@@ -43,10 +43,15 @@ function markOpenShockRuntimeStatus(ok, { error = null, statusCode = null } = {}
   openShockRuntimeStatus.lastRequestAt = new Date().toISOString();
   openShockRuntimeStatus.lastError = ok ? null : String(error || (statusCode ? `HTTP ${statusCode}` : "OpenShock request failed"));
   openShockRuntimeStatus.lastStatusCode = statusCode === null || statusCode === undefined ? null : Number(statusCode);
+  if (typeof observeOpenShockPresence === 'function') observeOpenShockPresence(ok);
 }
 
 function requestOpenShock(method, apiPath, body, optionsOverride = {}) {
   return new Promise((resolve, reject) => {
+    if (typeof presence !== 'undefined' && body?.shocks) {
+      body = { ...body, shocks: body.shocks.filter(shock => shock.type === 'Stop' || presence.allowed('openshock', shock.id)) };
+      if (!body.shocks.length) return reject(new Error('No available OpenShock devices; output cancelled'));
+    }
     // Final boundary covers gameplay, diagnostics and any legacy call sites.
     if (body && Array.isArray(body.shocks)) {
       const limits = safety();
@@ -280,7 +285,8 @@ async function getShockersLive() {
       const result = await requestOpenShock("GET", p);
       if (result.statusCode >= 200 && result.statusCode < 300) {
         const shockers = normalizeShockers(result.body);
-        if (shockers.length) return { source: p, shockers, fetchedAt: new Date().toISOString(), durationMs: result.durationMs };
+        if (typeof observeOpenShockPresence === 'function') observeOpenShockPresence(true, shockers);
+        return { source: p, shockers, fetchedAt: new Date().toISOString(), durationMs: result.durationMs };
       }
       errors.push(`${p}: HTTP ${result.statusCode}`);
     } catch (err) {
@@ -311,7 +317,7 @@ async function getShockers({ forceRefresh = false } = {}) {
     return { ...shockerCache.value, cached: true, cacheExpiresInMs: Math.max(0, shockerCache.expiresAt - now) };
   }
 
-  if (!forceRefresh && shockerCache.inFlight) {
+  if (shockerCache.inFlight) {
     debugState.counters.openShockSharedInFlight += 1;
     const value = await shockerCache.inFlight;
     return { ...value, cached: true, sharedInFlight: true, cacheExpiresInMs: Math.max(0, shockerCache.expiresAt - Date.now()) };
@@ -322,16 +328,16 @@ async function getShockers({ forceRefresh = false } = {}) {
   shockerCache.inFlight = getShockersLive()
     .then(value => {
       shockerCache.value = value;
-      shockerCache.expiresAt = Date.now() + shockerCacheTtlMs();
+      const failures = typeof presenceOpenShock !== 'undefined' ? presenceOpenShock.failures : 0;
+      shockerCache.expiresAt = Date.now() + (value.warning ? Math.min(120000, 5000 * Math.pow(2, Math.min(5, failures))) : shockerCacheTtlMs());
       shockerCache.lastError = null;
       return value;
     })
     .catch(err => {
       shockerCache.lastError = err.message;
-      if (shockerCache.value) {
-        return { ...shockerCache.value, cached: true, stale: true, warning: `OpenShock refresh failed, using stale cached shockers. ${err.message}` };
-      }
-      throw err;
+      shockerCache.expiresAt = Date.now() + 30000;
+      shockerCache.value = { ...(shockerCache.value || { shockers: [], source: 'none' }), cached: true, stale: true, warning: `OpenShock refresh failed; device availability is unknown. ${err.message}` };
+      return shockerCache.value;
     })
     .finally(() => {
       shockerCache.inFlight = null;

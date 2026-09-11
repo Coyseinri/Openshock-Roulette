@@ -2,6 +2,7 @@ const key = new URLSearchParams(window.location.search).get("key") || "";
 let timer = null;
 let loading = false;
 let latest = null;
+let outputStatusSignature = '';
 
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m])); }
 function setStatus(text) { document.getElementById("statusLine").textContent = text; }
@@ -9,6 +10,9 @@ function setStatus(text) { document.getElementById("statusLine").textContent = t
 function renderOutputStatus(status) {
   const host = document.getElementById("hostOutputStatus");
   if (!host) return;
+  const signature = JSON.stringify([status?.players, status?.providers?.shock?.reachable, status?.providers?.toy, status?.transitions, status?.hardwareCheck?.status]);
+  if (signature === outputStatusSignature || host.contains(document.activeElement)) return;
+  outputStatusSignature = signature;
   const expanded = new Set([...host.querySelectorAll("details[open][data-player-device-card]")].map(item => item.dataset.playerDeviceCard));
   const scrollY = window.scrollY;
   const players = status?.players || [];
@@ -33,12 +37,14 @@ function renderOutputStatus(status) {
         <div class="hostDeviceIdentity"><strong>${esc(device.name)}</strong><span class="providerBadge">${providerName}</span></div>
         <div class="hostDeviceFacts"><span class="${readinessClass}">● ${esc(device.connection)} · ${esc(device.readiness)}</span><span>Roles: ${esc(roles)}</span><span>Power: ${esc(device.intensityMultiplier)}%</span><span>Duration: ${esc(duration)}</span></div>
         <div class="hostDeviceLast ${device.lastOutput?.success === false ? "status-bad" : ""}">${last}</div>
+        <div class="mutedLine">${esc(device.reason || '')}${device.cancelled ? ' · Previous queued output cancelled; a new action is required.' : ''}</div>
         <div class="hostDeviceActions"><button class="hostButton deviceControlJump" data-player="${esc(p.playerId)}" data-provider="${esc(device.provider)}" data-device="${esc(device.id)}" ${device.canActivate ? "" : "disabled"}>Control</button><button class="hostButton reject deviceQuickStop" data-player="${esc(p.playerId)}" data-provider="${esc(device.provider)}" data-device="${esc(device.id)}" ${device.canStop ? "" : "disabled"}>Stop</button></div>
       </div>`;
     }).join("") || `<div class="mutedLine">No assigned devices.</div>`;
     return `<details class="hostDeviceCard" data-player-device-card="${esc(p.playerId)}" ${expanded.has(String(p.playerId)) ? "open" : ""}><summary><strong>${esc(p.name)}</strong><span class="${ready === total && total ? "status-ok" : "status-bad"}">${ready}/${total} devices ready</span></summary><div class="hostDeviceList">${devices}</div></details>`;
   }).join("");
-  host.innerHTML = `<div class="hostOutputTop">${top}</div>${cards}`;
+  const transitions = (status?.transitions || []).slice(-4).map(item => `<div>${esc(new Date(item.at).toLocaleTimeString())} · ${esc(players.flatMap(player => player.devices || []).find(device => device.id === item.id && device.provider === item.provider)?.name || item.provider)}: ${esc(item.status)} · ${esc(item.reason)}</div>`).join('');
+  host.innerHTML = `<div class="hostOutputTop">${top} · Hardware: ${esc(status?.hardwareCheck?.status || 'unknown')}</div>${cards}<div class="mutedLine" role="status">${transitions}</div>`;
   document.querySelectorAll(".deviceControlJump").forEach(button => button.onclick = () => focusManualDevice(button.dataset.player, button.dataset.provider, button.dataset.device));
   document.querySelectorAll(".deviceQuickStop").forEach(button => button.onclick = () => quickStopDevice(button));
   if (Math.abs(window.scrollY - scrollY) > 2) window.scrollTo({ top: scrollY });
@@ -87,6 +93,7 @@ async function stopAllOutputs() {
 
 function fillPlayerSelect(select, players) {
   if (!select) return;
+  if (document.activeElement === select) return;
   const current = select.value;
   select.innerHTML = "";
   players.forEach(p => {
@@ -103,6 +110,7 @@ function fillManualDeviceSelect(players) {
   const playerSelect = document.getElementById("manualPlayer");
   const deviceSelect = document.getElementById("manualDevice");
   if (!playerSelect || !deviceSelect) return;
+  if (document.activeElement === deviceSelect) return;
   const current = deviceSelect.value;
   const player = (players || []).find(item => String(item.id) === String(playerSelect.value));
   deviceSelect.innerHTML = "";
@@ -115,8 +123,7 @@ function fillManualDeviceSelect(players) {
     opt.disabled = device.enabled === false || device.online === false;
     deviceSelect.appendChild(opt);
   }
-  if ([...deviceSelect.options].some(option => option.value === current && !option.disabled)) deviceSelect.value = current;
-  if (deviceSelect.selectedOptions[0]?.disabled) deviceSelect.value = [...deviceSelect.options].find(option => !option.disabled)?.value || "";
+  if (current) deviceSelect.value = current;
   syncManualDeviceControls();
 }
 
@@ -132,7 +139,7 @@ function syncManualDeviceControls() {
     : [["Vibrate", "Vibrate"], ["Shock", "Shock"], ["Stop", "Stop"]];
   typeSelect.innerHTML = choices.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
   if ([...typeSelect.options].some(option => option.value === current)) typeSelect.value = current;
-  if (sendButton) sendButton.disabled = !deviceSelect.value;
+  if (sendButton) sendButton.disabled = !deviceSelect.value || deviceSelect.selectedOptions[0]?.disabled;
   syncManualControlFields();
 }
 

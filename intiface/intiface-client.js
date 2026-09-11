@@ -502,13 +502,14 @@
   function scalarMessage(device, feature, value) {
     return makeMessage("ScalarCmd", {
       DeviceIndex: Number(device.DeviceIndex),
+      OSRGeneration: device.OSRGeneration,
       Scalars: [{ Index: Number(feature.featureIndex), Scalar: clamp01(value), ActuatorType: feature.actuatorType }]
     });
   }
 
   function legacyMessage(device, feature, value) {
     const v = clamp01(value);
-    const payload = { DeviceIndex: Number(device.DeviceIndex) };
+    const payload = { DeviceIndex: Number(device.DeviceIndex), OSRGeneration: device.OSRGeneration };
     if (feature.command === "VibrateCmd") payload.Speeds = [{ Index: Number(feature.featureIndex), Speed: v }];
     else if (feature.command === "RotateCmd") payload.Rotations = [{ Index: Number(feature.featureIndex), Speed: v, Clockwise: true }];
     else if (feature.command === "LinearCmd") payload.Vectors = [{ Index: Number(feature.featureIndex), Duration: 300, Position: v }];
@@ -531,7 +532,7 @@
     stopPreviewTimers();
     if (!device) return;
     try {
-      await sendMessages(makeMessage("StopDeviceCmd", { DeviceIndex: Number(device.DeviceIndex) }));
+      await sendMessages(makeMessage("StopDeviceCmd", { DeviceIndex: Number(device.DeviceIndex), OSRGeneration: device.OSRGeneration }));
     } catch (err) {
       log("StopDeviceCmd failed; falling back to zeroing features", err.message, "warn");
       for (const feature of device.features || []) await setFeature(device, feature, 0).catch(e => log("Feature stop failed", e.message, "error"));
@@ -1137,6 +1138,7 @@
   function featureValueCommands(values) {
     const commands = [];
     const scalarGroups = new Map();
+    const generations = new Map();
 
     for (const item of values || []) {
       const device = item?.device;
@@ -1150,6 +1152,7 @@
       }
 
       const deviceIndex = Number(device.DeviceIndex);
+      generations.set(deviceIndex, device.OSRGeneration);
       if (!Number.isFinite(deviceIndex)) continue;
       if (!scalarGroups.has(deviceIndex)) scalarGroups.set(deviceIndex, []);
       scalarGroups.get(deviceIndex).push({
@@ -1161,7 +1164,7 @@
 
     for (const [deviceIndex, scalars] of scalarGroups) {
       if (!scalars.length) continue;
-      commands.push(makeMessage("ScalarCmd", { DeviceIndex: deviceIndex, Scalars: scalars }));
+      commands.push(makeMessage("ScalarCmd", { DeviceIndex: deviceIndex, OSRGeneration: generations.get(deviceIndex), Scalars: scalars }));
     }
 
     return commands;
@@ -1457,7 +1460,15 @@
     els.scanBtn?.addEventListener("click", () => refreshDevices().catch(err => log("Refresh failed", err.message, "error")));
     els.stopAllBtn?.addEventListener("click", () => stopAll().catch(err => log("Stop all failed", err.message, "error")));
     els.sendRawBtn?.addEventListener("click", () => {
-      try { sendMessages(JSON.parse(els.rawCommand.value)); }
+      try {
+        const raw = JSON.parse(els.rawCommand.value);
+        const messages = (Array.isArray(raw) ? raw : [raw]).map(envelope => {
+          const name = Object.keys(envelope)[0], payload = { ...envelope[name] };
+          if (payload.DeviceIndex !== undefined) payload.OSRGeneration = state.devices.get(Number(payload.DeviceIndex))?.OSRGeneration;
+          return { [name]: payload };
+        });
+        sendMessages(messages).catch(err => log('Raw command failed', err.message, 'error'));
+      }
       catch (err) { log("Raw command failed", err.message, "error"); }
     });
     els.copyLogBtn?.addEventListener("click", async () => {
@@ -1486,3 +1497,5 @@
 
   init().catch(err => log("Startup failed", err.message, "error"));
 })();
+
+if (window.parent !== window) { new ResizeObserver(() => window.parent.postMessage({ type: "osr-toy-height", height: document.body.scrollHeight + 24 }, location.origin)).observe(document.body); }

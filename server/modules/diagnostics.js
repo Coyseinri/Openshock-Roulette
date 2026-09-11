@@ -796,21 +796,21 @@ function buildPreflightChecks(state, players, shockerResult, configValidation, d
   add("sqlite", "SQLite/session database healthy", db.ok, "error", db.error || db.counts);
   const apiKeyCheck = buildApiKeyCheckSummary(shockerResult);
   const shockConfigured = (players || []).some(player => (player.devices || []).some(device => !device.provider || device.provider === "openshock"));
-  add("token", "OpenShock token configured", Boolean(TOKEN), shockConfigured ? "error" : "warning");
-  add("api-read", "OpenShock token can read own shockers", apiKeyCheck.readOwnShockers.ok, shockConfigured ? "error" : "warning", apiKeyCheck.readOwnShockers);
-  add("shockers", "Configured Shock devices are reachable", !shockConfigured || (shockerResult.shockers || []).length > 0, shockConfigured ? "error" : "warning", shockerResult.warning || null);
+  add("token", "OpenShock token configured", Boolean(TOKEN), "warning");
+  add("api-read", "OpenShock token can read own shockers", apiKeyCheck.readOwnShockers.ok, "warning", apiKeyCheck.readOwnShockers);
+  add("shockers", "Configured Shock devices are reachable", !shockConfigured || (shockerResult.shockers || []).length > 0, "warning", shockerResult.warning || null);
   add("players", "At least one logical player available", (players || []).length > 0, "error");
   const playerReadiness = readiness || buildDiagnosticsPlayerReadiness(setupState || {}, outputStatus || {});
   const activePlayers = playerReadiness.items.filter(player => player.enabled);
-  add("player-outputs", "Every active player has a usable output", activePlayers.length > 0 && activePlayers.every(player => player.ready), "error", activePlayers.filter(player => !player.ready).map(player => ({ id: player.id, name: player.name, warnings: player.warnings })));
+  add("player-outputs", "Every active player has a usable output", activePlayers.length > 0 && activePlayers.every(player => player.ready), "warning", activePlayers.filter(player => !player.ready).map(player => ({ id: player.id, name: player.name, warnings: player.warnings })));
   add("device-assignments", "No physical output is assigned to multiple players", playerReadiness.duplicateAssignments.length === 0, "error", playerReadiness.duplicateAssignments);
   const toyDevices = activePlayers.flatMap(player => player.devices.filter(device => device.provider === "intiface" && device.enabled));
   const shockDevices = activePlayers.flatMap(player => player.devices.filter(device => device.provider === "openshock" && device.enabled));
   const toyInUse = toyDevices.length > 0;
   const intiface = typeof intifaceService !== "undefined" ? intifaceService.snapshot() : { enabled: false, ready: false, state: "unavailable", lastError: "Intiface service unavailable" };
-  add("intiface-enabled", "Intiface service enabled when Toys are configured", !toyInUse || intiface.enabled === true, toyInUse ? "error" : "warning", { toyCount: toyDevices.length, state: intiface.state });
-  add("intiface-connected", "Intiface connected when Toys are configured", !toyInUse || intiface.ready === true, toyInUse ? "error" : "warning", { state: intiface.state, lastError: intiface.lastError, connectedDeviceCount: intiface.connectedDeviceCount });
-  add("toy-online", "Configured Toys are connected", !toyInUse || toyDevices.every(device => device.online), toyInUse ? "error" : "warning", toyDevices.filter(device => !device.online));
+  add("intiface-enabled", "Intiface service enabled when Toys are configured", !toyInUse || intiface.enabled === true, "warning", { toyCount: toyDevices.length, state: intiface.state });
+  add("intiface-connected", "Intiface connected when Toys are configured", !toyInUse || intiface.ready === true, "warning", { state: intiface.state, lastError: intiface.lastError, connectedDeviceCount: intiface.connectedDeviceCount });
+  add("toy-online", "Configured Toys are connected", !toyInUse || toyDevices.every(device => device.online), "warning", toyDevices.filter(device => !device.online));
   add("toy-mapping", "Configured Toys have active feature mappings", !toyInUse || toyDevices.every(device => device.mappingReady), toyInUse ? "error" : "warning", toyDevices.filter(device => !device.mappingReady));
   add("toy-templates", "Preferred Toy templates exist", !toyInUse || toyDevices.every(device => device.templateValid), toyInUse ? "error" : "warning", toyDevices.filter(device => !device.templateValid));
   const integrationEnabled = CONFIG?.intiface?.gameIntegrationEnabled === true;
@@ -826,6 +826,11 @@ function buildPreflightChecks(state, players, shockerResult, configValidation, d
   add("host", "Host page enabled", CONFIG?.pages?.host?.enabled !== false, "warning");
   add("player", "Player pages enabled", CONFIG?.pages?.player?.enabled !== false, "warning");
   add("audience", "Audience page enabled", CONFIG?.pages?.audience?.enabled !== false, "warning");
+  const hardware = outputStatus?.hardwareCheck || setupState?.hardwareCheck;
+  if (hardware) {
+    add("hardware-readiness", "Shared hardware check has no blocked assignments or mappings", hardware.blockers.length === 0, "error", hardware.blockers);
+    add("hardware-warnings", "Shared hardware availability", hardware.warnings.length === 0, "warning", hardware.warnings);
+  }
   const failed = checks.filter(c => !c.ok && c.severity === "error").length;
   const warnings = checks.filter(c => !c.ok && c.severity !== "error").length;
   return { ready: failed === 0, failed, warnings, checks };

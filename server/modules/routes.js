@@ -150,8 +150,9 @@ var server = http.createServer(async (req, res) => {
       }
     }
 
-    if ((url.pathname === "/intiface/setup" || url.pathname === "/intiface/setup/") && req.method === "GET") {
+    if (["/intiface/setup", "/intiface/setup/", "/intiface/setup.html", "/setup/toys"].includes(url.pathname) && req.method === "GET") {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
+      if (url.pathname !== '/setup/toys') { res.writeHead(302, { Location: '/setup#toys' }); return res.end(); }
       return serveHtmlFile(res, path.join(APP_ROOT, "intiface", "setup.html"));
     }
 
@@ -205,7 +206,19 @@ var server = http.createServer(async (req, res) => {
       if (CONFIG.server?.adminLocalhostOnly !== false && !isLocalRequest(req)) return sendJson(res, 403, { error: "Admin endpoint is localhost only" });
       const body = await readBody(req);
       try {
-        const response = await intifaceService.sendRaw(body.messages || body.message || body, body.waitForResponse !== false, body.timeoutMs);
+        const raw = body.messages || body.message || body;
+        if ((Array.isArray(raw) ? raw : [raw]).some(item => item.StopAllDevices)) cancelPendingOutputRuns();
+        const messages = (Array.isArray(raw) ? raw : [raw]).map(envelope => {
+          const name = Object.keys(envelope)[0], payload = { ...envelope[name] };
+          if (payload.DeviceIndex !== undefined) {
+            const device = intifaceService.devices.get(Number(payload.DeviceIndex));
+            if (!device || payload.OSRGeneration !== device.OSRGeneration) throw new Error('Device connection changed; refresh and start a new test');
+            if ((intifaceService.snapshot().devices || []).filter(item => stableIntifaceDeviceKey(item) === stableIntifaceDeviceKey(device)).length !== 1) throw new Error('Ambiguous Toy identity');
+          }
+          delete payload.OSRGeneration;
+          return { [name]: payload };
+        });
+        const response = await intifaceService.sendRaw(messages, body.waitForResponse !== false, body.timeoutMs);
         return sendJson(res, 200, { ok: true, response, runtime: intifaceService.snapshot() });
       } catch (err) {
         return sendJson(res, 503, { error: err.message, runtime: intifaceService.snapshot() });
@@ -640,6 +653,7 @@ var server = http.createServer(async (req, res) => {
 
     if (url.pathname === "/api/output-run" && req.method === "POST") {
       if (!isLocalRequest(req)) return sendJson(res, 403, { error: "Output runs can only be started on the game computer" });
+      await getConfiguredPlayers(null, { includeDisabled: true });
       return sendJson(res, 200, { outputRunToken: beginOutputRun() });
     }
 
@@ -746,7 +760,7 @@ var server = http.createServer(async (req, res) => {
 server.listen(PORT, process.env.HOST || CONFIG.server?.host || "0.0.0.0", () => {
   console.log(`${CONFIG.app?.serverBanner || CONFIG.app?.displayTitle || 'OpenShock Roulette'} running at http://localhost:${PORT}`);
   getLanAddresses().forEach(ip => console.log(`Player pages available at http://${ip}:${PORT}/player`));
-  console.log(`Intiface setup available at http://localhost:${PORT}/intiface/setup`);
+  console.log(`Setup and Toy mappings available at http://localhost:${PORT}/setup`);
   console.log(`Config source: ${CONFIG_PATH}; defaults: ${CONFIG_EXAMPLE_PATH}`);
   console.log(`SQLite JSON blob state DB: ${DB_PATH}`);
   if (!TOKEN) console.log("WARNING: OPENSHOCK_TOKEN / OPENSHOCK_API_TOKEN is not set.");

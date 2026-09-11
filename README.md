@@ -45,6 +45,8 @@ Version 1.4.0 adds optional Intiface/Toy support and a new Player Setup workflow
 - Configurable Toy templates, a 10-second flow graph and safe preview controls
 - Live connection, device, latency and mapping status
 - Player readiness checks before the game starts
+- Setup tabs for Players, Hardware check, Toy mappings and Export/import
+- Manual pre-game vibration/Toy tests with confirmation of the physical response
 - Per-device intensity and duration settings
 - OpenShock-only and Toy-only games remain supported
 
@@ -58,6 +60,17 @@ Version 1.4.0 adds optional Intiface/Toy support and a new Player Setup workflow
 - Collapsible Host device cards with readiness, mappings, effective settings and recent output results
 - Provider-specific per-device Control and Stop actions without losing entered values during refresh
 - STOP ALL covers both providers and cancels delayed double hits, event sequences and pending output work
+- Disconnects invalidate queued work for that device; reconnecting never replays old output
+
+### Hardware check and reconnects
+
+Open `/setup#hardware` before playing. Refresh checks availability and saved mappings without activating devices. Test each enabled device individually, then tick the confirmation only when the correct device responds. These confirmations belong to the current browser session and reset when the device connection or effective settings change. An API acknowledgement alone does not verify physical output.
+
+Unmapped, incompatible or ambiguous enabled Toy assignments block setup completion. Missing devices, unavailable providers, disabled gameplay integration and 0% profiles produce warnings. You can still play with the available outputs. OpenShock status confirms API availability and access to the device; it cannot confirm that the physical collar is online.
+
+After a disconnect, delayed hits and template steps for that device are discarded. Other devices remain available. A reconnected Toy must have a unique stable identity and compatible saved mappings before a **new** action can use it. Stop All also invalidates pending preview commands. Automatic retries check connections and device lists only; activation commands are never replayed.
+
+Toy mappings are part of Setup at `/setup#toys`. Existing `/intiface/setup` bookmarks redirect there. Physical hardware tests still need to be performed on the game computer.
 
 ### Safety and Access
 
@@ -105,7 +118,7 @@ Intiface support is optional and disabled by default. OSR connects to Intiface C
 Use the two setup pages:
 
 - `/setup` — create logical players, assign devices, test individual outputs and complete game setup
-- `/intiface/setup` — inspect device features, assign feature roles, preview templates and manage cached profiles
+- `/setup#toys` — inspect device features, assign feature roles, preview templates and manage cached profiles
 
 Start Intiface Central before OSR and keep its WebSocket server available at the configured address. The default is:
 
@@ -374,6 +387,8 @@ It does, however, make the audience introduce themselves again like civilized li
 
 A diagnostics dashboard is included for troubleshooting.
 
+Diagnostics has seven sections: Status, Players & Devices, Tests & Simulator, API & Inspectors, Config & Storage, Session & Logs, and QR/Links. Related tools are expandable within each section. Setup owns player configuration, Toy mappings, import/export and the pre-game hardware check; Diagnostics uses the same hardware readiness status alongside its system checks. Empty Developer and Future Tools panels have been removed.
+
 Available locally at:
 
 ```text
@@ -529,7 +544,7 @@ If automatic discovery fails, devices can be configured manually in `config/shoc
 4. Start the OSR server.
 5. Open `/setup` and create or review the players.
 6. Assign every Shock and Toy device to the correct player.
-7. Open `/intiface/setup` when Toy feature mapping or template testing is required.
+7. Open `/setup#toys` when Toy feature mapping or template testing is required.
 8. Test every enabled device at a low setting.
 9. Complete Player Setup and open the main screen.
 10. Let the Host, Players and Audience scan their QR codes.

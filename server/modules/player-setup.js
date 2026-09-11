@@ -326,6 +326,7 @@ function liveIntifaceDeviceMap() {
 
 function hydrateConfiguredPlayers(setup, shockers = [], { includeDisabled = false } = {}) {
   if (!setup) return [];
+  if (typeof syncDevicePresence === 'function') syncDevicePresence();
   const shockerMap = new Map((shockers || []).map(shocker => [String(shocker.id), shocker]));
   const toyMap = liveIntifaceDeviceMap();
   const intifaceCache = readPlayerSetupIntifaceCache();
@@ -338,11 +339,13 @@ function hydrateConfiguredPlayers(setup, shockers = [], { includeDisabled = fals
       isGrouped: player.devices.filter(device => device.provider === "openshock").length > 1,
       devices: player.devices.map(device => {
         const live = device.provider === "openshock" ? shockerMap.get(device.id) : toyMap.get(device.id);
+        const connection = typeof presence !== 'undefined' ? presence.entries.get(presence.key(device.provider, device.id)) : null;
         return {
           ...device,
           name: live?.name || live?.DeviceDisplayName || live?.DeviceName || device.name,
           memberName: device.memberName || live?.name || live?.DeviceDisplayName || live?.DeviceName || device.name,
-          online: Boolean(live),
+          online: connection ? connection.status === 'online' : Boolean(live),
+          connection: connection ? { status: connection.status, reason: connection.reason, generation: connection.generation, connectedAt: connection.connectedAt, disconnectedAt: connection.disconnectedAt, cancelled: connection.cancelled } : null,
           ambiguous: device.provider === "intiface" && toyMap.ambiguous.has(device.id),
           mappingReady: device.provider !== "intiface" ? true : Object.values(intifaceCache.profiles?.[device.id]?.featureRoles || {}).some(role => String(role || "ignore").toLowerCase() !== "ignore"),
           mappedFeatureCount: device.provider !== "intiface" ? null : Object.values(intifaceCache.profiles?.[device.id]?.featureRoles || {}).filter(role => String(role || "ignore").toLowerCase() !== "ignore").length,
@@ -414,7 +417,7 @@ async function getPlayerSetupState({ forceRefresh = false } = {}) {
     });
   }
   const availableShock = (shockerResult.shockers || []).map(shocker => ({
-    provider: "openshock", id: String(shocker.id), name: shocker.name, online: true, assigned: assignedShock.has(String(shocker.id))
+    provider: "openshock", id: String(shocker.id), name: shocker.name, online: !shockerError && !shockerResult.warning, assigned: assignedShock.has(String(shocker.id))
   }));
   for (const [cacheKey, matches] of liveToys.ambiguous) {
     toys.set(cacheKey, { ...(toys.get(cacheKey) || {}), provider: 'intiface', id: cacheKey,
@@ -443,6 +446,7 @@ async function getPlayerSetupState({ forceRefresh = false } = {}) {
     devices: { shock: availableShock, toy: availableToys },
     suggestions,
     readiness,
+    hardwareCheck: typeof hardwarePreflight === 'function' ? hardwarePreflight(players) : null,
     session: (() => {
       const session = readSessionState();
       return { setupCompleted: session.setupCompleted === true, roundNumber: Number(session.roundNumber || 0) };
@@ -525,6 +529,10 @@ async function applyPlayerSetupAction(body = {}) {
     const [device] = existing.player.devices.splice(existing.index, 1);
     if (provider === "intiface") syncIntifaceAssignmentToStorage(deviceId, "", device);
   } else if (action === "completeSetup") {
+    if (typeof hardwarePreflight === 'function') {
+      const check = hardwarePreflight(await getConfiguredPlayers(null, { includeDisabled: true }));
+      if (check.blockers.length) throw new Error(check.blockers.join(' '));
+    }
     const session = readSessionState();
     session.setupCompleted = true;
     writeSessionState(session);

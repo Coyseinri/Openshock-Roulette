@@ -33,7 +33,7 @@ const featureValueCommands = new Function(
   `${functionSource}\nreturn featureValueCommands;`
 )(valueWithDeviceMultiplier, legacyMessage, makeMessage);
 
-const device = { DeviceIndex: 7 };
+const device = { DeviceIndex: 7, OSRGeneration: 12 };
 const vibration = {
   command: "ScalarCmd",
   featureIndex: 0,
@@ -54,6 +54,7 @@ assert.equal(commands.length, 1, "Mixed scalar outputs for one device must be se
 assert.deepEqual(commands[0], {
   ScalarCmd: {
     DeviceIndex: 7,
+    OSRGeneration: 12,
     Scalars: [
       { Index: 0, Scalar: 0.35, ActuatorType: "Vibrate" },
       { Index: 1, Scalar: 0.6, ActuatorType: "Rotate" }

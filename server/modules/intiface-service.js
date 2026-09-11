@@ -35,6 +35,7 @@ function createIntifaceService() {
     state: INTIFACE_STATES.DISCONNECTED,
     ws: null,
     nextId: 1,
+    nextDeviceGeneration: 1,
     pending: new Map(),
     devices: new Map(),
     serverInfo: null,
@@ -188,15 +189,23 @@ function createIntifaceService() {
         if (name === "DeviceList") this.replaceDevices(payload.Devices || []);
         if (name === "DeviceAdded") this.upsertDevice(payload);
         if (name === "DeviceRemoved") this.devices.delete(Number(payload.DeviceIndex));
+        if (['DeviceList', 'DeviceAdded', 'DeviceRemoved'].includes(name) && typeof syncDevicePresence === 'function') syncDevicePresence();
         if (name === "Error") this.lastError = payload.ErrorMessage || String(payload.ErrorCode || "Intiface error");
       }
     },
 
     upsertDevice(device) {
       const index = Number(device?.DeviceIndex);
-      if (Number.isFinite(index)) this.devices.set(index, { ...device, DeviceIndex: index });
+      if (!Number.isFinite(index)) return;
+      const previous = this.devices.get(index);
+      const same = previous && stableIntifaceDeviceKey(previous) === stableIntifaceDeviceKey(device);
+      this.devices.set(index, { ...device, DeviceIndex: index, OSRGeneration: same ? previous.OSRGeneration : this.nextDeviceGeneration++ });
     },
-    replaceDevices(devices) { this.devices.clear(); for (const device of devices) this.upsertDevice(device); },
+    replaceDevices(devices) {
+      const ids = new Set(devices.map(device => Number(device.DeviceIndex)));
+      for (const id of this.devices.keys()) if (!ids.has(id)) this.devices.delete(id);
+      for (const device of devices) this.upsertDevice(device);
+    },
 
     async connect({ automatic = false } = {}) {
       if (this.connectingPromise) return this.connectingPromise;
@@ -205,36 +214,49 @@ function createIntifaceService() {
       if (!cfg.enabled) { this.state = INTIFACE_STATES.DISABLED; return this.snapshot(); }
       this.manualDisconnect = false;
       this.state = automatic && this.reconnectAttempts > 0 ? INTIFACE_STATES.RECONNECTING : INTIFACE_STATES.CONNECTING;
+      let attemptSocket;
       this.connectingPromise = new Promise((resolve, reject) => {
         let settled = false;
         const ws = new WebSocket(cfg.websocketUrl);
+        attemptSocket = ws;
         this.ws = ws;
         const fail = err => {
           if (settled) return; settled = true;
-          this.lastError = err?.message || String(err || "Connection failed");
-          this.connectingPromise = null;
+          if (this.ws === ws) {
+            this.lastError = err?.message || String(err || "Connection failed");
+            this.connectingPromise = null;
+          }
           try { ws.close(); } catch {}
           reject(err instanceof Error ? err : new Error(this.lastError));
         };
         const openTimeout = setTimeout(() => fail(new Error("Intiface connection timed out")), cfg.commandTimeoutMs);
         ws.addEventListener("open", async () => {
           clearTimeout(openTimeout);
+          if (this.ws !== ws) return;
           this.state = INTIFACE_STATES.CONNECTED;
           try {
             await this.sendRequest("RequestServerInfo", { ClientName: "OpenShock Roulette Server", MessageVersion: 3 }, cfg.commandTimeoutMs);
+            if (this.ws !== ws) throw new Error('Intiface connection replaced');
             await this.sendRequest("RequestDeviceList", {}, cfg.commandTimeoutMs);
+            if (this.ws !== ws) throw new Error('Intiface connection replaced');
             settled = true; this.connectingPromise = null; this.state = INTIFACE_STATES.READY; this.reconnectAttempts = 0; this.lastError = null;
+            if (typeof syncDevicePresence === 'function') syncDevicePresence();
             this.startHealthMonitor(); this.startKeepAwakeMonitor(); this.log(`Connected to ${cfg.websocketUrl}; ${this.devices.size} device(s)`); resolve(this.snapshot());
           } catch (err) { fail(err); }
         });
-        ws.addEventListener("message", event => this.handleMessage(event));
-        ws.addEventListener("error", () => { if (!settled) fail(new Error("Intiface WebSocket error")); });
+        ws.addEventListener("message", event => { if (this.ws === ws) this.handleMessage(event); });
+        ws.addEventListener("error", () => { if (this.ws === ws && !settled) fail(new Error("Intiface WebSocket error")); });
         ws.addEventListener("close", () => {
+          if (this.ws !== ws) return;
           clearTimeout(openTimeout); this.clearPending("Intiface connection closed"); this.stopHealthMonitor(); this.stopKeepAwakeMonitor(); this.activeDeviceIndexes.clear(); this.devices.clear(); this.ws = null; this.connectingPromise = null;
           if (!this.manualDisconnect) this.scheduleReconnect("WebSocket closed"); else this.state = INTIFACE_STATES.DISCONNECTED;
+          if (typeof presence !== 'undefined') presence.invalidateProvider('intiface', 'offline', 'Intiface connection closed');
         });
       });
-      try { return await this.connectingPromise; } catch (err) { if (automatic) this.scheduleReconnect(err.message); else this.state = INTIFACE_STATES.SUSPENDED; throw err; }
+      try { return await this.connectingPromise; } catch (err) {
+        if (this.ws === attemptSocket) { if (automatic) this.scheduleReconnect(err.message); else this.state = INTIFACE_STATES.SUSPENDED; }
+        throw err;
+      }
     },
 
     startHealthMonitor() {
@@ -274,7 +296,10 @@ function createIntifaceService() {
     },
     stopKeepAwakeMonitor() { if (this.keepAwakeTimer) clearInterval(this.keepAwakeTimer); this.keepAwakeTimer = null; },
 
-    closeSocket() { try { if (this.ws) this.ws.close(); } catch {} },
+    closeSocket() {
+      if (typeof presence !== 'undefined') presence.invalidateProvider('intiface', 'offline', 'Intiface connection closed');
+      try { if (this.ws) this.ws.close(); } catch {}
+    },
 
     scheduleReconnect(reason) {
       const cfg = this.config();

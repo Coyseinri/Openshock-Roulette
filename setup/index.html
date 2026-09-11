@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>OSR Player Setup</title>
+  <title>OSR Setup</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/setup/setup.css">
   <link rel="stylesheet" href="/setup/config-transfer.css">
@@ -11,10 +11,10 @@
 <body>
   <main class="setup-shell">
     <header class="setup-header">
-      <div><h1>Player Setup</h1><p>Players are the game targets. Devices are what happen to them.</p></div>
-      <div class="setup-actions"><button id="startGameBtn">Start / Continue Game</button><a class="button secondary" href="/intiface/setup">Advanced Toy Setup</a></div>
+      <div><h1>Setup</h1><p>Configure players, map devices and check hardware before playing.</p></div>
+      <nav class="setup-actions" aria-label="Main"><a class="button secondary" href="/">Game</a><a class="button secondary" href="/setup" aria-current="page">Setup</a><a class="button secondary" href="/diagnostics">Diagnostics</a><button id="startGameBtn">Start / Continue Game</button></nav>
     </header>
-
+    <nav class="setup-actions setup-tabs" aria-label="Setup sections"><a class="button secondary" href="#players">Players</a><a class="button secondary" href="#hardware">Hardware check</a><a class="button secondary" href="#toys">Toy mappings</a><a class="button secondary" href="#transfer">Export / import</a></nav>
     <section class="setup-status card provider-grid">
       <div class="provider-card">
         <div><strong>Shock</strong> <span id="shockStatus">● checking</span></div>
@@ -24,15 +24,19 @@
       <div class="provider-card">
         <div><strong>Toy</strong> <span id="toyStatus">● checking</span></div>
         <div id="toyCount" class="device-meta">Checking devices…</div>
-        <div class="setup-actions"><button id="scanToyBtn" class="secondary">Scan / Refresh Toys</button><a class="button secondary" href="/intiface/setup">Advanced Setup</a></div>
+        <div class="setup-actions"><button id="scanToyBtn" class="secondary">Scan / Refresh Toys</button><a class="button secondary" href="#toys">Toy mappings</a></div>
       </div>
       <div class="provider-card readiness-card"><strong>Readiness</strong><div id="readiness"></div></div>
     </section>
 
+    <div data-setup-panel="players">
     <section class="card"><div class="setup-create"><input id="newPlayerName" placeholder="Player name"><button id="createPlayerBtn">Add player</button></div><div id="players"></div></section>
     <section class="setup-grid"><div class="card"><h2>Unassigned Shock devices</h2><div id="shockDevices"></div></div><div class="card"><h2>Unassigned Toys</h2><div id="toyDevices"></div></div></section>
     <section class="card"><h2>Suggested matches</h2><div id="suggestions"></div></section>
-    <section class="card config-transfer"><h2>Export / import configuration</h2>
+    </div>
+    <section class="card" data-setup-panel="hardware" hidden><h2>Pre-game hardware check</h2><p>Refreshing checks connections and mappings only. Use a test button for each device, then confirm that the correct device responded.</p><div class="setup-actions"><button id="refreshHardwareBtn" class="secondary">Refresh status</button><button id="hardwareStopAllBtn" class="danger">STOP ALL</button></div><div id="hardwareSummary" role="status"></div><div id="hardwareDevices"></div></section>
+    <section data-setup-panel="toys" hidden><iframe id="toySetupFrame" title="Toy mappings and template tests" class="toy-setup-frame"></iframe></section>
+    <section class="card config-transfer" data-setup-panel="transfer" hidden><h2>Export / import configuration</h2>
       <p class="device-meta">Move player setup, stable device mappings and game settings without API tokens, sessions or logs.</p>
       <div class="transfer-scopes"><label><input type="checkbox" data-export-scope value="players" checked> Players</label><label><input type="checkbox" data-export-scope value="deviceMappings" checked> Device mappings</label><label><input type="checkbox" data-export-scope value="gameProfile" checked> Game profile</label></div>
       <div class="setup-actions"><button id="exportConfigBtn" class="secondary">Download export</button><input id="importConfigFile" type="file" accept="application/json,.json"><select id="importMode"><option value="merge">Merge</option><option value="replace">Replace selected scopes</option></select><button id="previewImportBtn" class="secondary">Validate &amp; preview</button></div>
@@ -42,5 +46,6 @@
     <div id="message" class="setup-message" role="status"></div>
   </main>
   <script src="/setup/setup.js"></script>
+  <script src="/setup/hardware.js"></script>
 </body>
 </html>

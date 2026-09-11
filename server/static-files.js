@@ -78,7 +78,7 @@ function serveStaticFile(req, res, url, { appRoot, sendJson }) {
   requestedPath = staticAliases[requestedPath] || requestedPath;
   const allowed = new Set([
     'index.html', 'app.js', 'style.css', 'diagnostics.html',
-    'setup/index.html', 'setup/setup.js', 'setup/setup.css',
+    'setup/index.html', 'setup/setup.js', 'setup/setup.css', 'setup/config-transfer.css', 'setup/hardware.js',
     'intiface/setup.html', 'intiface/intiface-client.js', 'intiface/intiface.css',
     'host/index.html', 'host/host.js', 'host/host.css',
     'player/index.html', 'player/player.js', 'player/player.css',

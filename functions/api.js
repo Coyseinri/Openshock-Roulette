@@ -260,6 +260,14 @@ async function loadOutputStatus() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Could not load output status");
     latestOutputStatus = data;
+    for (const player of configuredPlayers || []) {
+      const current = data.players?.find(item => item.playerId === player.id);
+      for (const device of player.devices || []) {
+        const live = current?.devices?.find(item => item.id === device.id && item.provider === device.provider);
+        device.online = live?.canActivate === true;
+        if (live) device.mappingReady = live.mappingReady;
+      }
+    }
     renderMainOutputStatus();
   } catch (err) {
     const note = document.getElementById("outputStatusNote");

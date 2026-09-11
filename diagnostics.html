@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>OpenShock Roulette Diagnostics + Test</title>
   <style>
+    a { color: #7aa7ff; }
     :root { color-scheme: dark; --bg:#101114; --panel:#1b1d22; --panel2:#24272e; --border:#343844; --text:#f1f3f4; --muted:#aeb4bf; --ok:#35c46f; --warn:#ffbf47; --bad:#ff5c70; --accent:#7aa7ff; --purple:#b388ff; }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
@@ -64,7 +65,7 @@
 <body>
   <header>
     <div>
-      <h1>OSR Diagnostics + Test</h1>
+      <h1>Diagnostics</h1><nav aria-label="Main"><a href="/">Game</a> · <a href="/setup">Setup</a> · <a href="/diagnostics" aria-current="page">Diagnostics</a></nav>
       <div class="muted small" id="lastUpdated">Loading...</div>
     </div>
     <div class="toolbar">
@@ -80,38 +81,21 @@
 
   <main>
     <div class="tabs" id="tabs">
-      <button class="tab active" data-tab="overview">Overview</button>
-      <button class="tab" data-tab="preflight">Pre-flight</button>
+      <button class="tab active" data-tab="overview">Status</button>
       <button class="tab" data-tab="devices">Players & Devices</button>
-      <button class="tab" data-tab="tests">Safe Tests</button>
-      <button class="tab" data-tab="api">API Explorer</button>
-      <button class="tab" data-tab="inspectors">Inspectors</button>
-      <button class="tab" data-tab="simulator">Simulator & Odds</button>
-      <button class="tab" data-tab="config">Config</button>
-      <button class="tab" data-tab="storage">Storage</button>
+      <button class="tab" data-tab="tests">Tests & Simulator</button>
+      <button class="tab" data-tab="api">API & Inspectors</button>
+      <button class="tab" data-tab="config">Config & Storage</button>
+      <button class="tab" data-tab="logs">Session & Logs</button>
       <button class="tab" data-tab="links">QR/Links</button>
-      <button class="tab" data-tab="session">Session</button>
-      <button class="tab" data-tab="logs">Logs</button>
-      <button class="tab" data-tab="developer">Developer</button>
-      <button class="tab" data-tab="future">Future Tools</button>
-      <button class="tab" data-tab="raw">Raw JSON</button>
     </div>
-
-    <section id="overview" class="section active"></section>
-    <section id="preflight" class="section"></section>
-    <section id="devices" class="section"></section>
-    <section id="tests" class="section"></section>
-    <section id="api" class="section"></section>
-    <section id="inspectors" class="section"></section>
-    <section id="simulator" class="section"></section>
-    <section id="config" class="section"></section>
-    <section id="storage" class="section"></section>
-    <section id="links" class="section"></section>
-    <section id="session" class="section"></section>
-    <section id="logs" class="section"></section>
-    <section id="developer" class="section"></section>
-    <section id="future" class="section"></section>
-    <section id="raw" class="section"></section>
+    <section id="section-overview" class="section active"><div id="overview"></div><details data-diag-id="group:preflight"><summary>System Pre-Flight</summary><div id="preflight"></div></details></section>
+    <section id="section-devices" class="section"><div id="devices"></div></section>
+    <section id="section-tests" class="section"><div id="tests"></div><details data-diag-id="group:simulator"><summary>Simulator</summary><div id="simulator"></div></details></section>
+    <section id="section-api" class="section"><div id="api"></div><details data-diag-id="group:inspectors"><summary>Inspectors</summary><div id="inspectors"></div></details><details data-diag-id="group:raw"><summary>Raw Json</summary><div id="raw"></div></details></section>
+    <section id="section-config" class="section"><div id="config"></div><details data-diag-id="group:storage"><summary>Storage</summary><div id="storage"></div></details></section>
+    <section id="section-logs" class="section"><div id="session"></div><details data-diag-id="group:logs"><summary>Logs</summary><div id="logs"></div></details></section>
+    <section id="section-links" class="section"><div id="links"></div></section>
   </main>
 
   <div class="toast" id="toast"></div>
@@ -205,7 +189,7 @@ async function runApiKeyCheck(control=false) {
 function renderPreflight(d) {
   const p = d.tools.preflight;
   document.getElementById('preflight').innerHTML = `
-    <div class="card"><h2>OSR Pre-flight Check</h2>
+    <div class="card"><h2>System pre-flight</h2><p>Hardware check: <strong>${esc(d.players.outputStatus?.hardwareCheck?.status || "unknown")}</strong>. <a href="/setup#hardware">Open Setup hardware check and physical tests</a>.</p>
       <p>${p.ready ? statusPill(true, 'READY TO PLAY') : statusPill(false, 'NOT READY')} ${warnPill(`${p.warnings} warnings`)} ${p.failed ? statusPill(false, `${p.failed} blockers`) : statusPill(true, 'No blockers')}</p>
       <button id="runPreflightInner" class="purple">Run fresh pre-flight</button>
     </div>
@@ -405,50 +389,15 @@ function renderSession(d) {
 function logRows(items) { return (items || []).map(x => [esc(x.time || x.created_at || ''), esc(x.method || x.type || ''), esc(x.path || x.title || ''), esc(x.statusCode || x.status || ''), esc(x.responseTimeMs || x.durationMs || ''), esc(x.error || x.description || '')]); }
 function renderLogs(d) { document.getElementById('logs').innerHTML = `<div class="card"><h2>Timeline</h2>${table(['Time','Type','Title','Description'], (d.tools.timeline || []).map(x => [esc(x.time), esc(x.type), esc(x.title), esc(x.description)]))}</div><div class="card"><h2>Recent OpenShock Calls</h2>${table(['Time','Method/Type','Path/Title','Status','ms','Error/Description'], logRows(d.logs.openshock))}</div><div class="card"><h2>Recent Incoming Requests</h2>${table(['Time','Method','Path','Status','ms','Error/Description'], logRows(d.logs.incoming))}</div><div class="card"><h2>Slow Requests</h2>${table(['Time','Method','Path','Status','ms','Error/Description'], logRows(d.logs.slow))}</div>`; }
 
-function renderDeveloper(d) {
-  const dev = d.tools.developer;
-  document.getElementById('developer').innerHTML = `<div class="wideGrid"><div class="card"><h2>Developer Mode</h2><p class="muted">Contained diagnostics helpers. Anything that could mutate real gameplay stays disabled until it gets a dedicated safe implementation.</p>${table(['Tool','Available','Notes'], Object.entries(dev).filter(([k]) => typeof dev[k] === 'object').map(([k,v]) => [esc(k), v.available ? statusPill(true, 'Yes') : warnPill('Planned'), esc(v.note || v.endpoint || '')]))}</div><div class="card"><h2>Release Sanity Check</h2>${table(['Check','Status'], [['Syntax checks', warnPill('Run locally: node --check server.js')], ['Config diff', d.tools.configDiff.missingFromLive.length ? warnPill('Live config missing keys') : statusPill(true, 'OK')], ['Pre-flight', d.tools.preflight.ready ? statusPill(true, 'Ready') : statusPill(false, 'Blocked')]])}</div><div class="card"><h2>Fake Data Tools</h2><p class="muted">Planned: fake players, fake audience, fake roles, benchmark runs. Not active yet, because fake chaos should not accidentally become real chaos.</p></div></div>`;
-}
-
-function renderFuture(d) {
-  const planned = [
-    ['Performance Profiler', 'Track render time, route latency, slow actions, event-card execution time and wheel update timing.', 'active-ish: route/log metrics shown'],
-    ['API Benchmark Runner', 'Run controlled checks against OSR endpoints and OpenShock calls without starting a real round.', 'partial: API catalog and recent calls shown'],
-    ['Database Browser', 'Read-only SQLite/session explorer with table/blob views and export helpers.', 'partial: storage explorer shown'],
-    ['Event Card Simulator', 'Pick a card, fake a round context, preview modifiers/results.', 'partial: inspector shown'],
-    ['Objective Progress Inspector', 'Show why private/public objectives did or did not progress.', 'partial: objective data shown'],
-    ['Role Ability Inspector', 'Show hidden role triggers, passive progress, rewards and pending role effects.', 'partial: role inspector shown'],
-    ['Grouped Shocker Visualizer', 'Graph logical players, member devices, multipliers and final send calculations.', 'active: grouped view and test preview'],
-    ['Multiplier Calculator', 'Preview selected value → device multiplier → server cap → final OpenShock value.', 'active after test send'],
-    ['Shock Plan Preview', 'Before sending a test, show exactly which physical devices will receive values.', 'active: safe tests preview'],
-    ['Fake Round Simulator', 'Dry-run rounds using current config to test odds and event frequency.', 'active: simulator tab'],
-    ['Config Diff Viewer', 'Compare config.json with config.example.json and show missing/new/defaulted keys.', 'active: config tab'],
-    ['Config Editor', 'Careful future tool for editing safe live settings from the browser.', 'planned'],
-    ['OpenShock Latency Monitor', 'Track API latency, failures, cache usage and last successful send.', 'partial: API/logs shown'],
-    ['Network / Access Check', 'Show detected local URLs, publicBaseUrl, QR reachability and remote warnings.', 'partial: links tab'],
-    ['QR / Link Verifier', 'Validate host, player and audience links, keys and expected access behavior.', 'partial: links tab'],
-    ['Audience Simulator', 'Generate fake audience sessions/votes in dry-run mode to test thresholds.', 'planned'],
-    ['Token Economy Inspector', 'Show point/token balances, costs, purchases and reward events.', 'partial: session/raw JSON'],
-    ['Session Restore Tool', 'Browse archived sessions and restore one intentionally.', 'planned'],
-    ['Backup Bundle Export', 'Export config, session summary, logs and diagnostics into one zip.', 'planned; JSON export exists'],
-    ['Log Search & Filters', 'Filter logs by request path, device, status code or error text.', 'planned'],
-    ['Safety Checklist', 'Pre-game checklist for consent, device test, max intensity, STOP ALL and controller location.', 'active: pre-flight + tests'],
-    ['Release Sanity Check', 'Run syntax/config/readiness checks before pushing or packaging.', 'partial: developer tab'],
-    ['Sensor Diagnostics', 'Reserved for future microphone/sensor framework if the screaming-machine returns from exile.', 'planned'],
-    ['Plugin / Custom Card Inspector', 'Validate custom card packs or plugin hooks before they touch gameplay.', 'planned']
-  ];
-  document.getElementById('future').innerHTML = `<div class="card"><h2>Future Diagnostics Tools</h2><p class="muted">This list is now also a map of what is already partially built into diagnostics. Planned means not active; active-ish means useful now but not perfect.</p></div><div class="wideGrid">${planned.map(([name, desc, status], idx) => `<div class="card">${detailsBlock(`future:${idx}`, name, `<p class="muted">${esc(desc)}</p><p>Status: ${esc(status)}</p>`, true)}</div>`).join('')}</div>`;
-}
-
-function renderRaw(d) { document.getElementById('raw').innerHTML = `<div class="card"><h2>Raw Diagnostics JSON</h2><p class="muted">Auto-refresh will not overwrite this panel while the Raw JSON tab is open. Use the button below when you want a fresh snapshot.</p><div class="toolbar" style="margin-bottom:10px;"><button id="refreshRawBtn">Refresh Raw JSON</button><button id="copyRawBtn">Copy Redacted Export JSON</button></div><pre id="rawJson">${esc(JSON.stringify(d, null, 2))}</pre></div>`; document.getElementById('refreshRawBtn').onclick = () => load(true); document.getElementById('copyRawBtn').onclick = async () => { try { const data = await redactedExportJson(); await navigator.clipboard.writeText(JSON.stringify(data, null, 2)); toast('Redacted export JSON copied', 'ok'); } catch { toast('Clipboard copy failed', 'bad'); } }; }
+function renderRaw(d) { document.getElementById('raw').innerHTML = `<div class="card"><h2>Raw Diagnostics JSON</h2><p class="muted">Auto-refresh will not overwrite this panel while API & Inspectors is open. Use the button below when you want a fresh snapshot.</p><div class="toolbar" style="margin-bottom:10px;"><button id="refreshRawBtn">Refresh Raw JSON</button><button id="copyRawBtn">Copy Redacted Export JSON</button></div><pre id="rawJson">${esc(JSON.stringify(d, null, 2))}</pre></div>`; document.getElementById('refreshRawBtn').onclick = () => load(true); document.getElementById('copyRawBtn').onclick = async () => { try { const data = await redactedExportJson(); await navigator.clipboard.writeText(JSON.stringify(data, null, 2)); toast('Redacted export JSON copied', 'ok'); } catch { toast('Clipboard copy failed', 'bad'); } }; }
 
 function activeTabName() { return document.querySelector('.tab.active')?.dataset?.tab || 'overview'; }
-function render(d, { force = false } = {}) { captureDetailsState(); const scrollState = captureDiagnosticsScrollState(); const tab = activeTabName(); const holdInteractive = !force && interactiveTabs.has(tab) && document.getElementById(tab)?.innerHTML.trim(); snapshot = d; document.getElementById('lastUpdated').textContent = `Updated ${new Date(d.generatedAt).toLocaleString()} · auto-refresh ${autoRefreshEnabled ? 'every 5 seconds' : 'paused'}${holdInteractive ? ' · active tool held still' : ''}`; const maybe = (name, fn) => { if (holdInteractive && tab === name) return; fn(d); }; maybe('overview', renderOverview); maybe('preflight', renderPreflight); maybe('devices', renderDevices); maybe('tests', renderTests); maybe('api', renderApi); maybe('inspectors', renderInspectors); maybe('simulator', renderSimulator); maybe('config', renderConfig); maybe('storage', renderStorage); maybe('links', renderLinks); maybe('session', renderSession); maybe('logs', renderLogs); maybe('developer', renderDeveloper); maybe('future', renderFuture); if (force || tab !== 'raw' || !document.getElementById('rawJson')) renderRaw(d); restoreDetailsState(); restoreDiagnosticsScrollState(scrollState); }
+function render(d, { force = false } = {}) { captureDetailsState(); const scrollState = captureDiagnosticsScrollState(); const tab = activeTabName(); const holdInteractive = !force && interactiveTabs.has(tab) && snapshot !== null; snapshot = d; document.getElementById('lastUpdated').textContent = `Updated ${new Date(d.generatedAt).toLocaleString()} · auto-refresh ${autoRefreshEnabled ? 'every 5 seconds' : 'paused'}${holdInteractive ? ' · active tool held still' : ''}`; const maybe = (name, fn) => { if (holdInteractive && (tab === name || ({simulator:'tests',inspectors:'api',raw:'api'})[name] === tab)) return; fn(d); }; maybe('overview', renderOverview); maybe('preflight', renderPreflight); maybe('devices', renderDevices); maybe('tests', renderTests); maybe('api', renderApi); maybe('inspectors', renderInspectors); maybe('simulator', renderSimulator); maybe('config', renderConfig); maybe('storage', renderStorage); maybe('links', renderLinks); maybe('session', renderSession); maybe('logs', renderLogs); maybe('raw', renderRaw); restoreDetailsState(); restoreDiagnosticsScrollState(scrollState); }
 async function load(force=false) { if (!force && !autoRefreshEnabled) return; try { const d = await api(`/api/diagnostics/state${force ? '?refresh=true' : ''}`); render(d, { force }); } catch (err) { toast(err.message, 'bad'); document.getElementById('overview').innerHTML = `<div class="card"><h2>Diagnostics failed</h2><p>${esc(err.message)}</p></div>`; } }
-async function stopAll() { if (!confirm('Send STOP ALL to every loaded shocker?')) return; try { const data = await post('/api/diagnostics/stop-all'); toast(`STOP ALL sent to ${data.stopped} devices`, 'ok'); await load(false); } catch (err) { toast(err.message, 'bad'); } }
+async function stopAll() { if (!confirm('STOP ALL OpenShock and Toy outputs, including pending sequences?')) return; try { const data = await post('/api/diagnostics/stop-all'); toast('Stop All completed for OpenShock and Toys', 'ok'); await load(false); } catch (err) { toast(err.message, 'bad'); } }
 async function runPreflight() { try { const p = await api('/api/diagnostics/preflight'); toast(p.ready ? 'Pre-flight ready' : 'Pre-flight found blockers', p.ready ? 'ok' : 'bad'); await load(true); } catch (err) { toast(err.message, 'bad'); } }
 
-function setupTabs() { const saved = localStorage.getItem('osrDiagTab') || 'overview'; document.querySelectorAll('.tab').forEach(btn => { btn.onclick = () => { captureDetailsState(); document.querySelectorAll('.tab').forEach(b => b.classList.remove('active')); document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.tab).classList.add('active'); localStorage.setItem('osrDiagTab', btn.dataset.tab); if (snapshot) render(snapshot, { force: false }); }; if (btn.dataset.tab === saved) setTimeout(() => btn.click(), 0); }); }
+function setupTabs() { const previous = localStorage.getItem('osrDiagTab'); const saved = ({preflight:'overview',simulator:'tests',inspectors:'api',raw:'api',storage:'config',session:'logs'})[previous] || previous || 'overview'; document.querySelectorAll('.tab').forEach(btn => { btn.onclick = () => { captureDetailsState(); document.querySelectorAll('.tab').forEach(b => b.classList.remove('active')); document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); btn.classList.add('active'); document.getElementById('section-' + btn.dataset.tab).classList.add('active'); localStorage.setItem('osrDiagTab', btn.dataset.tab); if (snapshot) render(snapshot, { force: false }); }; if (btn.dataset.tab === saved) setTimeout(() => btn.click(), 0); }); }
 
 document.getElementById('refreshBtn').onclick = () => load(true);
 document.getElementById('reloadShockersBtn').onclick = async () => { try { await post('/api/diagnostics/reload-shockers'); toast('Shockers reloaded', 'ok'); await load(true); } catch (err) { toast(err.message, 'bad'); } };

@@ -17,7 +17,7 @@ function normalizeEventProvider(value) {
 }
 
 function eventPlayerHasProvider(player, provider) {
-  const devices = (player.devices || []).filter(device => device.enabled !== false);
+  const devices = (player.devices || []).filter(device => device.enabled !== false && (typeof presenceDeviceAllowed !== 'function' || presenceDeviceAllowed(device)));
   if (provider === "toy") return devices.some(device => device.provider === "intiface" && device.online !== false);
   if (provider === "shock") return devices.some(device => device.provider === "openshock");
   return devices.some(device => device.provider === "openshock" || (device.provider === "intiface" && device.online !== false));
@@ -39,6 +39,7 @@ function scaleEventDevice(device, powerMultiplier = 1) {
 
 async function activateEventPlayer(player, { provider = "any", rolledValue = 0, mode = null, shockDurationMs = null, powerMultiplier = 1, durationMultiplier = 1, templateOverride = null, outputRunToken = null } = {}) {
   assertOutputRunActive(outputRunToken);
+  if (typeof syncDevicePresence === 'function') syncDevicePresence();
   const normalizedProvider = normalizeEventProvider(provider);
   const s = safety();
   const selectedValue = clampInt(rolledValue, 0, s.serverMaxShockIntensity ?? 99);
@@ -61,7 +62,8 @@ async function activateEventPlayer(player, { provider = "any", rolledValue = 0, 
         shockDurationMs: baseDuration,
         requireGameIntegration: true,
         durationMsOverride: durationMs,
-        templateOverride
+        templateOverride,
+        outputRunToken
       }),
       provider: "intiface",
       deviceName: device.name
@@ -102,7 +104,7 @@ async function executeEventSequence(run) {
       if (run.cancelled || activeEventEffectRuns.get(run.id) !== run) break;
       const result = await activateEventPlayer(run.players[i], run.options);
       run.results.push(result);
-      if (!result.ok) break;
+      // A missing device must not cancel the remaining players' safe outputs.
       if (i < run.players.length - 1) await delayEventRun(run.delayMs);
     }
   } catch (err) {
@@ -247,6 +249,7 @@ function validateEventDeviceEffect(raw) {
 
 async function runEventDeviceEffects({ effects = [], targetPlayerIds = [], rolledValue = 0, mode = null, shockDurationMs = 700, outputRunToken = null } = {}) {
   assertOutputRunActive(outputRunToken);
+  if (typeof capturePresenceRun === 'function' && outputRunToken == null) outputRunToken = beginOutputRun();
   const context = { targetPlayerIds, rolledValue, mode, shockDurationMs, powerMultiplier: 1, durationMultiplier: 1, templateOverride: null, outputRunToken };
   const results = [];
   for (const raw of Array.isArray(effects) ? effects : []) {

@@ -37,17 +37,24 @@ function lastOutputDeviceAttempt(provider, deviceId) {
 }
 
 function beginOutputRun() {
+  if (typeof capturePresenceRun === 'function') return capturePresenceRun(outputRunGeneration);
   return outputRunGeneration;
 }
 
 function assertOutputRunActive(token) {
-  if (token !== null && token !== undefined && Number(token) !== outputRunGeneration) {
+  const generation = typeof presenceRunTokens !== 'undefined' ? presenceRunTokens.get(token)?.generation : Number(token);
+  if (token !== null && token !== undefined && generation !== outputRunGeneration) {
     throw new Error("Output run cancelled by Stop All");
   }
 }
 
 function cancelPendingOutputRuns() {
   outputRunGeneration += 1;
+  if (typeof presenceRunTokens !== 'undefined') presenceRunTokens.clear();
+  if (typeof intifaceService !== 'undefined' && intifaceService.devices) {
+    for (const device of intifaceService.devices.values()) device.OSRGeneration = intifaceService.nextDeviceGeneration++;
+    if (typeof syncDevicePresence === 'function') syncDevicePresence();
+  }
   if (typeof cancelPendingOpenShockRequests === "function") cancelPendingOpenShockRequests();
   if (typeof cancelAllEventEffectRuns === "function") cancelAllEventEffectRuns("Stop All");
   for (const run of activeGameToyRuns.values()) run.cancelled = true;
@@ -108,11 +115,6 @@ function gameTemplateValue(mode, progress, position, count, maxPower) {
 }
 
 function gameFeatureRole(rawDevice, feature, cacheKey) {
-  const state = readSessionState();
-  const mapping = state.intiface?.mappings?.[String(rawDevice.DeviceIndex)] || {};
-  const liveKey = `${rawDevice.DeviceIndex}:${feature.command}:${feature.featureIndex}:${feature.actuatorType}`;
-  const liveRole = mapping.features?.[liveKey];
-  if (liveRole) return String(liveRole);
   const cache = readPlayerSetupIntifaceCache();
   const cachedRole = cache.profiles?.[cacheKey]?.featureRoles?.[stableIntifaceFeatureKey(feature)];
   return String(cachedRole || "ignore");
@@ -180,11 +182,13 @@ function gameToyMaxPower(rolledValue, mode, device) {
 function rawIntifaceDeviceForConfigured(device) {
   if (typeof intifaceService === "undefined") return null;
   const runtime = intifaceService.snapshot();
+  const matches = (runtime.devices || []).filter(item => stableIntifaceDeviceKey(item) === device.id);
+  if (matches.length !== 1) return null;
   const byIndex = Number.isFinite(Number(device.DeviceIndex))
     ? (runtime.devices || []).find(item => Number(item.DeviceIndex) === Number(device.DeviceIndex))
     : null;
   if (byIndex && stableIntifaceDeviceKey(byIndex) === device.id) return byIndex;
-  return (runtime.devices || []).find(item => stableIntifaceDeviceKey(item) === device.id) || null;
+  return matches[0];
 }
 
 async function stopGameToyDevice(rawDevice) {
@@ -205,7 +209,9 @@ async function executeGameToyRun(run) {
   const steps = Math.max(1, Math.ceil(durationMs / intervalMs));
   try {
     for (let step = 0; step <= steps; step += 1) {
+      if (typeof syncDevicePresence === 'function') syncDevicePresence();
       if (run.cancelled || activeGameToyRuns.get(cacheKey)?.id !== run.id) break;
+      if (typeof presence !== 'undefined' && !presence.allowed('intiface', cacheKey, run.presenceSnapshot)) break;
       const progress = step / steps;
       const values = features.map((feature, index) => ({
         feature,
@@ -216,8 +222,11 @@ async function executeGameToyRun(run) {
       if (step < steps) await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
   } catch (err) {
+    recordOutputDeviceAttempt('intiface', cacheKey, { mode: 'template', success: false, error: err.message });
     console.warn(`[Intiface] Gameplay template failed for ${cacheKey}: ${err.message}`);
   } finally {
+    // Never send an old run's Stop to a new connection or a reused DeviceIndex.
+    if (typeof presence !== 'undefined' && !presence.allowed('intiface', cacheKey, run.presenceSnapshot)) return;
     const current = activeGameToyRuns.get(cacheKey);
     if (current?.id === run.id) {
       activeGameToyRuns.delete(cacheKey);
@@ -228,7 +237,8 @@ async function executeGameToyRun(run) {
   }
 }
 
-function startGameToyRun(device, { rolledValue, mode, shockDurationMs, requireGameIntegration = true, durationMsOverride = null, maxPowerPercentOverride = null, templateOverride = null }) {
+function startGameToyRun(device, { rolledValue, mode, shockDurationMs, requireGameIntegration = true, durationMsOverride = null, maxPowerPercentOverride = null, templateOverride = null, outputRunToken = null }) {
+  if (typeof presenceDeviceAllowed === 'function' && !presenceDeviceAllowed(device, outputRunToken)) return { ok: false, skipped: true, reason: 'Toy disconnected, blocked or queued output expired' };
   const cfg = gameIntifaceConfig();
   if (!cfg.enabled) return { ok: false, skipped: true, reason: "Intiface is disabled" };
   if (requireGameIntegration && !cfg.gameIntegrationEnabled) return { ok: false, skipped: true, reason: "Intiface game integration disabled" };
@@ -252,6 +262,7 @@ function startGameToyRun(device, { rolledValue, mode, shockDurationMs, requireGa
   const run = {
     id: nextGameToyRunId++, cacheKey: device.id, rawDevice, template, features, maxPower, durationMs, cancelled: false
   };
+  run.presenceSnapshot = typeof presence !== 'undefined' ? presence.snapshot() : null;
   activeGameToyRuns.set(device.id, run);
   executeGameToyRun(run).catch(err => console.warn(`[Intiface] Gameplay run failed: ${err.message}`));
   return {
@@ -277,6 +288,7 @@ function appliedOpenShockIntensity(rolledValue, mode, device, s) {
 
 async function activateOpenShockDevices(player, devices, { rolledValue, mode, shockDurationMs, exclusive, outputRunToken = null }) {
   assertOutputRunActive(outputRunToken);
+  if (typeof presenceDeviceAllowed === 'function') devices = devices.filter(device => presenceDeviceAllowed(device, outputRunToken));
   if (!devices.length) return { ok: false, provider: "openshock", skipped: true, devices: [] };
   const s = safety();
   const duration = clampInt(shockDurationMs, s.minDurationMs ?? 300, s.maxDurationMs ?? 1000);
@@ -354,11 +366,18 @@ async function findConfiguredOutputDevice(provider, deviceId) {
   return null;
 }
 
-async function testSetupDevice({ provider, deviceId, testType = "test", testValue = 10, testPower = 25, durationMs = 1500 } = {}) {
+async function testSetupDevice({ provider, deviceId, testType = "test", testValue = 10, testPower = 25, durationMs = 1500, expectedGeneration = null } = {}) {
+  const outputRunToken = beginOutputRun();
   const normalizedProvider = provider === "intiface" ? "intiface" : "openshock";
   const found = await findConfiguredOutputDevice(normalizedProvider, deviceId);
+  assertOutputRunActive(outputRunToken);
   if (!found) throw new Error("Configured device not found");
   const { player, device } = found;
+  if (typeof syncDevicePresence === 'function') {
+    syncDevicePresence();
+    if (expectedGeneration != null && presence.entries.get(presence.key(normalizedProvider, deviceId))?.generation !== expectedGeneration) throw new Error('Device connection or configuration changed; refresh and test again');
+    if (!presenceDeviceAllowed(device, outputRunToken)) return { ok: false, skipped: true, reason: 'Device is offline, blocked or connection changed', provider: normalizedProvider };
+  }
   if (device.enabled === false) return { ok: false, skipped: true, reason: "Device is disabled", provider: normalizedProvider, playerId: player.id };
 
   if (normalizedProvider === "intiface") {
@@ -367,6 +386,7 @@ async function testSetupDevice({ provider, deviceId, testType = "test", testValu
       mode: "normal",
       shockDurationMs: durationMs,
       requireGameIntegration: false,
+      outputRunToken,
       durationMsOverride: clampInt(durationMs, 500, 3000),
       maxPowerPercentOverride: Math.max(0, Math.min(100, Number(testPower) || 25))
     });
@@ -387,7 +407,7 @@ async function testSetupDevice({ provider, deviceId, testType = "test", testValu
   try {
     const response = await requestOpenShock("POST", "/2/shockers/control", {
       shocks: [{ id: device.id, type: isShock ? "Shock" : "Vibrate", intensity: safeIntensity, duration: safeDuration, exclusive: true }]
-    }, { action: isShock ? "setupShockTest" : "setupVibeTest" });
+    }, { action: isShock ? "setupShockTest" : "setupVibeTest", cancellable: true });
     return {
       ok: response.statusCode >= 200 && response.statusCode < 300,
       provider: "openshock",
@@ -428,6 +448,7 @@ async function stopSetupDevice({ provider, deviceId } = {}) {
 }
 
 async function controlHostDevice({ playerId, provider, deviceId, mode = null, intensity = 0, durationMs = null } = {}) {
+  const outputRunToken = beginOutputRun();
   const normalizedProvider = String(provider || "").toLowerCase();
   if (!['openshock', 'intiface'].includes(normalizedProvider)) throw new Error("Unsupported device provider");
   const id = String(deviceId || "");
@@ -436,6 +457,7 @@ async function controlHostDevice({ playerId, provider, deviceId, mode = null, in
   if (!found || (playerId && String(found.player.id) !== String(playerId))) throw new Error("Device is not assigned to the selected player");
 
   const requestedMode = String(mode || "").toLowerCase();
+  if (requestedMode !== 'stop') assertOutputRunActive(outputRunToken);
   const allowedModes = normalizedProvider === "intiface" ? ["activate", "stop"] : ["shock", "vibrate", "stop"];
   if (!allowedModes.includes(requestedMode)) throw new Error(`Unsupported ${normalizedProvider === "intiface" ? "Toy" : "Shock"} control mode`);
   if (requestedMode === "stop") {
@@ -444,6 +466,7 @@ async function controlHostDevice({ playerId, provider, deviceId, mode = null, in
     return stopped;
   }
   if (found.device.enabled === false) throw new Error("Device is disabled");
+  if (typeof presenceDeviceAllowed === 'function' && !presenceDeviceAllowed(found.device, outputRunToken)) throw new Error('Device is offline, blocked or connection changed');
   if (found.device.online === false) throw new Error("Device is offline");
   if (normalizedProvider === "intiface" && found.device.ambiguous === true) throw new Error("Toy identity is ambiguous");
   if (normalizedProvider === "intiface" && found.device.mappingReady !== true) throw new Error("Toy output is unmapped");
@@ -468,6 +491,7 @@ async function controlHostDevice({ playerId, provider, deviceId, mode = null, in
 }
 
 async function activateGamePlayer({ playerId, rolledValue = 0, mode = null, shockDurationMs = null, exclusive = true, outputRunToken = null } = {}) {
+  if (typeof capturePresenceRun === 'function' && outputRunToken == null) outputRunToken = beginOutputRun();
   assertOutputRunActive(outputRunToken);
   const id = String(playerId || "");
   if (!id) throw new Error("Missing player id");
@@ -496,7 +520,7 @@ async function activateGamePlayer({ playerId, rolledValue = 0, mode = null, shoc
 
   const openshock = await activateOpenShockDevices(player, shockDevices, { rolledValue: selectedValue, mode: outcomeMode, shockDurationMs: duration, exclusive, outputRunToken });
   assertOutputRunActive(outputRunToken);
-  const intiface = toyDevices.map(device => ({ ...startGameToyRun(device, { rolledValue: selectedValue, mode: outcomeMode, shockDurationMs: duration }), provider: "intiface", deviceId: device.id, deviceName: device.name }));
+  const intiface = toyDevices.map(device => ({ ...startGameToyRun(device, { rolledValue: selectedValue, mode: outcomeMode, shockDurationMs: duration, outputRunToken }), provider: "intiface", deviceId: device.id, deviceName: device.name }));
   for (const device of shockDevices) {
     const applied = (openshock.devices || []).find(item => String(item.id) === String(device.id));
     recordOutputDeviceAttempt("openshock", device.id, {
@@ -556,7 +580,8 @@ function safeOutputDeviceStatus(device, shockReachable, intifaceCache, toyRuntim
   const online = provider === "intiface" ? Boolean(device.online && toyRuntime.ready) : Boolean(device.online && shockReachable);
   const ambiguous = provider === "intiface" && device.ambiguous === true;
   const mappingReady = provider === "intiface" ? device.mappingReady === true : true;
-  const readiness = !enabled ? "disabled" : ambiguous ? "blocked" : !online ? "offline" : !mappingReady ? "unmapped" : "ready";
+  const entry = typeof presence !== 'undefined' ? presence.entries.get(presence.key(provider, device.id)) : null;
+  const readiness = !enabled ? "disabled" : entry ? (entry.status === 'online' ? 'ready' : entry.status) : ambiguous ? "blocked" : !online ? "offline" : !mappingReady ? "unmapped" : "ready";
   const roles = provider === "intiface"
     ? [...new Set(Object.values(intifaceCache.profiles?.[device.id]?.featureRoles || {}).map(role => String(role || "ignore").toLowerCase()).filter(role => role !== "ignore"))]
     : ["shock", "vibrate", "stop"];
@@ -566,7 +591,8 @@ function safeOutputDeviceStatus(device, shockReachable, intifaceCache, toyRuntim
   return {
     id: String(device.id), provider,
     name: String(device.memberName || device.name || (provider === "intiface" ? "Toy" : "Shock")),
-    enabled, connection: provider === "intiface" && ["connecting", "reconnecting"].includes(toyRuntime.state) ? toyRuntime.state : online ? "online" : "offline",
+    enabled, connection: entry?.status || (provider === "intiface" && ["connecting", "reconnecting"].includes(toyRuntime.state) ? toyRuntime.state : online ? "online" : "offline"),
+    reason: entry?.reason || '', generation: entry?.generation, connectedAt: entry?.connectedAt, disconnectedAt: entry?.disconnectedAt, cancelled: entry?.cancelled || false,
     disabled: !enabled,
     online: enabled && online, ambiguous, mappingReady, readiness, ready: readiness === "ready",
     roles, intensityMultiplier: clampPercent(device.intensityMultiplier),
@@ -613,7 +639,9 @@ async function getOutputStatusSnapshot(existingPlayers = null) {
       shock: { configured: shockConfigured, reachable: Boolean(shockReachable), lastRequestAt: openShockRuntimeStatus.lastRequestAt, lastError: openShockRuntimeStatus.lastError },
       toy: { configured: toyConfigured, enabled: toyRuntime.enabled === true, connected: toyRuntime.ready === true, state: toyRuntime.state || "disabled", deviceCount: Number(toyRuntime.connectedDeviceCount || 0) }
     },
-    players: players.map(player => outputStatusForPlayer(player, shockReachable, intifaceCache, toyRuntime))
+    players: players.map(player => outputStatusForPlayer(player, shockReachable, intifaceCache, toyRuntime)),
+    hardwareCheck: typeof hardwarePreflight === 'function' ? hardwarePreflight(players) : null,
+    transitions: typeof presence !== 'undefined' ? presence.transitions.slice(-10) : []
   };
 }
 
@@ -624,7 +652,7 @@ async function stopAllGameOutputs(ids = []) {
   let shockIds = Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
   if (!shockIds.length) {
     try {
-      const players = await getConfiguredPlayers(null, { includeDisabled: true });
+      const players = typeof readPlayerSetup === 'function' ? (readPlayerSetup()?.players || []) : await getConfiguredPlayers(null, { includeDisabled: true });
       shockIds = Array.from(new Set(players.flatMap(player => player.devices.filter(device => device.provider === "openshock").map(device => device.id))));
     } catch {}
   }
