@@ -130,7 +130,9 @@ function bindDynamic() {
   document.querySelectorAll("[data-assign-player]").forEach(select => select.onchange = () => {
     if (!select.value) return;
     const [provider, ...rest] = select.dataset.assignPlayer.split(":");
-    setupAction({ action: "assignDevice", provider, deviceId: rest.join(":"), playerId: select.value, deviceName: select.closest(".device-row").querySelector("strong").textContent }).catch(showError);
+    setupAction({ action: "assignDevice", provider, deviceId: rest.join(":"), playerId: select.value, deviceName: select.closest(".device-row").querySelector("strong").textContent }).then(() => {
+      setMessage(provider === "intiface" ? "Toy assignment saved. Open Toy mappings to assign feature roles and save the profile." : "Device assignment saved.");
+    }).catch(showError);
   });
   document.querySelectorAll("[data-device-enabled]").forEach(el => el.onchange = () => updateDevice(el.dataset.provider, el.dataset.device, { enabled: el.checked }).catch(showError));
   document.querySelectorAll("[data-device-multiplier]").forEach(el => el.onchange = () => updateDevice(el.dataset.provider, el.dataset.device, { intensityMultiplier: Math.max(0, Math.min(100, Number(el.value) || 0)) }).catch(showError));
