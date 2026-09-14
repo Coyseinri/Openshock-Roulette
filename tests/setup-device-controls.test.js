@@ -16,6 +16,7 @@ assert.ok(toySetup.includes("Save assignment &amp; mapping"),"Toy Setup must exp
 assert.ok(setup.includes("Toy assignment saved"),"Player Setup must confirm that Toy assignment is persisted immediately");
 const intifaceClient=fs.readFileSync(path.join(root,"intiface","intiface-client.js"),"utf8");
 assert.ok(intifaceClient.includes("Disconnected — mapping can still be saved"),"A disconnected Toy must retain its mapping card so the profile can be saved");
+assert.ok(intifaceClient.includes("Automatic mapping save failed"),"Toy mapping changes must be persisted automatically");
 assert.ok(routes.includes('/api/setup/test-device'));
 assert.ok(routes.includes('/api/setup/stop-device'));
 assert.ok(activation.includes("requireGameIntegration = true"),"Setup tests must be able to reuse Toy templates while gameplay integration is disabled");

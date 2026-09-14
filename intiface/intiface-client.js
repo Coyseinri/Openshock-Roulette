@@ -99,6 +99,7 @@
     deviceListInteractionUntil: 0,
     statePollTimer: null
   };
+  let mappingSaveTimer = null;
 
   function log(message, data = null, level = "info") {
     const time = new Date().toLocaleTimeString();
@@ -1255,6 +1256,10 @@
 
   function markMappingDirty() {
     if (els.mappingStatus) els.mappingStatus.textContent = "Unsaved changes";
+    if (IS_SETUP) {
+      window.clearTimeout(mappingSaveTimer);
+      mappingSaveTimer = window.setTimeout(() => saveMappings().catch(err => log("Automatic mapping save failed", err.message, "error")), 600);
+    }
   }
 
   function updateCacheStatus() {
