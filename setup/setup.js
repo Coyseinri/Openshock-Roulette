@@ -90,9 +90,18 @@ function render() {
   const shock = state.providers?.shock || {};
   const toy = state.providers?.toy || {};
   $("shockStatus").innerHTML = statusText(Boolean(shock.reachable), shock.reachable ? "reachable" : "last request failed");
-  $("toyStatus").innerHTML = statusText(Boolean(toy.connected), toy.enabled === false ? "disabled" : toy.connected ? "connected" : "disconnected", toy.enabled === false);
+  const toyDisabled = toy.enabled === false;
+  const toyIntegrationOff = !toyDisabled && toy.gameIntegrationEnabled === false;
+  $("toyStatus").innerHTML = statusText(Boolean(toy.connected), toyDisabled ? "disabled" : toy.connected ? "connected" : "disconnected", toyDisabled);
   $("shockCount").textContent = `${(state.devices?.shock || []).length} device(s) found`;
   $("toyCount").textContent = `${toy.deviceCount ?? (state.devices?.toy || []).filter(d => d.online).length} connected device(s)`;
+  const toyIntegrationNotice = $("toyIntegrationNotice");
+  if (toyIntegrationNotice) {
+    toyIntegrationNotice.hidden = !toyIntegrationOff;
+    toyIntegrationNotice.textContent = toyIntegrationOff
+      ? "Toy gameplay is disabled. Enable Intiface game integration in the host Game settings and save config before starting a roll."
+      : "";
+  }
   const active = (state.readiness || []).filter(item => item.enabled);
   const ready = active.filter(item => item.ready);
   const notReady = active.filter(item => !item.ready);

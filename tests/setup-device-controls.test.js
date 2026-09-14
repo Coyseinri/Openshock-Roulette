@@ -14,6 +14,9 @@ assert.ok(setup.includes("window.confirm"),"Real Shock test must require deliber
 assert.ok(setup.includes("Save assignment &amp; mapping"),"Blocked Toy guidance must explain how to persist assignment and mapping");
 assert.ok(toySetup.includes("Save assignment &amp; mapping"),"Toy Setup must expose an explicit assignment-and-mapping save action");
 assert.ok(setup.includes("Toy assignment saved"),"Player Setup must confirm that Toy assignment is persisted immediately");
+assert.ok(setup.includes("Toy gameplay is disabled"),"Player Setup must explain when Toy gameplay integration is disabled");
+const setupHtml=fs.readFileSync(path.join(root,"setup","index.html"),"utf8");
+assert.ok(setupHtml.includes('id="toyIntegrationNotice"'),"Setup must provide a dedicated Toy integration warning area");
 const intifaceClient=fs.readFileSync(path.join(root,"intiface","intiface-client.js"),"utf8");
 assert.ok(intifaceClient.includes("Disconnected — mapping can still be saved"),"A disconnected Toy must retain its mapping card so the profile can be saved");
 assert.ok(intifaceClient.includes("Automatic mapping save failed"),"Toy mapping changes must be persisted automatically");

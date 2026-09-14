@@ -456,7 +456,13 @@ async function getPlayerSetupState({ forceRefresh = false } = {}) {
         const runtime = typeof openShockRuntimeStatus !== "undefined" ? openShockRuntimeStatus : { reachable: null, lastError: null };
         return { reachable: runtime.reachable === null ? (!shockerError && !shockerResult.warning) : runtime.reachable, lastError: runtime.lastError || shockerError || shockerResult.warning || null };
       })(),
-      toy: { enabled: CONFIG.intiface?.enabled === true, connected: Boolean(typeof intifaceService !== "undefined" && intifaceService.snapshot()?.ready), state: typeof intifaceService !== "undefined" ? intifaceService.snapshot()?.state : "disabled", deviceCount: liveToys.size }
+      toy: {
+        enabled: CONFIG.intiface?.enabled === true,
+        gameIntegrationEnabled: CONFIG.intiface?.gameIntegrationEnabled === true,
+        connected: Boolean(typeof intifaceService !== "undefined" && intifaceService.snapshot()?.ready),
+        state: typeof intifaceService !== "undefined" ? intifaceService.snapshot()?.state : "disabled",
+        deviceCount: liveToys.size
+      }
     }
   };
 }
