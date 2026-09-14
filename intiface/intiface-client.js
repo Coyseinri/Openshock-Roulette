@@ -75,6 +75,7 @@
     nextId: 1,
     pending: new Map(),
     devices: new Map(),
+    lastKnownDevices: new Map(),
     players: [],
     config: { ...DEFAULTS },
     mappings: {},
@@ -222,13 +223,16 @@
         if (els.serverStatus) els.serverStatus.textContent = `${payload.ServerName || "Intiface"} v${payload.MessageVersion ?? "?"}`;
       } else if (name === "DeviceList") {
         state.devices.clear();
-        for (const device of payload.Devices || []) upsertDevice(device);
+        const devices = payload.Devices || [];
+        if (devices.length) for (const device of devices) upsertDevice(device);
+        else for (const device of state.lastKnownDevices.values()) state.devices.set(Number(device.DeviceIndex), { ...device, _offline: true });
         renderDevices();
       } else if (name === "DeviceAdded") {
         upsertDevice(payload);
         renderDevices();
       } else if (name === "DeviceRemoved") {
-        state.devices.delete(Number(payload.DeviceIndex));
+        const existing = state.devices.get(Number(payload.DeviceIndex)) || state.lastKnownDevices.get(Number(payload.DeviceIndex));
+        if (existing) state.devices.set(Number(payload.DeviceIndex), { ...existing, _offline: true });
         renderDevices();
       } else if (name === "ScanningFinished") {
         log("Scanning finished");
@@ -242,8 +246,10 @@
     const index = Number(raw.DeviceIndex);
     if (!Number.isFinite(index)) return;
     const device = { ...raw, DeviceIndex: index, features: extractOutputFeatures(raw) };
+    delete device._offline;
     device.cacheKey = deviceCacheKey(device);
     state.devices.set(index, device);
+    state.lastKnownDevices.set(index, { ...device });
     if (!state.deviceRuntime.has(index)) state.deviceRuntime.set(index, { connectedAt: new Date().toISOString(), lastCommand: "None", lastCommandAt: null, errors: 0, battery: null, rssi: null });
     recordCapabilities().catch(err => log("Capability database update failed", err.message, "warn"));
     applyCachedProfile(device);
@@ -452,7 +458,11 @@
     if (deviceDefinitionChanged && !deviceListIsBeingUsed()) {
       state.runtimeDeviceSignature = nextSignature;
       state.devices.clear();
-      for (const device of state.runtimeDevices) upsertDevice(device);
+      if (state.runtimeDevices.length) {
+        for (const device of state.runtimeDevices) upsertDevice(device);
+      } else {
+        for (const device of state.lastKnownDevices.values()) state.devices.set(Number(device.DeviceIndex), { ...device, _offline: true });
+      }
       renderDevices();
     }
 
@@ -925,7 +935,7 @@
     const features = device.features || [];
     const selected = String(state.selectedDeviceIndex) === String(device.DeviceIndex);
     const cached = Boolean(state.cache?.profiles?.[device.cacheKey]);
-    const badges = features.length ? features.map(f => `<span class="badge ok">${escapeHtml(f.actuatorType)} #${f.featureIndex}</span>`).join("") : `<span class="badge warn">No output features found</span>`;
+    const badges = `${device._offline ? `<span class="badge warn">Disconnected — mapping can still be saved</span>` : ""}${features.length ? features.map(f => `<span class="badge ok">${escapeHtml(f.actuatorType)} #${f.featureIndex}</span>`).join("") : `<span class="badge warn">No output features found</span>`}`;
     const cacheBadge = cached ? `<span class="badge ok">Cached profile</span>` : `<span class="badge warn">No cache yet</span>`;
     const profile = profileSettingsForDevice(device.DeviceIndex);
     const mappingHtml = IS_SETUP ? `
@@ -953,7 +963,7 @@
             <div class="badge-row">${badges}${cacheBadge}</div>
           </div>
           <div class="button-row">
-            <button data-test-all-active="${device.DeviceIndex}">Test All Active Features</button>
+            <button data-test-all-active="${device.DeviceIndex}"${device._offline ? " disabled" : ""}>Test All Active Features</button>
             <button class="secondary" data-stop-device="${device.DeviceIndex}">Stop Device</button>
           </div>
         </div>
@@ -990,7 +1000,7 @@
           </div>
         </label>
         <div class="button-row">
-          <button data-test-feature="${escapeHtml(key)}" data-device-index="${device.DeviceIndex}">Test Feature</button>
+          <button data-test-feature="${escapeHtml(key)}" data-device-index="${device.DeviceIndex}"${device._offline ? " disabled" : ""}>Test Feature</button>
           <button class="secondary" data-zero-feature="${escapeHtml(key)}" data-device-index="${device.DeviceIndex}">Zero</button>
         </div>
       </div>`;
