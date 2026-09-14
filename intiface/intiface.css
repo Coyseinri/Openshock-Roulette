@@ -192,3 +192,4 @@ code {
 .template-flow-legend span { display:inline-flex; align-items:center; gap:.4rem; }
 .template-flow-legend i { display:inline-block; width:1.2rem; height:.2rem; border-radius:999px; }
 @media (max-width: 620px) { .template-flow-head { flex-direction:column; } .template-flow-graph svg { height:13rem; } }
+.mapping-help { border-left: 3px solid var(--accent); padding: .7rem .9rem; background: rgba(122,167,255,.08); border-radius: .5rem; }

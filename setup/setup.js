@@ -63,7 +63,7 @@ function deviceStatus(device) {
 function deviceCard(player, device) {
   const isToy = device.provider === "intiface";
   const mappingWarning = isToy && !device.mappingReady
-    ? `<div class="mapping-warning">No active mapped Toy output. <a href="/setup#toys">Open Advanced Setup</a>.</div>` : "";
+    ? `<div class="mapping-warning">No active mapped Toy output. Open <a href="/setup#toys">Toy mappings</a>, select this Toy, assign it to a player, map at least one output role, then click <strong>Save assignment &amp; mapping</strong>.</div>` : "";
   const testControls = isToy
     ? `<div class="test-controls"><span class="device-meta">Test power: 25% × multiplier</span><button data-action="test-toy" data-provider="intiface" data-device="${esc(device.id)}">Test Toy</button><button class="danger" data-action="stop-device" data-provider="intiface" data-device="${esc(device.id)}">Stop</button></div>`
     : `<div class="test-controls"><button data-action="test-vibe" data-provider="openshock" data-device="${esc(device.id)}">Vibe Test</button><label>Shock test <input class="shock-test-value" type="number" min="1" max="99" value="10" data-shock-test-value="${esc(device.id)}"></label><button class="warn" data-action="test-shock" data-provider="openshock" data-device="${esc(device.id)}">TEST SHOCK</button></div>`;
