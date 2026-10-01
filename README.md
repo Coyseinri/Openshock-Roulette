@@ -577,6 +577,16 @@ If automatic discovery fails, devices can be configured manually in `config/shoc
 
 ## Safety Controls
 
+Read the official [OpenShock Safety Rules](https://wiki.openshock.org/home/safety-rules) before using shockers. This project adds game controls on top of OpenShock; it does not make unsafe placement, non-consensual use or reckless intensity magically safe.
+
+OpenShock's core warnings are blunt for a reason:
+
+> Do not wear the shocker near your neck or your heart.
+
+> Do not touch the pins of the shocker with both hands at the same time.
+
+Avoid placing shockers near the neck, chest/heart area, spine or anywhere current could cross the chest. If someone has chest pain, breathing difficulty, irregular heartbeat, loss of consciousness, vision/hearing issues or any other worrying symptom after a shock, stop immediately and contact emergency services.
+
 The application includes:
 
 - STOP ALL button
@@ -595,13 +605,18 @@ The application includes:
 Recommended real-world rules:
 
 - Agree on intensity limits beforehand
+- Agree on a safeword or stop signal before play starts
 - Test devices before starting
-- Keep the controller nearby
+- Keep the controller, OpenShock hub and any physical E-stop reachable
 - Allow immediate opt-out
 - Never force participation
+- Do not use shockers on anyone under 18
+- Do not use shockers on anyone with heart conditions, implanted medical devices, seizure risk, pregnancy or reduced ability to consent
+- Do not play while intoxicated, asleep, restrained without a reliable release, bathing, swimming or otherwise unable to stop
+- Start low, increase slowly and treat every new device placement as untested
 - Do not rely solely on software for safety
 
-The STOP ALL button is traditionally discovered approximately one round later than ideal. For best results, locate it before you need it.
+If your hub has an E-stop, OpenShock documents it as a way to stop current and pending shocks, vibrations and beeps until reset. OSR's STOP ALL button is useful, but physical emergency control wins. Locate both before you need them, because discovering the stop button mid-chaos is a bold strategy and not a safety plan.
 
 ---
 
