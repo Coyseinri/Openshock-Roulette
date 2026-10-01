@@ -9,6 +9,52 @@ function clampPercent(value, fallback = 100) {
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 
+function clampNumber(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function setupIntifaceConfigSnapshot(config = readConfig()) {
+  const intiface = config.intiface || {};
+  const game = intiface.game || {};
+  return {
+    enabled: intiface.enabled === true,
+    websocketUrl: String(intiface.websocketUrl || "ws://127.0.0.1:12345"),
+    gameIntegrationEnabled: intiface.gameIntegrationEnabled === true,
+    activationDurationMultiplier: clampNumber(game.activationDurationMultiplier, 0.1, 20, 1),
+    vibeDurationMultiplier: clampNumber(game.vibeDurationMultiplier, 0.1, 20, 1),
+    minDurationMs: Math.round(clampNumber(game.minDurationMs, 100, 60000, 500)),
+    maxDurationMs: Math.round(clampNumber(game.maxDurationMs, 100, 120000, 30000))
+  };
+}
+
+function updateSetupIntifaceSettings(settings = {}) {
+  const websocketUrl = String(settings.websocketUrl || "").trim() || "ws://127.0.0.1:12345";
+  if (!/^wss?:\/\/[^\s]+$/i.test(websocketUrl)) throw new Error("Intiface WebSocket URL must start with ws:// or wss://");
+  const current = readConfig();
+  const next = {
+    ...current,
+    intiface: {
+      ...(current.intiface || {}),
+      enabled: settings.enabled === true,
+      websocketUrl,
+      gameIntegrationEnabled: settings.gameIntegrationEnabled === true,
+      game: {
+        ...(current.intiface?.game || {}),
+        activationDurationMultiplier: clampNumber(settings.activationDurationMultiplier, 0.1, 20, 1),
+        vibeDurationMultiplier: clampNumber(settings.vibeDurationMultiplier, 0.1, 20, 1),
+        minDurationMs: Math.round(clampNumber(settings.minDurationMs, 100, 60000, 500)),
+        maxDurationMs: Math.round(clampNumber(settings.maxDurationMs, 100, 120000, 30000))
+      }
+    }
+  };
+  if (next.intiface.game.maxDurationMs < next.intiface.game.minDurationMs) next.intiface.game.maxDurationMs = next.intiface.game.minDurationMs;
+  writeConfig(next);
+  CONFIG = readConfig();
+  return setupIntifaceConfigSnapshot(CONFIG);
+}
+
 function makePersistentPlayerId() {
   return `osr-player:${randomUUID()}`;
 }
@@ -446,6 +492,7 @@ async function getPlayerSetupState({ forceRefresh = false } = {}) {
     devices: { shock: availableShock, toy: availableToys },
     suggestions,
     readiness,
+    intifaceConfig: setupIntifaceConfigSnapshot(CONFIG),
     hardwareCheck: typeof hardwarePreflight === 'function' ? hardwarePreflight(players) : null,
     session: (() => {
       const session = readSessionState();
@@ -486,7 +533,9 @@ function syncLegacyOpenShockMultiplier(device) {
 async function applyPlayerSetupAction(body = {}) {
   const action = String(body.action || body.type || "");
   let setup = readPlayerSetup() || writePlayerSetup({ players: [] });
-  if (action === "createPlayer") {
+  if (action === "updateIntifaceSettings") {
+    updateSetupIntifaceSettings(body.settings || body.intiface || {});
+  } else if (action === "createPlayer") {
     const name = String(body.name || "").trim();
     if (!name) throw new Error("Player name is required");
     setup.players.push(normalizeConfiguredPlayer({ id: makePersistentPlayerId(), name, enabled: true, devices: [] }));
