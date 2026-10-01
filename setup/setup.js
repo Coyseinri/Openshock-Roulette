@@ -106,6 +106,7 @@ function render() {
   const ready = active.filter(item => item.ready);
   const notReady = active.filter(item => !item.ready);
   $("readiness").innerHTML = `<div>Ready ${ready.length}/${active.length} active players</div><a href="#hardware">Hardware check: ${esc(state.hardwareCheck?.status || 'checking')}</a>${state.hardwareCheck?.blockers?.length ? `<div class="mapping-warning">Resolve blocked mappings before starting.</div>` : notReady.length ? `<div class="mapping-warning">No online output: ${notReady.map(item => esc(item.name)).join(", ")}. You may still start.</div>` : ""}`;
+  renderIntifaceSettings();
   if (typeof renderHardwareCheck === 'function') renderHardwareCheck(state.hardwareCheck);
   // Polling must not replace an open selector or an unfinished edit.
   if (document.querySelector('[data-setup-panel="players"]')?.contains(document.activeElement)) return;
@@ -114,6 +115,53 @@ function render() {
   $("toyDevices").innerHTML = pool(state.devices?.toy, "intiface");
   $("suggestions").innerHTML = (state.suggestions || []).map(s => `<div class="device-row"><span>${esc(s.deviceName)} → <strong>${esc(s.playerName)}</strong></span><button data-action="accept-suggestion" data-provider="${esc(s.provider)}" data-device="${esc(s.deviceId)}" data-name="${esc(s.deviceName)}" data-player="${esc(s.playerId)}">Accept</button></div>`).join("") || `<p class="device-meta">No suggestions.</p>`;
   bindDynamic();
+}
+
+function setSelectValue(id, value) {
+  const el = $(id);
+  if (el && document.activeElement !== el) el.value = String(value === true);
+}
+
+function setInputValue(id, value) {
+  const el = $(id);
+  if (el && document.activeElement !== el) el.value = value ?? "";
+}
+
+function renderIntifaceSettings() {
+  const cfg = state.intifaceConfig || {};
+  setSelectValue("intifaceEnabled", cfg.enabled === true);
+  setInputValue("intifaceWebsocketUrl", cfg.websocketUrl || "ws://127.0.0.1:12345");
+  setSelectValue("intifaceGameIntegrationEnabled", cfg.gameIntegrationEnabled === true);
+  setInputValue("toyActivationDurationMultiplier", cfg.activationDurationMultiplier ?? 1);
+  setInputValue("toyVibeDurationMultiplier", cfg.vibeDurationMultiplier ?? 1);
+  setInputValue("toyMinDurationMs", cfg.minDurationMs ?? 500);
+  setInputValue("toyMaxDurationMs", cfg.maxDurationMs ?? 30000);
+  const runtime = state.providers?.toy || {};
+  const status = $("intifaceSettingsStatus");
+  if (status) status.textContent = `Status: ${runtime.enabled === false ? "disabled" : runtime.connected ? "connected" : runtime.state || "disconnected"} · ${runtime.deviceCount || 0} Toy(s) visible.`;
+}
+
+function numberField(id, fallback) {
+  const value = Number($(id)?.value);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+async function saveIntifaceSettings() {
+  const payload = {
+    action: "updateIntifaceSettings",
+    settings: {
+      enabled: $("intifaceEnabled").value === "true",
+      websocketUrl: $("intifaceWebsocketUrl").value.trim(),
+      gameIntegrationEnabled: $("intifaceGameIntegrationEnabled").value === "true",
+      activationDurationMultiplier: numberField("toyActivationDurationMultiplier", 1),
+      vibeDurationMultiplier: numberField("toyVibeDurationMultiplier", 1),
+      minDurationMs: numberField("toyMinDurationMs", 500),
+      maxDurationMs: numberField("toyMaxDurationMs", 30000)
+    }
+  };
+  setMessage("Saving Toy settings…");
+  await setupAction(payload);
+  setMessage("Toy settings saved.");
 }
 
 function updateDevice(provider, deviceId, patch) { return setupAction({ action: "updateDevice", provider, deviceId, ...patch }); }
@@ -165,6 +213,10 @@ $("createPlayerBtn").onclick = () => { const name = $("newPlayerName").value.tri
 $("startGameBtn").onclick = () => setupAction({ action: "completeSetup" }).then(() => { window.location.href = "/"; }).catch(showError);
 $("refreshShockBtn").onclick = () => { setMessage("Refreshing OpenShock devices…"); load(true).then(() => setMessage("Shock devices refreshed.")).catch(showError); };
 $("scanToyBtn").onclick = () => { setMessage("Scanning Intiface devices…"); postJson("/api/setup/scan-intiface").then(data => { state = data; render(); setMessage("Toy scan complete."); }).catch(showError); };
+$("saveIntifaceSettingsBtn").onclick = () => saveIntifaceSettings().catch(showError);
+$("connectIntifaceBtn").onclick = () => { setMessage("Connecting to Intiface…"); postJson("/api/intiface/connect").then(() => load()).then(() => setMessage("Intiface connect requested.")).catch(showError); };
+$("reconnectIntifaceBtn").onclick = () => { setMessage("Reconnecting to Intiface…"); postJson("/api/intiface/reconnect").then(() => load()).then(() => setMessage("Intiface reconnect requested.")).catch(showError); };
+$("disconnectIntifaceBtn").onclick = () => { setMessage("Disconnecting Intiface…"); postJson("/api/intiface/disconnect").then(() => load()).then(() => setMessage("Intiface disconnected.")).catch(showError); };
 $("exportConfigBtn").onclick = () => {
   const scopes = [...document.querySelectorAll("[data-export-scope]:checked")].map(input => input.value);
   if (!scopes.length) return setMessage("Select at least one export scope.", true);
