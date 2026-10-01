@@ -146,6 +146,16 @@ The same values can still be edited directly in `config/config.json`:
 
 Configure every Toy in Advanced Toy Setup before enabling it for gameplay. Give identical devices unique display names in Intiface; OSR intentionally refuses an ambiguous identity instead of guessing which device should activate.
 
+If a Toy does nothing:
+
+- Check that Intiface Central is running
+- Check that `/setup#intiface` has the correct WebSocket URL and Intiface connection enabled
+- Check that Toy gameplay is enabled before starting a roll
+- Open `/setup#toys` and confirm the Toy has saved feature mappings
+- Give identical Toys unique display names in Intiface, then scan again
+- Run `/setup#hardware` and test the specific device at a low setting
+- Check Diagnostics for provider status, output results and mapping warnings
+
 ### Configuration export and import
 
 Player Setup can export and import three selectable scopes: logical players, stable device mappings and the reusable game profile. Imports support **Merge** and **Replace selected scopes**. OSR validates the complete file first, shows a grouped change preview, and only enables Apply for that exact validated version. A local backup is created in `data/config-import-backups/` before anything changes.
@@ -550,12 +560,13 @@ If automatic discovery fails, devices can be configured manually in `config/shoc
 3. Connect the OpenShock devices and/or start Intiface Central.
 4. Start the OSR server.
 5. Open `/setup` and create or review the players.
-6. Assign every Shock and Toy device to the correct player.
-7. Open `/setup#toys` when Toy feature mapping or template testing is required.
-8. Test every enabled device at a low setting.
-9. Complete Player Setup and open the main screen.
-10. Let the Host, Players and Audience scan their QR codes.
-11. Begin regretting your life choices.
+6. Open `/setup#intiface` and enable/configure Intiface if Toys are part of the game.
+7. Assign every Shock and Toy device to the correct player.
+8. Open `/setup#toys` when Toy feature mapping or template testing is required.
+9. Test every enabled device at a low setting.
+10. Complete Player Setup and open the main screen.
+11. Let the Host, Players and Audience scan their QR codes.
+12. Begin regretting your life choices.
 
 ---
 
@@ -601,6 +612,8 @@ The application includes:
 - Local-only root, setup and diagnostics pages
 - Role-specific remote participant pages and APIs
 - Diagnostics/pre-flight checks
+
+These controls are guardrails, not guarantees. OSR can cancel its own queued work and refuse unsafe-looking commands, but it cannot prove RF delivery, Bluetooth behavior, the physical device state, the OpenShock service state, a third-party device firmware decision or a human response. Treat the software as one layer in a safety plan, not the safety plan.
 
 Recommended real-world rules:
 
@@ -688,6 +701,9 @@ If your hub has an E-stop, OpenShock documents it as a way to stop current and p
 - Hard 99% Shock limit and final output-boundary validation
 - Participant path isolation and private-file access protection
 - Live Host per-device readiness and sanitized output history
+- Setup-side Intiface settings for connection, gameplay enablement and basic duration tuning
+- Host dashboard dropdowns stay usable during refresh
+- README safety guidance aligned with OpenShock warnings
 - Full Node.js regression test command through `npm test`
 
 Things escalated quickly.
