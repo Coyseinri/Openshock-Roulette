@@ -117,7 +117,7 @@ Intiface support is optional and disabled by default. OSR connects to Intiface C
 
 Use the two setup pages:
 
-- `/setup` — create logical players, assign devices, test individual outputs and complete game setup
+- `/setup` — create logical players, assign devices, enable basic Intiface settings, test individual outputs and complete game setup
 - `/setup#toys` — inspect device features, assign feature roles, preview templates and manage cached profiles
 
 Start Intiface Central before OSR and keep its WebSocket server available at the configured address. The default is:
@@ -126,7 +126,14 @@ Start Intiface Central before OSR and keep its WebSocket server available at the
 ws://127.0.0.1:12345
 ```
 
-Enable Intiface in `config/config.json`:
+For normal use, open `/setup#intiface` and configure:
+
+- Intiface connection enabled/disabled
+- WebSocket URL
+- Toy gameplay enabled/disabled
+- Basic Toy duration multipliers and duration bounds
+
+The same values can still be edited directly in `config/config.json`:
 
 ```json
 "intiface": {
@@ -162,7 +169,7 @@ With grouped shockers enabled, the target wheel shows the shared prefix as the p
 
 When a grouped player is selected, OSR expands the hit to every device in that group. Each physical shocker still keeps its own multiplier, so one device can run at 50% while another runs at 75%, because apparently fairness now requires spreadsheet energy.
 
-The host manual shock control can target either the grouped player or one individual device under that group.
+Gameplay can target the grouped player. Host manual shock controls stay per assigned device, so a host can test or correct one physical device without hitting the whole group.
 
 Grouping is configured in `config/config.json` / `config/config.example.json`:
 
@@ -293,11 +300,11 @@ The host can also manually complete or reroll public objectives when the table h
 
 ---
 
-## Per-Player Multipliers
+## Per-Device Multipliers
 
-Each player can have their own intensity multiplier.
+Each assigned device can have its own intensity multiplier.
 
-The rolled value is adjusted before being sent to OpenShock.
+The rolled value is adjusted before being sent to OpenShock or translated into a Toy output.
 
 Examples:
 
@@ -307,7 +314,7 @@ Examples:
 
 For grouped shockers, the rolled value is expanded to every device in the group and then each device's own multiplier is applied.
 
-This allows individual balancing for players with different tolerance levels while keeping the game fair for everyone.
+For mixed players with Shock devices and Toys, each assigned device keeps its own multiplier and Toy profile. This allows individual balancing for different devices and tolerance levels while keeping the game fair for everyone.
 
 Or at least equally unfair.
 
