@@ -45,6 +45,7 @@ function actionLabel(type) {
 
 function renderPlayers(data) {
   const select = document.getElementById("targetPlayerSelect");
+  if (document.activeElement === select) return;
   const current = select.value;
   select.innerHTML = "";
   (data.players || []).filter(p => p.id !== data.player?.id).forEach(p => {
