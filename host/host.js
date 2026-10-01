@@ -7,6 +7,15 @@ let outputStatusSignature = '';
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m])); }
 function setStatus(text) { document.getElementById("statusLine").textContent = text; }
 
+function replaceSelectOptions(select, buildOptions, { preserveValue = true, skipWhenActive = true } = {}) {
+  if (!select) return false;
+  if (skipWhenActive && document.activeElement === select) return false;
+  const current = select.value;
+  select.replaceChildren(...buildOptions());
+  if (preserveValue && [...select.options].some(option => option.value === current)) select.value = current;
+  return true;
+}
+
 function renderOutputStatus(status) {
   const host = document.getElementById("hostOutputStatus");
   if (!host) return;
@@ -92,39 +101,30 @@ async function stopAllOutputs() {
 }
 
 function fillPlayerSelect(select, players) {
-  if (!select) return;
-  if (document.activeElement === select) return;
-  const current = select.value;
-  select.innerHTML = "";
-  players.forEach(p => {
+  replaceSelectOptions(select, () => (players || []).map(p => {
     const opt = document.createElement("option");
     opt.value = p.id;
     const devices = Array.isArray(p.devices) && p.devices.length > 1 ? ` (${p.devices.length} devices)` : "";
     opt.textContent = `${p.name}${devices}`;
-    select.appendChild(opt);
-  });
-  if ([...select.options].some(o => o.value === current)) select.value = current;
+    return opt;
+  }));
 }
 
 function fillManualDeviceSelect(players) {
   const playerSelect = document.getElementById("manualPlayer");
   const deviceSelect = document.getElementById("manualDevice");
   if (!playerSelect || !deviceSelect) return;
-  if (document.activeElement === deviceSelect) return;
-  const current = deviceSelect.value;
   const player = (players || []).find(item => String(item.id) === String(playerSelect.value));
-  deviceSelect.innerHTML = "";
-  for (const device of player?.devices || []) {
+  const updated = replaceSelectOptions(deviceSelect, () => (player?.devices || []).map(device => {
     const opt = document.createElement("option");
     opt.dataset.provider = device.provider === "intiface" ? "intiface" : "openshock";
     opt.dataset.deviceId = device.id;
     opt.value = `${opt.dataset.provider}:${device.id}`;
     opt.textContent = `${opt.dataset.provider === "intiface" ? "Toy" : "Shock"}: ${device.memberName || device.name || device.id}${device.enabled === false ? " (disabled)" : device.online === false ? " (offline)" : ""}`;
     opt.disabled = device.enabled === false || device.online === false;
-    deviceSelect.appendChild(opt);
-  }
-  if (current) deviceSelect.value = current;
-  syncManualDeviceControls();
+    return opt;
+  }));
+  if (updated) syncManualDeviceControls();
 }
 
 function syncManualDeviceControls() {
@@ -165,39 +165,32 @@ function renderPlayers(players) {
 
 function renderRewardOptions(economy) {
   const select = document.getElementById("rewardTokenType");
-  if (!select) return;
-  const current = select.value;
-  select.innerHTML = "";
-  (economy?.tokenTypes || ["shield", "mercy", "blessing", "curse", "chaos", "guarantee"]).forEach(type => {
+  replaceSelectOptions(select, () => (economy?.tokenTypes || ["shield", "mercy", "blessing", "curse", "chaos", "guarantee"]).map(type => {
     const opt = document.createElement("option");
     opt.value = type;
     opt.textContent = type;
-    select.appendChild(opt);
-  });
-  if ([...select.options].some(o => o.value === current)) select.value = current;
+    return opt;
+  }));
 }
 
 function renderEventCardOptions(cards) {
   const select = document.getElementById("forceEventCard");
   if (!select) return;
-  const current = select.value;
-  select.innerHTML = "";
 
   const sorted = (cards || [])
     .filter(card => card && card.id)
     .slice()
     .sort((a, b) => String(a.title || a.id).localeCompare(String(b.title || b.id)));
 
-  sorted.forEach(card => {
+  replaceSelectOptions(select, () => sorted.map(card => {
     const opt = document.createElement("option");
     opt.value = card.id;
     const flags = [card.targetWheel ? "target" : null, card.fateWheel ? "fate" : null].filter(Boolean).join(" + ");
     opt.textContent = `${card.title || card.id}${flags ? ` (${flags})` : ""}`;
     opt.title = card.description || "";
-    select.appendChild(opt);
-  });
+    return opt;
+  }));
 
-  if ([...select.options].some(o => o.value === current)) select.value = current;
   const status = document.getElementById("forceEventStatus");
   if (status && !sorted.length) status.textContent = "No enabled event cards found.";
 }
