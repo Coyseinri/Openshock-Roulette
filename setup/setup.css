@@ -7,3 +7,8 @@
 .hardware-row { padding: 16px 0; border-bottom: 1px solid #343844; }
 .hardware-row .setup-actions { margin-top: 10px; }
 .hardware-result { margin-top: 8px; }
+.intiface-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 14px; margin: 16px 0; }
+.intiface-settings-grid label { display: flex; flex-direction: column; gap: 6px; }
+.intiface-settings-grid input, .intiface-settings-grid select { width: 100%; }
+.intiface-settings-actions { margin-top: 12px; }
+@media(max-width:760px){.intiface-settings-grid{grid-template-columns:1fr}}
