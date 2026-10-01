@@ -681,16 +681,18 @@ Things escalated quickly.
 
 ## Development Notes
 
-The application intentionally remains lightweight:
+The application intentionally stays boring where boring is useful:
 
 - No frontend framework
 - One local Node.js server
 - Static frontend files
-- Minimal infrastructure
+- SQLite through Node's built-in `node:sqlite`
+- Config and runtime state kept local
+- Regression tests through `npm test`
 
-Future Coyseinri is responsible for maintaining this. Present Coyseinri apologizes.
+Most v1.4 work lives in focused modules instead of giant entry files: Setup owns player/device assignment, Intiface mapping owns Toy profiles and feature roles, game activation owns final output decisions, and Diagnostics owns the uncomfortable truth.
 
-Future Coyseinri would also like to apologize, but is currently busy fixing bugs introduced by Present Coyseinri.
+Future Coyseinri is still responsible for maintaining this. Present Coyseinri has at least labeled more of the wires.
 
 ---
 
