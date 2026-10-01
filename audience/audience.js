@@ -62,6 +62,7 @@ async function ensureAudienceSession(forceName = false) {
 
 function renderPlayers(players) {
   const select = document.getElementById("targetPlayerSelect");
+  if (document.activeElement === select) return;
   const current = select.value;
   select.innerHTML = "";
   players.forEach(p => {
@@ -86,6 +87,7 @@ function renderVotes(data) {
 
 function renderTokens(economy) {
   const select = document.getElementById("tokenTypeSelect");
+  if (document.activeElement === select) return;
   const current = select.value;
   select.innerHTML = "";
   (economy.tokenTypes || ["shield", "mercy", "blessing", "curse", "chaos", "guarantee"]).forEach(type => {
