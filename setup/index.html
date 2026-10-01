@@ -14,7 +14,7 @@
       <div><h1>Setup</h1><p>Configure players, map devices and check hardware before playing.</p></div>
       <nav class="setup-actions" aria-label="Main"><a class="button secondary" href="/">Game</a><a class="button secondary" href="/setup" aria-current="page">Setup</a><a class="button secondary" href="/diagnostics">Diagnostics</a><button id="startGameBtn">Start / Continue Game</button></nav>
     </header>
-    <nav class="setup-actions setup-tabs" aria-label="Setup sections"><a class="button secondary" href="#players">Players</a><a class="button secondary" href="#hardware">Hardware check</a><a class="button secondary" href="#toys">Toy mappings</a><a class="button secondary" href="#transfer">Export / import</a></nav>
+    <nav class="setup-actions setup-tabs" aria-label="Setup sections"><a class="button secondary" href="#players">Players</a><a class="button secondary" href="#hardware">Hardware check</a><a class="button secondary" href="#intiface">Toy settings</a><a class="button secondary" href="#toys">Toy mappings</a><a class="button secondary" href="#transfer">Export / import</a></nav>
     <section class="setup-status card provider-grid">
       <div class="provider-card">
         <div><strong>Shock</strong> <span id="shockStatus">● checking</span></div>
@@ -36,6 +36,19 @@
     <section class="card"><h2>Suggested matches</h2><div id="suggestions"></div></section>
     </div>
     <section class="card" data-setup-panel="hardware" hidden><h2>Pre-game hardware check</h2><p>Refreshing checks connections and mappings only. Use a test button for each device, then confirm that the correct device responded.</p><div class="setup-actions"><button id="refreshHardwareBtn" class="secondary">Refresh status</button><button id="hardwareStopAllBtn" class="danger">STOP ALL</button></div><div id="hardwareSummary" role="status"></div><div id="hardwareDevices"></div></section>
+    <section class="card" data-setup-panel="intiface" hidden><h2>Toy settings</h2><p class="device-meta">Basic Intiface settings for setup and gameplay. Advanced tuning stays in <code>config/config.json</code>.</p>
+      <div class="intiface-settings-grid">
+        <label>Intiface connection <select id="intifaceEnabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></label>
+        <label>WebSocket URL <input id="intifaceWebsocketUrl" type="url" inputmode="url" placeholder="ws://127.0.0.1:12345"></label>
+        <label>Toy gameplay <select id="intifaceGameIntegrationEnabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></label>
+        <label>Shock/hold duration multiplier <input id="toyActivationDurationMultiplier" type="number" min="0.1" max="20" step="0.1"></label>
+        <label>Vibe duration multiplier <input id="toyVibeDurationMultiplier" type="number" min="0.1" max="20" step="0.1"></label>
+        <label>Minimum Toy duration (ms) <input id="toyMinDurationMs" type="number" min="100" max="60000" step="100"></label>
+        <label>Maximum Toy duration (ms) <input id="toyMaxDurationMs" type="number" min="100" max="120000" step="100"></label>
+      </div>
+      <div class="setup-actions intiface-settings-actions"><button id="saveIntifaceSettingsBtn">Save Toy settings</button><button id="connectIntifaceBtn" class="secondary">Connect</button><button id="reconnectIntifaceBtn" class="secondary">Reconnect</button><button id="disconnectIntifaceBtn" class="secondary">Disconnect</button></div>
+      <div id="intifaceSettingsStatus" class="device-meta" role="status"></div>
+    </section>
     <section data-setup-panel="toys" hidden><iframe id="toySetupFrame" title="Toy mappings and template tests" class="toy-setup-frame"></iframe></section>
     <section class="card config-transfer" data-setup-panel="transfer" hidden><h2>Export / import configuration</h2>
       <p class="device-meta">Move player setup, stable device mappings and game settings without API tokens, sessions or logs.</p>
