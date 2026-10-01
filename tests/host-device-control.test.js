@@ -14,6 +14,8 @@ assert.ok(client.includes("deviceSelect.selectedOptions[0]?.dataset.provider"), 
 assert.ok(client.includes("playerId, deviceId, provider, mode: type"), "Host requests must bind player, device, and provider");
 assert.ok(client.includes('data-player-device-card'), "Host output status must render collapsible logical-player cards");
 assert.ok(client.includes("expanded.has(String(p.playerId))"), "Polling must preserve expanded player cards");
+assert.ok(client.includes("replaceSelectOptions"), "Host polling must update dropdown options through the active-select guard");
+assert.ok(client.includes("document.activeElement === select"), "Host polling must not rebuild an open dropdown");
 assert.ok(client.includes("option.dataset.deviceId"), "Manual controls must preserve provider-qualified stable device identity");
 assert.ok(client.includes("device.canActivate ?"), "Unavailable or unmapped devices must disable activation controls");
 assert.ok(client.includes("deviceQuickStop"), "Each stoppable device must keep a prominent Stop action");
